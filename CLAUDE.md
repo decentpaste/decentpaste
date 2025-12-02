@@ -119,7 +119,7 @@ All UI is in `src/app.ts`. Key methods:
 ## Design Decisions
 
 1. **Why libp2p?** Decentralized, no central server, built-in encryption
-2. **Why polling clipboard?** `arboard` doesn't support native change events
+2. **Why polling clipboard?** Tauri clipboard plugin doesn't support native change events
 3. **Why gossipsub?** Efficiently broadcasts to multiple peers
 4. **Why request-response for pairing?** Needs reliable 1:1 communication
 5. **Why shared secret per pair?** Each device pair has unique encryption key

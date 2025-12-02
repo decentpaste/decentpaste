@@ -195,8 +195,8 @@ pub async fn get_clipboard_history(
 }
 
 #[tauri::command]
-pub async fn set_clipboard(content: String) -> Result<()> {
-    crate::clipboard::monitor::set_clipboard_content(&content)
+pub async fn set_clipboard(app_handle: AppHandle, content: String) -> Result<()> {
+    crate::clipboard::monitor::set_clipboard_content(&app_handle, &content)
         .map_err(|e| DecentPasteError::Clipboard(e))
 }
 

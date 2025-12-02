@@ -8,6 +8,9 @@
     "core:event:default",
     "core:event:allow-emit",
     "core:event:allow-listen",
-    "opener:default"
+    "opener:default",
+    "clipboard-manager:allow-read-text",
+    "clipboard-manager:allow-write-text",
+    "clipboard-manager:allow-clear"
   ]
 }

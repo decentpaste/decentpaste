@@ -1,9 +1,13 @@
 use chrono::{DateTime, Utc};
-use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::sync::OnceLock;
+use tauri::{AppHandle, Manager};
 
 use crate::error::{DecentPasteError, Result};
+
+/// Static storage for the data directory path, initialized once from Tauri
+static DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeviceIdentity {
@@ -24,13 +28,28 @@ pub struct PairedPeer {
     pub last_seen: Option<DateTime<Utc>>,
 }
 
-pub fn get_data_dir() -> Result<PathBuf> {
-    let proj_dirs = ProjectDirs::from("com", "decentpaste", "app")
-        .ok_or_else(|| DecentPasteError::Storage("Could not determine data directory".into()))?;
+/// Initialize the data directory using Tauri's path resolver.
+/// Must be called once at app startup before any storage operations.
+pub fn init_data_dir(app: &AppHandle) -> Result<()> {
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| DecentPasteError::Storage(format!("Could not determine data directory: {}", e)))?;
 
-    let data_dir = proj_dirs.data_dir();
-    std::fs::create_dir_all(data_dir)?;
-    Ok(data_dir.to_path_buf())
+    std::fs::create_dir_all(&data_dir)?;
+
+    DATA_DIR.set(data_dir).map_err(|_| {
+        DecentPasteError::Storage("Data directory already initialized".into())
+    })?;
+
+    Ok(())
+}
+
+pub fn get_data_dir() -> Result<PathBuf> {
+    DATA_DIR
+        .get()
+        .cloned()
+        .ok_or_else(|| DecentPasteError::Storage("Data directory not initialized. Call init_data_dir first.".into()))
 }
 
 fn get_peers_path() -> Result<PathBuf> {

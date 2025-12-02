@@ -129,7 +129,7 @@ decentpaste/
 │ └─────┬─────┘  └──────┬──────┘  └───────────┘  └───────────┘       │
 │       │               │                                              │
 │       │         ┌─────┴─────┐                                       │
-│       │         │  arboard  │  (System Clipboard)                   │
+│       │         │  Tauri    │  (Clipboard Plugin)                   │
 │       │         └───────────┘                                       │
 │       │                                                              │
 │ ┌─────┴──────────────────────────────────────────────────────┐      │
@@ -394,7 +394,7 @@ yarn build
 1. **Text-only clipboard**: Currently only supports text. Images/files could be added.
 2. **Local network only**: Uses mDNS, so devices must be on same network. Internet relay could be added.
 3. **Single shared secret**: All paired peers currently use first peer's secret. Should use per-peer secrets.
-4. **No mobile testing**: Built with Tauri mobile support but not tested on Android/iOS.
+4. **Mobile support**: Android/iOS clipboard works (text-only) via Tauri clipboard plugin.
 5. **No persistence of clipboard history**: History is in-memory only.
 
 ---
@@ -423,7 +423,7 @@ yarn build
 ### Rust (Key Dependencies)
 - `tauri` v2 - Application framework
 - `libp2p` v0.54 - P2P networking
-- `arboard` v3 - Cross-platform clipboard
+- `tauri-plugin-clipboard-manager` v2 - Cross-platform clipboard (including mobile)
 - `aes-gcm` v0.10 - Encryption
 - `tokio` v1 - Async runtime
 

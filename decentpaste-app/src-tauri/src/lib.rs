@@ -17,7 +17,7 @@ use clipboard::{ClipboardChange, ClipboardEntry, ClipboardMonitor, SyncManager};
 use network::{NetworkCommand, NetworkEvent, NetworkManager, NetworkStatus, ClipboardMessage};
 use security::get_or_create_identity;
 use state::AppState;
-use storage::{load_paired_peers, load_settings};
+use storage::{init_data_dir, load_paired_peers, load_settings};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -34,6 +34,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .manage(AppState::new())
         .setup(|app| {
             let app_handle = app.handle().clone();
@@ -71,6 +72,9 @@ pub fn run() {
 }
 
 async fn initialize_app(app_handle: AppHandle) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    // Initialize data directory first (required for all storage operations)
+    init_data_dir(&app_handle)?;
+
     let state = app_handle.state::<AppState>();
 
     // Load settings
@@ -122,7 +126,7 @@ async fn initialize_app(app_handle: AppHandle) -> Result<(), Box<dyn std::error:
 
     // Start clipboard monitor
     let clipboard_monitor = ClipboardMonitor::new(settings.clipboard_poll_interval_ms);
-    clipboard_monitor.start(clipboard_tx).await;
+    clipboard_monitor.start(app_handle.clone(), clipboard_tx).await;
 
     // Handle clipboard changes - broadcast to network
     let app_handle_clipboard = app_handle.clone();
@@ -323,7 +327,7 @@ async fn initialize_app(app_handle: AppHandle) -> Result<(), Box<dyn std::error:
                                         if sync_manager.on_received(&msg.content_hash) {
                                             // Update local clipboard
                                             if let Err(e) =
-                                                clipboard::monitor::set_clipboard_content(&content)
+                                                clipboard::monitor::set_clipboard_content(&app_handle_network, &content)
                                             {
                                                 error!("Failed to set clipboard: {}", e);
                                             }

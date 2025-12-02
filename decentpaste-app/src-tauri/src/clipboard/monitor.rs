@@ -1,6 +1,7 @@
-use arboard::Clipboard;
 use std::sync::Arc;
 use std::time::Duration;
+use tauri::AppHandle;
+use tauri_plugin_clipboard_manager::ClipboardExt;
 use tokio::sync::{mpsc, RwLock};
 use tracing::{debug, error, warn};
 
@@ -28,7 +29,7 @@ impl ClipboardMonitor {
         }
     }
 
-    pub async fn start(&self, tx: mpsc::Sender<ClipboardChange>) {
+    pub async fn start(&self, app_handle: AppHandle, tx: mpsc::Sender<ClipboardChange>) {
         // Mark as running
         {
             let mut running = self.running.write().await;
@@ -47,16 +48,6 @@ impl ClipboardMonitor {
         let running = self.running.clone();
 
         tokio::spawn(async move {
-            // Create clipboard instance
-            let mut clipboard = match Clipboard::new() {
-                Ok(c) => c,
-                Err(e) => {
-                    error!("Failed to create clipboard instance: {}", e);
-                    *running.write().await = false;
-                    return;
-                }
-            };
-
             loop {
                 // Check if we should stop
                 if !*running.read().await {
@@ -64,8 +55,8 @@ impl ClipboardMonitor {
                     break;
                 }
 
-                // Try to read clipboard
-                match clipboard.get_text() {
+                // Try to read clipboard using Tauri plugin
+                match app_handle.clipboard().read_text() {
                     Ok(text) => {
                         if !text.is_empty() {
                             let hash = hash_content(&text);
@@ -117,7 +108,9 @@ impl ClipboardMonitor {
     }
 }
 
-pub fn set_clipboard_content(content: &str) -> Result<(), String> {
-    let mut clipboard = Clipboard::new().map_err(|e| e.to_string())?;
-    clipboard.set_text(content).map_err(|e| e.to_string())
+pub fn set_clipboard_content(app_handle: &AppHandle, content: &str) -> Result<(), String> {
+    app_handle
+        .clipboard()
+        .write_text(content)
+        .map_err(|e| e.to_string())
 }
