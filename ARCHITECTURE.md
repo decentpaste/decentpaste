@@ -247,6 +247,7 @@ Tauri commands exposed to frontend:
 | `confirm_pairing` | Confirm PIN match |
 | `get_clipboard_history` | Get clipboard history |
 | `set_clipboard` | Set clipboard content |
+| `share_clipboard_content` | Manually share clipboard with peers (for mobile) |
 | `get_settings` / `update_settings` | Manage app settings |
 | `get_device_info` | Get this device's info |
 
@@ -429,5 +430,6 @@ yarn build
 
 ### Frontend (Key Dependencies)
 - `@tauri-apps/api` v2 - Tauri JavaScript API
+- `@tauri-apps/plugin-clipboard-manager` v2 - Clipboard access for mobile
 - `tailwindcss` v4 - CSS framework
 - `lucide` - Icons (inline SVGs)
