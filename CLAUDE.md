@@ -130,6 +130,7 @@ All UI is in `src/app.ts`. Key methods:
 - **Local network only** - mDNS doesn't work across networks
 - **Single shared secret** - Currently uses first peer's secret for all (bug)
 - **In-memory history** - Not persisted to disk
+- **Mobile clipboard** - Auto-monitoring disabled on Android/iOS; use `shareClipboardContent()` command for manual sharing
 
 ## Testing
 

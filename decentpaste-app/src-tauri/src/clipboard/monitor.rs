@@ -56,6 +56,9 @@ impl ClipboardMonitor {
                 }
 
                 // Try to read clipboard using Tauri plugin
+                // Note: On Android/iOS, the Rust clipboard API may not work for reading.
+                // In that case, clipboard monitoring is disabled and users share manually.
+                #[cfg(not(any(target_os = "android", target_os = "ios")))]
                 match app_handle.clipboard().read_text() {
                     Ok(text) => {
                         if !text.is_empty() {
@@ -83,6 +86,14 @@ impl ClipboardMonitor {
                         // This can happen if clipboard is empty or contains non-text
                         debug!("Could not read clipboard: {}", e);
                     }
+                }
+
+                // On mobile, clipboard monitoring from Rust is not supported
+                #[cfg(any(target_os = "android", target_os = "ios"))]
+                {
+                    // Mobile platforms: clipboard monitoring disabled
+                    // Users can manually share clipboard content via the UI
+                    let _ = (&app_handle, &last_hash, &tx); // Suppress unused warnings
                 }
 
                 tokio::time::sleep(poll_interval).await;

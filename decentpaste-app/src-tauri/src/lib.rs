@@ -61,6 +61,7 @@ pub fn run() {
             commands::cancel_pairing,
             commands::get_clipboard_history,
             commands::set_clipboard,
+            commands::share_clipboard_content,
             commands::clear_clipboard_history,
             commands::get_settings,
             commands::update_settings,

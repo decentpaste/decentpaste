@@ -1,6 +1,7 @@
 import { store, type View, type Toast } from './state/store';
 import { eventManager } from './api/events';
 import * as commands from './api/commands';
+import { readText } from '@tauri-apps/plugin-clipboard-manager';
 import { icon } from './components/icons';
 import { $, formatTime, truncate, getStatusColor, getStatusText } from './utils/dom';
 import type { ClipboardEntry, DiscoveredPeer, PairedPeer } from './api/types';
@@ -283,6 +284,15 @@ class App {
         <!-- Quick Actions -->
         <div class="mb-6">
           <h2 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">Quick Actions</h2>
+          <div class="flex gap-3 mb-3">
+            <button
+              id="btn-share-clipboard"
+              class="flex-1 bg-primary-600 hover:bg-primary-700 text-white rounded-xl p-3 flex items-center justify-center gap-2 transition-colors"
+            >
+              ${icon('share', 18)}
+              <span class="text-sm font-medium">Share Clipboard</span>
+            </button>
+          </div>
           <div class="flex gap-3">
             <button
               id="btn-refresh-peers"
@@ -787,6 +797,22 @@ class App {
       await commands.clearClipboardHistory();
       store.set('clipboardHistory', []);
       store.addToast('History cleared', 'success');
+    });
+
+    // Share clipboard (reads clipboard and sends to peers)
+    $('#btn-share-clipboard')?.addEventListener('click', async () => {
+      try {
+        const content = await readText();
+        if (!content || content.trim() === '') {
+          store.addToast('Clipboard is empty', 'error');
+          return;
+        }
+        await commands.shareClipboardContent(content);
+        store.addToast('Clipboard shared with peers', 'success');
+      } catch (e) {
+        const error = e instanceof Error ? e.message : String(e);
+        store.addToast(`Failed to share: ${error}`, 'error');
+      }
     });
 
     $('#btn-clear-all-history')?.addEventListener('click', async () => {

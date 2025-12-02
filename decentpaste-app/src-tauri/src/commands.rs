@@ -200,6 +200,66 @@ pub async fn set_clipboard(app_handle: AppHandle, content: String) -> Result<()>
         .map_err(|e| DecentPasteError::Clipboard(e))
 }
 
+/// Manually share clipboard content with paired peers.
+/// This is especially useful on mobile where automatic clipboard monitoring is not available.
+#[tauri::command]
+pub async fn share_clipboard_content(
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+    content: String,
+) -> Result<()> {
+    use chrono::Utc;
+    use crate::clipboard::ClipboardEntry;
+    use crate::network::{ClipboardMessage, NetworkCommand};
+    use crate::security::{encrypt_content, hash_content};
+    use tauri::Emitter;
+
+    let content_hash = hash_content(&content);
+
+    // Get device info
+    let device_identity = state.device_identity.read().await;
+    let identity = device_identity
+        .as_ref()
+        .ok_or_else(|| DecentPasteError::NotInitialized)?;
+
+    // Check if we have any paired peers
+    let paired_peers = state.paired_peers.read().await;
+    if paired_peers.is_empty() {
+        return Err(DecentPasteError::Pairing("No paired peers".into()));
+    }
+
+    // Encrypt content (using first peer's secret - simplified)
+    let peer = paired_peers.first().unwrap();
+    let encrypted = encrypt_content(content.as_bytes(), &peer.shared_secret)
+        .map_err(|e| DecentPasteError::Encryption(e.to_string()))?;
+
+    let msg = ClipboardMessage {
+        id: uuid::Uuid::new_v4().to_string(),
+        content_hash: content_hash.clone(),
+        encrypted_content: encrypted,
+        timestamp: Utc::now(),
+        origin_device_id: identity.device_id.clone(),
+        origin_device_name: identity.device_name.clone(),
+    };
+
+    // Send via network
+    let tx = state.network_command_tx.read().await;
+    if let Some(tx) = tx.as_ref() {
+        tx.send(NetworkCommand::BroadcastClipboard { message: msg })
+            .await
+            .map_err(|_| DecentPasteError::ChannelSend)?;
+    }
+
+    // Add to history
+    let entry = ClipboardEntry::new_local(content, &identity.device_id, &identity.device_name);
+    state.add_clipboard_entry(entry.clone()).await;
+
+    // Emit to frontend
+    let _ = app_handle.emit("clipboard-sent", entry);
+
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn clear_clipboard_history(state: State<'_, AppState>) -> Result<()> {
     let mut history = state.clipboard_history.write().await;

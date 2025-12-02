@@ -69,6 +69,11 @@ export async function clearClipboardHistory(): Promise<void> {
   return invoke('clear_clipboard_history');
 }
 
+/** Manually share clipboard content with paired peers (useful on mobile) */
+export async function shareClipboardContent(content: string): Promise<void> {
+  return invoke('share_clipboard_content', { content });
+}
+
 // Settings
 export async function getSettings(): Promise<AppSettings> {
   return invoke('get_settings');

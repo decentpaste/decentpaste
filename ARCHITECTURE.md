@@ -394,7 +394,7 @@ yarn build
 1. **Text-only clipboard**: Currently only supports text. Images/files could be added.
 2. **Local network only**: Uses mDNS, so devices must be on same network. Internet relay could be added.
 3. **Single shared secret**: All paired peers currently use first peer's secret. Should use per-peer secrets.
-4. **Mobile support**: Android/iOS clipboard works (text-only) via Tauri clipboard plugin.
+4. **Mobile clipboard**: On Android/iOS, automatic clipboard monitoring is not supported. Users must manually share content using the "Share" button. Receiving clipboard from desktop works automatically.
 5. **No persistence of clipboard history**: History is in-memory only.
 
 ---
