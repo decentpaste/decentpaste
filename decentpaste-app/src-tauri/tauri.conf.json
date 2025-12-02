@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "decentpaste-app",
+  "productName": "DecentPaste",
   "version": "0.1.0",
   "identifier": "com.decentpaste.app",
   "build": {
@@ -13,13 +13,17 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "decentpaste-app",
-        "width": 800,
-        "height": 600
+        "title": "DecentPaste",
+        "width": 420,
+        "height": 650,
+        "minWidth": 350,
+        "minHeight": 500,
+        "resizable": true,
+        "center": true
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
     }
   },
   "bundle": {

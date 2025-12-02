@@ -1,0 +1,144 @@
+use libp2p::{
+    gossipsub, identify, mdns,
+    request_response::{self, ProtocolSupport, Codec},
+    swarm::NetworkBehaviour,
+    StreamProtocol,
+};
+use std::time::Duration;
+use futures::prelude::*;
+use async_trait::async_trait;
+
+use super::protocol::ProtocolMessage;
+
+const PROTOCOL_NAME: &str = "/decentpaste/1.0.0";
+const GOSSIPSUB_TOPIC: &str = "decentpaste-clipboard";
+
+#[derive(Debug, Clone, Default)]
+pub struct DecentPasteCodec;
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PairingRequest {
+    pub message: Vec<u8>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PairingResponse {
+    pub message: Vec<u8>,
+}
+
+#[async_trait]
+impl Codec for DecentPasteCodec {
+    type Protocol = StreamProtocol;
+    type Request = PairingRequest;
+    type Response = PairingResponse;
+
+    async fn read_request<T>(&mut self, _: &Self::Protocol, io: &mut T) -> std::io::Result<Self::Request>
+    where
+        T: AsyncRead + Unpin + Send,
+    {
+        let mut buf = Vec::new();
+        let mut limited = io.take(1024 * 64); // 64KB limit
+        limited.read_to_end(&mut buf).await?;
+        serde_json::from_slice(&buf).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+    }
+
+    async fn read_response<T>(&mut self, _: &Self::Protocol, io: &mut T) -> std::io::Result<Self::Response>
+    where
+        T: AsyncRead + Unpin + Send,
+    {
+        let mut buf = Vec::new();
+        let mut limited = io.take(1024 * 64); // 64KB limit
+        limited.read_to_end(&mut buf).await?;
+        serde_json::from_slice(&buf).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+    }
+
+    async fn write_request<T>(&mut self, _: &Self::Protocol, io: &mut T, req: Self::Request) -> std::io::Result<()>
+    where
+        T: AsyncWrite + Unpin + Send,
+    {
+        let bytes = serde_json::to_vec(&req).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        io.write_all(&bytes).await?;
+        io.close().await?;
+        Ok(())
+    }
+
+    async fn write_response<T>(&mut self, _: &Self::Protocol, io: &mut T, res: Self::Response) -> std::io::Result<()>
+    where
+        T: AsyncWrite + Unpin + Send,
+    {
+        let bytes = serde_json::to_vec(&res).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        io.write_all(&bytes).await?;
+        io.close().await?;
+        Ok(())
+    }
+}
+
+#[derive(NetworkBehaviour)]
+pub struct DecentPasteBehaviour {
+    pub mdns: mdns::tokio::Behaviour,
+    pub gossipsub: gossipsub::Behaviour,
+    pub request_response: request_response::Behaviour<DecentPasteCodec>,
+    pub identify: identify::Behaviour,
+}
+
+impl DecentPasteBehaviour {
+    pub fn new(local_peer_id: libp2p::PeerId, keypair: &libp2p::identity::Keypair) -> Result<Self, Box<dyn std::error::Error>> {
+        // mDNS for local discovery
+        let mdns = mdns::tokio::Behaviour::new(
+            mdns::Config::default(),
+            local_peer_id,
+        )?;
+
+        // Gossipsub for clipboard broadcast
+        let gossipsub_config = gossipsub::ConfigBuilder::default()
+            .heartbeat_interval(Duration::from_secs(10))
+            .validation_mode(gossipsub::ValidationMode::Strict)
+            .message_id_fn(|message| {
+                // Use content hash as message ID for deduplication
+                let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                std::hash::Hash::hash(&message.data, &mut hasher);
+                gossipsub::MessageId::from(std::hash::Hasher::finish(&hasher).to_string())
+            })
+            .build()
+            .map_err(|e| format!("Failed to create gossipsub config: {}", e))?;
+
+        let gossipsub = gossipsub::Behaviour::new(
+            gossipsub::MessageAuthenticity::Signed(keypair.clone()),
+            gossipsub_config,
+        )
+        .map_err(|e| format!("Failed to create gossipsub behaviour: {}", e))?;
+
+        // Request-response for pairing
+        let request_response = request_response::Behaviour::new(
+            [(StreamProtocol::new(PROTOCOL_NAME), ProtocolSupport::Full)],
+            request_response::Config::default(),
+        );
+
+        // Identify for peer identification
+        let identify = identify::Behaviour::new(
+            identify::Config::new(
+                PROTOCOL_NAME.to_string(),
+                keypair.public(),
+            )
+            .with_agent_version(format!("decentpaste/{}", env!("CARGO_PKG_VERSION"))),
+        );
+
+        Ok(Self {
+            mdns,
+            gossipsub,
+            request_response,
+            identify,
+        })
+    }
+
+    pub fn subscribe_clipboard(&mut self) -> Result<(), gossipsub::SubscriptionError> {
+        let topic = gossipsub::IdentTopic::new(GOSSIPSUB_TOPIC);
+        self.gossipsub.subscribe(&topic).map(|_| ())
+    }
+
+    pub fn publish_clipboard(&mut self, message: &ProtocolMessage) -> Result<gossipsub::MessageId, gossipsub::PublishError> {
+        let topic = gossipsub::IdentTopic::new(GOSSIPSUB_TOPIC);
+        let data = message.to_bytes().map_err(|e| gossipsub::PublishError::TransformFailed(std::io::Error::new(std::io::ErrorKind::Other, e)))?;
+        self.gossipsub.publish(topic, data)
+    }
+}
