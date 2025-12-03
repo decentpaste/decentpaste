@@ -221,7 +221,7 @@ impl NetworkManager {
                 super::behaviour::DecentPasteBehaviourEvent::RequestResponse(event),
             ) => {
                 match event {
-                    request_response::Event::Message { peer, message } => {
+                    request_response::Event::Message { peer, connection_id: _connection_id, message } => {
                         match message {
                             request_response::Message::Request {
                                 request, channel, ..

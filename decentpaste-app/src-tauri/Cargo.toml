@@ -25,7 +25,7 @@ serde_json = "1"
 tokio = { version = "1", features = ["full", "sync"] }
 
 # libp2p networking
-libp2p = { version = "0.54", features = [
+libp2p = { version = "0.56", features = [
     "tokio",
     "tcp",
     "noise",
