@@ -169,9 +169,11 @@ pub struct DecentPasteBehaviour {
 
 #### `swarm.rs` - NetworkManager
 Manages the libp2p swarm lifecycle:
+- Accepts a persisted keypair for consistent PeerId across restarts
 - Handles incoming network events (peer discovery, messages)
 - Processes commands from the main app (send clipboard, initiate pairing)
 - Maintains peer connection state
+- Filters out already-paired peers from discovery events
 
 #### `protocol.rs` - Message Types
 Defines all protocol messages:
@@ -228,40 +230,45 @@ pub struct AppSettings {
 }
 ```
 
-#### `peers.rs` - PairedPeer
+#### `peers.rs` - PairedPeer & Identity Persistence
 Stores paired device information:
 - Peer ID, device name
 - Shared secret (encrypted at rest)
 - Pairing timestamp, last seen
 
+Also handles **libp2p keypair persistence**:
+- `get_or_create_libp2p_keypair()` - Loads or creates the libp2p Ed25519 keypair
+- Stored in `libp2p_keypair.bin` using protobuf encoding
+- Ensures consistent PeerId across app restarts (critical for pairing to work)
+
 ### 5. Commands (`src/commands.rs`)
 
 Tauri commands exposed to frontend:
 
-| Command | Description |
-|---------|-------------|
-| `get_network_status` | Get current network status |
-| `get_discovered_peers` | List discovered devices on network |
-| `get_paired_peers` | List paired devices |
-| `initiate_pairing` | Start pairing with a peer |
-| `confirm_pairing` | Confirm PIN match |
-| `get_clipboard_history` | Get clipboard history |
-| `set_clipboard` | Set clipboard content |
-| `share_clipboard_content` | Manually share clipboard with peers (for mobile) |
-| `get_settings` / `update_settings` | Manage app settings |
-| `get_device_info` | Get this device's info |
+| Command                            | Description                                               |
+|------------------------------------|-----------------------------------------------------------|
+| `get_network_status`               | Get current network status                                |
+| `get_discovered_peers`             | List discovered devices (excludes already-paired devices) |
+| `get_paired_peers`                 | List paired devices                                       |
+| `initiate_pairing`                 | Start pairing with a peer                                 |
+| `confirm_pairing`                  | Confirm PIN match                                         |
+| `get_clipboard_history`            | Get clipboard history                                     |
+| `set_clipboard`                    | Set clipboard content                                     |
+| `share_clipboard_content`          | Manually share clipboard with peers (for mobile)          |
+| `get_settings` / `update_settings` | Manage app settings                                       |
+| `get_device_info`                  | Get this device's info                                    |
 
 ### 6. Events (Emitted to Frontend)
 
-| Event | Payload | Description |
-|-------|---------|-------------|
-| `network-status` | `NetworkStatus` | Network state changed |
-| `peer-discovered` | `DiscoveredPeer` | New peer found |
-| `peer-lost` | `string` (peer_id) | Peer went offline |
-| `clipboard-received` | `ClipboardEntry` | Clipboard from peer |
-| `pairing-request` | `{sessionId, peerId, deviceName}` | Incoming pairing |
-| `pairing-pin` | `{sessionId, pin}` | PIN ready to display |
-| `pairing-complete` | `{sessionId, peerId, deviceName}` | Pairing succeeded |
+| Event                | Payload                           | Description           |
+|----------------------|-----------------------------------|-----------------------|
+| `network-status`     | `NetworkStatus`                   | Network state changed |
+| `peer-discovered`    | `DiscoveredPeer`                  | New peer found        |
+| `peer-lost`          | `string` (peer_id)                | Peer went offline     |
+| `clipboard-received` | `ClipboardEntry`                  | Clipboard from peer   |
+| `pairing-request`    | `{sessionId, peerId, deviceName}` | Incoming pairing      |
+| `pairing-pin`        | `{sessionId, pin}`                | PIN ready to display  |
+| `pairing-complete`   | `{sessionId, peerId, deviceName}` | Pairing succeeded     |
 
 ---
 
@@ -373,6 +380,13 @@ Both devices use the same session_id (provided by initiator in step 1).
 
 ### `postcss.config.js`
 - Uses `@tailwindcss/postcss` for Tailwind v4
+
+### Data Directory (`~/.local/share/com.decentpaste.app/`)
+- `identity.json` - Device identity (device_id, device_name, public_key)
+- `private_key.bin` - Device private key (restricted permissions)
+- `libp2p_keypair.bin` - libp2p Ed25519 keypair for consistent PeerId
+- `peers.json` - Paired peers with shared secrets
+- `settings.json` - App settings
 
 ---
 

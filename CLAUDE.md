@@ -66,6 +66,12 @@ decentpaste-app/
 4. Devices exchange encrypted shared secret
 5. Stored in `~/.local/share/com.decentpaste.app/peers.json`
 
+## Persistent Identity
+
+- **libp2p keypair** is persisted in `~/.local/share/com.decentpaste.app/libp2p_keypair.bin`
+- This ensures the PeerId stays consistent across app restarts
+- Without this, paired devices would appear as "new" after restart
+
 ## Common Tasks
 
 ### Add a new Tauri command
