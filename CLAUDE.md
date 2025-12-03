@@ -2,7 +2,9 @@
 
 ## What is this project?
 
-DecentPaste is a cross-platform clipboard sharing app (like Apple's Universal Clipboard) that works on all platforms. It uses:
+DecentPaste is a cross-platform clipboard sharing app (like Apple's Universal Clipboard) that works on all platforms. It
+uses:
+
 - **Tauri v2** for the desktop/mobile app
 - **libp2p** for decentralized P2P networking
 - **mDNS** for local network device discovery
@@ -27,7 +29,7 @@ decentpaste-app/
 │   └── state/store.ts      # Reactive state
 └── src-tauri/src/          # Backend (Rust)
     ├── lib.rs              # App initialization
-    ├── commands.rs         # Tauri command handlers (17 commands)
+    ├── commands.rs         # Tauri command handlers (19 commands)
     ├── network/            # libp2p networking
     │   ├── behaviour.rs    # mDNS + gossipsub + request-response
     │   └── swarm.rs        # Network manager
@@ -72,11 +74,19 @@ decentpaste-app/
 - This ensures the PeerId stays consistent across app restarts
 - Without this, paired devices would appear as "new" after restart
 
+## Connection Resilience
+
+- **Automatic retry** - Failed connections retry up to 3 times with 2-second delays
+- **Explicit gossipsub peers** - Connected peers are added to gossipsub mesh immediately for faster message delivery
+- **Mobile background handling** - When app returns from background, it automatically reconnects to all discovered peers
+  via visibility change listener
+
 ## Common Tasks
 
 ### Add a new Tauri command
 
 1. Add to `src-tauri/src/commands.rs`:
+
 ```rust
 #[tauri::command]
 pub async fn my_command(state: State<'_, AppState>, arg: String) -> Result<String> {
@@ -85,6 +95,7 @@ pub async fn my_command(state: State<'_, AppState>, arg: String) -> Result<Strin
 ```
 
 2. Register in `src-tauri/src/lib.rs`:
+
 ```rust
 .invoke_handler(tauri::generate_handler![
     // ... existing commands
@@ -93,29 +104,33 @@ pub async fn my_command(state: State<'_, AppState>, arg: String) -> Result<Strin
 ```
 
 3. Add TypeScript wrapper in `src/api/commands.ts`:
+
 ```typescript
 export async function myCommand(arg: string): Promise<string> {
-  return invoke('my_command', { arg });
+    return invoke('my_command', {arg});
 }
 ```
 
 ### Add a new event
 
 1. Emit from Rust:
+
 ```rust
-app_handle.emit("my-event", payload)?;
+app_handle.emit("my-event", payload) ?;
 ```
 
 2. Listen in `src/api/events.ts`:
+
 ```typescript
 listen<MyPayload>('my-event', (e) => {
-  // handle
+    // handle
 });
 ```
 
 ### Modify the UI
 
 All UI is in `src/app.ts`. Key methods:
+
 - `renderDashboard()` - Home view
 - `renderPeersView()` - Peers list
 - `renderHistoryView()` - Clipboard history

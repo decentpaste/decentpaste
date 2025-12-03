@@ -1,12 +1,16 @@
 # DecentPaste - Architecture Documentation
 
-This document describes the DecentPaste project architecture for AI agents and developers who will work on this codebase.
+This document describes the DecentPaste project architecture for AI agents and developers who will work on this
+codebase.
 
 ## Project Overview
 
-DecentPaste is a cross-platform clipboard sharing application that enables seamless clipboard synchronization between devices over a local network. It works similarly to Apple's Universal Clipboard but supports all platforms (Windows, macOS, Linux, Android, iOS).
+DecentPaste is a cross-platform clipboard sharing application that enables seamless clipboard synchronization between
+devices over a local network. It works similarly to Apple's Universal Clipboard but supports all platforms (Windows,
+macOS, Linux, Android, iOS).
 
 ### Key Features
+
 - **Decentralized P2P networking** using libp2p (no central server)
 - **Local network discovery** via mDNS
 - **Secure clipboard sync** with AES-256-GCM encryption
@@ -14,6 +18,7 @@ DecentPaste is a cross-platform clipboard sharing application that enables seaml
 - **Automatic clipboard synchronization** when devices are paired
 
 ### Technology Stack
+
 - **Backend**: Rust with Tauri v2
 - **Frontend**: TypeScript with Tailwind CSS v4
 - **Networking**: libp2p (mDNS, gossipsub, request-response)
@@ -151,7 +156,9 @@ decentpaste/
 ### 1. Network Layer (`src/network/`)
 
 #### `behaviour.rs` - DecentPasteBehaviour
+
 Combined libp2p network behaviour with four sub-behaviours:
+
 - **mDNS**: Automatic local network peer discovery
 - **Gossipsub**: Pub/sub for broadcasting clipboard content to all paired peers
 - **Request-Response**: Point-to-point messaging for pairing protocol
@@ -168,15 +175,22 @@ pub struct DecentPasteBehaviour {
 ```
 
 #### `swarm.rs` - NetworkManager
+
 Manages the libp2p swarm lifecycle:
+
 - Accepts a persisted keypair for consistent PeerId across restarts
 - Handles incoming network events (peer discovery, messages)
 - Processes commands from the main app (send clipboard, initiate pairing)
 - Maintains peer connection state
 - Filters out already-paired peers from discovery events
+- **Connection resilience**: Automatically retries failed connections (3 attempts, 2s delay)
+- **Gossipsub optimization**: Adds peers to explicit peer list on connection for immediate mesh inclusion
+- **Mobile support**: Handles `ReconnectPeers` command for app resume from background
 
 #### `protocol.rs` - Message Types
+
 Defines all protocol messages:
+
 ```rust
 pub enum ProtocolMessage {
     Pairing(PairingMessage),    // Pairing flow messages
@@ -188,11 +202,13 @@ pub enum ProtocolMessage {
 ### 2. Clipboard Layer (`src/clipboard/`)
 
 #### `monitor.rs` - ClipboardMonitor
+
 - Polls system clipboard every 500ms (configurable)
 - Hashes content with SHA-256 to detect changes
 - Emits `ClipboardChange` events when content changes
 
 #### `sync.rs` - SyncManager
+
 - Prevents echo/loops by tracking recent content hashes
 - Implements last-write-wins conflict resolution
 - Manages clipboard entry history
@@ -200,12 +216,15 @@ pub enum ProtocolMessage {
 ### 3. Security Layer (`src/security/`)
 
 #### `crypto.rs`
+
 - `encrypt_content()` / `decrypt_content()` - AES-256-GCM encryption
 - `hash_content()` - SHA-256 hashing for deduplication
 - `generate_shared_secret()` - Random 32-byte secret generation
 
 #### `pairing.rs`
+
 PIN-based pairing protocol:
+
 1. Device A initiates pairing with Device B
 2. Device B generates 6-digit PIN, displays to user
 3. Both devices display PIN for visual verification
@@ -213,12 +232,14 @@ PIN-based pairing protocol:
 5. Devices establish shared secret for encryption
 
 #### `identity.rs`
+
 - Generates unique device identity on first run
 - Stores device ID, name, and keypair
 
 ### 4. Storage Layer (`src/storage/`)
 
 #### `config.rs` - AppSettings
+
 ```rust
 pub struct AppSettings {
     pub device_name: String,
@@ -231,12 +252,15 @@ pub struct AppSettings {
 ```
 
 #### `peers.rs` - PairedPeer & Identity Persistence
+
 Stores paired device information:
+
 - Peer ID, device name
 - Shared secret (encrypted at rest)
 - Pairing timestamp, last seen
 
 Also handles **libp2p keypair persistence**:
+
 - `get_or_create_libp2p_keypair()` - Loads or creates the libp2p Ed25519 keypair
 - Stored in `libp2p_keypair.bin` using protobuf encoding
 - Ensures consistent PeerId across app restarts (critical for pairing to work)
@@ -245,18 +269,19 @@ Also handles **libp2p keypair persistence**:
 
 Tauri commands exposed to frontend:
 
-| Command                            | Description                                               |
-|------------------------------------|-----------------------------------------------------------|
-| `get_network_status`               | Get current network status                                |
-| `get_discovered_peers`             | List discovered devices (excludes already-paired devices) |
-| `get_paired_peers`                 | List paired devices                                       |
-| `initiate_pairing`                 | Start pairing with a peer                                 |
-| `confirm_pairing`                  | Confirm PIN match                                         |
-| `get_clipboard_history`            | Get clipboard history                                     |
-| `set_clipboard`                    | Set clipboard content                                     |
-| `share_clipboard_content`          | Manually share clipboard with peers (for mobile)          |
-| `get_settings` / `update_settings` | Manage app settings                                       |
-| `get_device_info`                  | Get this device's info                                    |
+| Command                            | Description                                                               |
+|------------------------------------|---------------------------------------------------------------------------|
+| `get_network_status`               | Get current network status                                                |
+| `get_discovered_peers`             | List discovered devices (excludes already-paired devices)                 |
+| `get_paired_peers`                 | List paired devices                                                       |
+| `initiate_pairing`                 | Start pairing with a peer                                                 |
+| `confirm_pairing`                  | Confirm PIN match                                                         |
+| `get_clipboard_history`            | Get clipboard history                                                     |
+| `set_clipboard`                    | Set clipboard content                                                     |
+| `share_clipboard_content`          | Manually share clipboard with peers (for mobile)                          |
+| `reconnect_peers`                  | Force reconnection to all discovered peers (for mobile background resume) |
+| `get_settings` / `update_settings` | Manage app settings                                                       |
+| `get_device_info`                  | Get this device's info                                                    |
 
 ### 6. Events (Emitted to Frontend)
 
@@ -280,14 +305,14 @@ Simple reactive store with subscriptions:
 
 ```typescript
 interface AppState {
-  networkStatus: NetworkStatus;
-  discoveredPeers: DiscoveredPeer[];
-  pairedPeers: PairedPeer[];
-  clipboardHistory: ClipboardEntry[];
-  currentView: 'dashboard' | 'peers' | 'history' | 'settings';
-  settings: AppSettings;
-  deviceInfo: DeviceInfo | null;
-  // ... UI state
+    networkStatus: NetworkStatus;
+    discoveredPeers: DiscoveredPeer[];
+    pairedPeers: PairedPeer[];
+    clipboardHistory: ClipboardEntry[];
+    currentView: 'dashboard' | 'peers' | 'history' | 'settings';
+    settings: AppSettings;
+    deviceInfo: DeviceInfo | null;
+    // ... UI state
 }
 ```
 
@@ -305,6 +330,12 @@ Single-file application with four main views:
 - `commands.ts`: Typed wrappers for all Tauri commands
 - `events.ts`: Event listener management with typed handlers
 - `types.ts`: TypeScript interfaces matching Rust types
+
+### Entry Point (`src/main.ts`)
+
+- Initializes the app on DOMContentLoaded
+- **Mobile background handling**: Listens for `visibilitychange` events and triggers `reconnectPeers()` when app becomes
+  visible (critical for mobile where connections drop when backgrounded)
 
 ---
 
@@ -370,18 +401,22 @@ Both devices use the same session_id (provided by initiator in step 1).
 ## Configuration Files
 
 ### `src-tauri/tauri.conf.json`
+
 - App metadata (name, version, identifier)
 - Window configuration (size, title)
 - Build commands
 
 ### `src-tauri/capabilities/default.json`
+
 - Tauri permissions for the main window
 - Enables core events and opener plugin
 
 ### `postcss.config.js`
+
 - Uses `@tailwindcss/postcss` for Tailwind v4
 
 ### Data Directory (`~/.local/share/com.decentpaste.app/`)
+
 - `identity.json` - Device identity (device_id, device_name, public_key)
 - `private_key.bin` - Device private key (restricted permissions)
 - `libp2p_keypair.bin` - libp2p Ed25519 keypair for consistent PeerId
@@ -417,7 +452,8 @@ yarn build
 1. **Text-only clipboard**: Currently only supports text. Images/files could be added.
 2. **Local network only**: Uses mDNS, so devices must be on same network. Internet relay could be added.
 3. **Single shared secret**: All paired peers currently use first peer's secret. Should use per-peer secrets.
-4. **Mobile clipboard**: On Android/iOS, automatic clipboard monitoring is not supported. Users must manually share content using the "Share" button. Receiving clipboard from desktop works automatically.
+4. **Mobile clipboard**: On Android/iOS, automatic clipboard monitoring is not supported. Users must manually share
+   content using the "Share" button. Receiving clipboard from desktop works automatically.
 5. **No persistence of clipboard history**: History is in-memory only.
 
 ---
@@ -425,16 +461,19 @@ yarn build
 ## Troubleshooting
 
 ### Network Issues
+
 - Check that devices are on the same local network
 - Verify mDNS is not blocked by firewall
 - Check network status in app UI
 
 ### Pairing Issues
+
 - Ensure both devices have the app running
 - Verify PIN matches exactly on both devices
 - Check for pairing timeout (5 minutes)
 
 ### Clipboard Not Syncing
+
 - Verify devices are paired (check Peers view)
 - Ensure auto-sync is enabled in Settings
 - Check that content is text (images not supported)
@@ -444,6 +483,7 @@ yarn build
 ## Dependencies
 
 ### Rust (Key Dependencies)
+
 - `tauri` v2 - Application framework
 - `libp2p` v0.54 - P2P networking
 - `tauri-plugin-clipboard-manager` v2 - Cross-platform clipboard (including mobile)
@@ -451,6 +491,7 @@ yarn build
 - `tokio` v1 - Async runtime
 
 ### Frontend (Key Dependencies)
+
 - `@tauri-apps/api` v2 - Tauri JavaScript API
 - `@tauri-apps/plugin-clipboard-manager` v2 - Clipboard access for mobile
 - `tailwindcss` v4 - CSS framework
