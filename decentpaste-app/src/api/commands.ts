@@ -22,6 +22,14 @@ export async function stopNetwork(): Promise<void> {
     return invoke('stop_network');
 }
 
+/**
+ * Force reconnection to all discovered peers.
+ * Call this when the app resumes from background on mobile.
+ */
+export async function reconnectPeers(): Promise<void> {
+    return invoke('reconnect_peers');
+}
+
 // Peer management
 export async function getDiscoveredPeers(): Promise<DiscoveredPeer[]> {
     return invoke('get_discovered_peers');

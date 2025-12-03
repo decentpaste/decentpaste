@@ -51,6 +51,7 @@ pub fn run() {
             commands::get_network_status,
             commands::start_network,
             commands::stop_network,
+            commands::reconnect_peers,
             commands::get_discovered_peers,
             commands::get_paired_peers,
             commands::remove_paired_peer,
@@ -67,8 +68,24 @@ pub fn run() {
             commands::get_device_info,
             commands::get_pairing_sessions,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            // Handle app lifecycle events (especially for mobile)
+            if let tauri::RunEvent::Resumed = event {
+                info!("App resumed from background, triggering peer reconnection");
+                let state = app_handle.state::<AppState>();
+                let tx_arc = state.network_command_tx.clone();
+                tauri::async_runtime::spawn(async move {
+                    let tx = tx_arc.read().await;
+                    if let Some(tx) = tx.as_ref() {
+                        if let Err(e) = tx.send(NetworkCommand::ReconnectPeers).await {
+                            error!("Failed to send reconnect command: {}", e);
+                        }
+                    }
+                });
+            }
+        });
 }
 
 async fn initialize_app(

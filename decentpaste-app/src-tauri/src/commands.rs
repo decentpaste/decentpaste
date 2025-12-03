@@ -45,6 +45,19 @@ pub async fn stop_network(state: State<'_, AppState>) -> Result<()> {
     Ok(())
 }
 
+/// Force reconnection to all discovered peers.
+/// Call this when the app resumes from background on mobile.
+#[tauri::command]
+pub async fn reconnect_peers(state: State<'_, AppState>) -> Result<()> {
+    let tx = state.network_command_tx.read().await;
+    if let Some(tx) = tx.as_ref() {
+        tx.send(NetworkCommand::ReconnectPeers)
+            .await
+            .map_err(|_| DecentPasteError::ChannelSend)?;
+    }
+    Ok(())
+}
+
 // Peer management
 #[tauri::command]
 pub async fn get_discovered_peers(state: State<'_, AppState>) -> Result<Vec<DiscoveredPeer>> {

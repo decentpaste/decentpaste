@@ -56,6 +56,8 @@ pub enum NetworkCommand {
         message: ClipboardMessage,
     },
     GetPeers,
+    /// Force reconnection to all discovered peers (used after app resume from background)
+    ReconnectPeers,
 }
 
 /// Tracks retry state for a peer connection
@@ -715,6 +717,26 @@ impl NetworkManager {
                         .event_tx
                         .send(NetworkEvent::PeerDiscovered(peer.clone()))
                         .await;
+                }
+            }
+
+            NetworkCommand::ReconnectPeers => {
+                info!("Reconnecting to all discovered peers (app resumed from background)");
+
+                // Clear stale connection state
+                self.connected_peers.clear();
+                self.pending_retries.clear();
+
+                // Try to dial all discovered peers
+                for (peer_id, peer) in &self.discovered_peers {
+                    if let Some(addr_str) = peer.addresses.first() {
+                        if let Ok(addr) = addr_str.parse::<Multiaddr>() {
+                            info!("Attempting to reconnect to {} at {}", peer_id, addr);
+                            if let Err(e) = self.swarm.dial(addr) {
+                                warn!("Failed to initiate reconnection to {}: {}", peer_id, e);
+                            }
+                        }
+                    }
                 }
             }
 
