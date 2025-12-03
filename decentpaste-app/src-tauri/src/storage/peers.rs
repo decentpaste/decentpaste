@@ -31,25 +31,25 @@ pub struct PairedPeer {
 /// Initialize the data directory using Tauri's path resolver.
 /// Must be called once at app startup before any storage operations.
 pub fn init_data_dir(app: &AppHandle) -> Result<()> {
-    let data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| DecentPasteError::Storage(format!("Could not determine data directory: {}", e)))?;
+    let data_dir = app.path().app_data_dir().map_err(|e| {
+        DecentPasteError::Storage(format!("Could not determine data directory: {}", e))
+    })?;
 
     std::fs::create_dir_all(&data_dir)?;
 
-    DATA_DIR.set(data_dir).map_err(|_| {
-        DecentPasteError::Storage("Data directory already initialized".into())
-    })?;
+    DATA_DIR
+        .set(data_dir)
+        .map_err(|_| DecentPasteError::Storage("Data directory already initialized".into()))?;
 
     Ok(())
 }
 
 pub fn get_data_dir() -> Result<PathBuf> {
-    DATA_DIR
-        .get()
-        .cloned()
-        .ok_or_else(|| DecentPasteError::Storage("Data directory not initialized. Call init_data_dir first.".into()))
+    DATA_DIR.get().cloned().ok_or_else(|| {
+        DecentPasteError::Storage(
+            "Data directory not initialized. Call init_data_dir first.".into(),
+        )
+    })
 }
 
 fn get_peers_path() -> Result<PathBuf> {
@@ -65,6 +65,45 @@ fn get_identity_path() -> Result<PathBuf> {
 fn get_private_key_path() -> Result<PathBuf> {
     let data_dir = get_data_dir()?;
     Ok(data_dir.join("private_key.bin"))
+}
+
+fn get_libp2p_keypair_path() -> Result<PathBuf> {
+    let data_dir = get_data_dir()?;
+    Ok(data_dir.join("libp2p_keypair.bin"))
+}
+
+/// Load or create the libp2p keypair for consistent PeerId across restarts
+pub fn get_or_create_libp2p_keypair() -> Result<libp2p::identity::Keypair> {
+    let path = get_libp2p_keypair_path()?;
+
+    if path.exists() {
+        // Load existing keypair using protobuf encoding
+        let bytes = std::fs::read(&path)?;
+        let keypair = libp2p::identity::Keypair::from_protobuf_encoding(&bytes).map_err(|e| {
+            DecentPasteError::Storage(format!("Failed to load libp2p keypair: {}", e))
+        })?;
+        return Ok(keypair);
+    }
+
+    // Generate new keypair
+    let keypair = libp2p::identity::Keypair::generate_ed25519();
+
+    // Save to disk using protobuf encoding
+    let bytes = keypair.to_protobuf_encoding().map_err(|e| {
+        DecentPasteError::Storage(format!("Failed to encode libp2p keypair: {}", e))
+    })?;
+    std::fs::write(&path, &bytes)?;
+
+    // Set restrictive permissions on Unix
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = std::fs::metadata(&path)?.permissions();
+        perms.set_mode(0o600);
+        std::fs::set_permissions(&path, perms)?;
+    }
+
+    Ok(keypair)
 }
 
 pub fn load_paired_peers() -> Result<Vec<PairedPeer>> {

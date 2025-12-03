@@ -1,10 +1,10 @@
 use chrono::Utc;
-use rand::RngCore;
 use rand::rngs::OsRng;
+use rand::RngCore;
 use uuid::Uuid;
 
 use crate::error::Result;
-use crate::storage::{DeviceIdentity, load_device_identity, save_device_identity, load_settings};
+use crate::storage::{load_device_identity, load_settings, save_device_identity, DeviceIdentity};
 
 pub fn generate_device_identity(device_name: &str) -> DeviceIdentity {
     // Generate a unique device ID

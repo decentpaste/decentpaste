@@ -2,6 +2,6 @@ mod crypto;
 mod identity;
 mod pairing;
 
-pub use crypto::{encrypt_content, decrypt_content, hash_content, generate_shared_secret};
+pub use crypto::{decrypt_content, encrypt_content, generate_shared_secret, hash_content};
 pub use identity::{generate_device_identity, get_or_create_identity};
-pub use pairing::{PairingSession, PairingState, generate_pin, verify_pin_hash, create_pin_hash};
+pub use pairing::{create_pin_hash, generate_pin, verify_pin_hash, PairingSession, PairingState};

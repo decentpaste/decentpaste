@@ -1,12 +1,12 @@
+use async_trait::async_trait;
+use futures::prelude::*;
 use libp2p::{
     gossipsub, identify, mdns,
-    request_response::{self, ProtocolSupport, Codec},
+    request_response::{self, Codec, ProtocolSupport},
     swarm::NetworkBehaviour,
     StreamProtocol,
 };
 use std::time::Duration;
-use futures::prelude::*;
-use async_trait::async_trait;
 
 use super::protocol::ProtocolMessage;
 
@@ -32,41 +32,63 @@ impl Codec for DecentPasteCodec {
     type Request = PairingRequest;
     type Response = PairingResponse;
 
-    async fn read_request<T>(&mut self, _: &Self::Protocol, io: &mut T) -> std::io::Result<Self::Request>
+    async fn read_request<T>(
+        &mut self,
+        _: &Self::Protocol,
+        io: &mut T,
+    ) -> std::io::Result<Self::Request>
     where
         T: AsyncRead + Unpin + Send,
     {
         let mut buf = Vec::new();
         let mut limited = io.take(1024 * 64); // 64KB limit
         limited.read_to_end(&mut buf).await?;
-        serde_json::from_slice(&buf).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+        serde_json::from_slice(&buf)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
     }
 
-    async fn read_response<T>(&mut self, _: &Self::Protocol, io: &mut T) -> std::io::Result<Self::Response>
+    async fn read_response<T>(
+        &mut self,
+        _: &Self::Protocol,
+        io: &mut T,
+    ) -> std::io::Result<Self::Response>
     where
         T: AsyncRead + Unpin + Send,
     {
         let mut buf = Vec::new();
         let mut limited = io.take(1024 * 64); // 64KB limit
         limited.read_to_end(&mut buf).await?;
-        serde_json::from_slice(&buf).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+        serde_json::from_slice(&buf)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
     }
 
-    async fn write_request<T>(&mut self, _: &Self::Protocol, io: &mut T, req: Self::Request) -> std::io::Result<()>
+    async fn write_request<T>(
+        &mut self,
+        _: &Self::Protocol,
+        io: &mut T,
+        req: Self::Request,
+    ) -> std::io::Result<()>
     where
         T: AsyncWrite + Unpin + Send,
     {
-        let bytes = serde_json::to_vec(&req).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        let bytes = serde_json::to_vec(&req)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         io.write_all(&bytes).await?;
         io.close().await?;
         Ok(())
     }
 
-    async fn write_response<T>(&mut self, _: &Self::Protocol, io: &mut T, res: Self::Response) -> std::io::Result<()>
+    async fn write_response<T>(
+        &mut self,
+        _: &Self::Protocol,
+        io: &mut T,
+        res: Self::Response,
+    ) -> std::io::Result<()>
     where
         T: AsyncWrite + Unpin + Send,
     {
-        let bytes = serde_json::to_vec(&res).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        let bytes = serde_json::to_vec(&res)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         io.write_all(&bytes).await?;
         io.close().await?;
         Ok(())
@@ -82,12 +104,12 @@ pub struct DecentPasteBehaviour {
 }
 
 impl DecentPasteBehaviour {
-    pub fn new(local_peer_id: libp2p::PeerId, keypair: &libp2p::identity::Keypair) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn new(
+        local_peer_id: libp2p::PeerId,
+        keypair: &libp2p::identity::Keypair,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         // mDNS for local discovery
-        let mdns = mdns::tokio::Behaviour::new(
-            mdns::Config::default(),
-            local_peer_id,
-        )?;
+        let mdns = mdns::tokio::Behaviour::new(mdns::Config::default(), local_peer_id)?;
 
         // Gossipsub for clipboard broadcast
         let gossipsub_config = gossipsub::ConfigBuilder::default()
@@ -116,11 +138,8 @@ impl DecentPasteBehaviour {
 
         // Identify for peer identification
         let identify = identify::Behaviour::new(
-            identify::Config::new(
-                PROTOCOL_NAME.to_string(),
-                keypair.public(),
-            )
-            .with_agent_version(format!("decentpaste/{}", env!("CARGO_PKG_VERSION"))),
+            identify::Config::new(PROTOCOL_NAME.to_string(), keypair.public())
+                .with_agent_version(format!("decentpaste/{}", env!("CARGO_PKG_VERSION"))),
         );
 
         Ok(Self {
@@ -136,9 +155,17 @@ impl DecentPasteBehaviour {
         self.gossipsub.subscribe(&topic).map(|_| ())
     }
 
-    pub fn publish_clipboard(&mut self, message: &ProtocolMessage) -> Result<gossipsub::MessageId, gossipsub::PublishError> {
+    pub fn publish_clipboard(
+        &mut self,
+        message: &ProtocolMessage,
+    ) -> Result<gossipsub::MessageId, gossipsub::PublishError> {
         let topic = gossipsub::IdentTopic::new(GOSSIPSUB_TOPIC);
-        let data = message.to_bytes().map_err(|e| gossipsub::PublishError::TransformFailed(std::io::Error::new(std::io::ErrorKind::Other, e)))?;
+        let data = message.to_bytes().map_err(|e| {
+            gossipsub::PublishError::TransformFailed(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                e,
+            ))
+        })?;
         self.gossipsub.publish(topic, data)
     }
 }

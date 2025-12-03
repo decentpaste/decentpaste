@@ -40,7 +40,10 @@ impl ClipboardMonitor {
             *running = true;
         }
 
-        debug!("Starting clipboard monitor with {:?} poll interval", self.poll_interval);
+        debug!(
+            "Starting clipboard monitor with {:?} poll interval",
+            self.poll_interval
+        );
 
         // Clone for the async task
         let last_hash = self.last_hash.clone();

@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep:*)"
+    ],
+    "deny": [
+      "Read(.idea/**)",
+      "Read(.run/**)",
+      "Read(target/**)",
+      "Read(decentpaste-app/node_modules/**)",
+      "Read(decentpaste-app/dist/**)",
+    ],
+    "ask": []
+  },
+  "outputStyle": "Explanatory"
+}

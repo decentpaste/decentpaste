@@ -27,7 +27,7 @@ pub struct PairingRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PairingChallenge {
     pub session_id: String,
-    pub pin: String, // In real implementation, this would be encrypted
+    pub pin: String,         // In real implementation, this would be encrypted
     pub device_name: String, // Responder's device name
 }
 

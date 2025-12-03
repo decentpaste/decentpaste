@@ -48,8 +48,17 @@ pub async fn stop_network(state: State<'_, AppState>) -> Result<()> {
 // Peer management
 #[tauri::command]
 pub async fn get_discovered_peers(state: State<'_, AppState>) -> Result<Vec<DiscoveredPeer>> {
-    let peers = state.discovered_peers.read().await;
-    Ok(peers.clone())
+    let discovered = state.discovered_peers.read().await;
+    let paired = state.paired_peers.read().await;
+
+    // Filter out peers that are already paired
+    let filtered: Vec<DiscoveredPeer> = discovered
+        .iter()
+        .filter(|d| !paired.iter().any(|p| p.peer_id == d.peer_id))
+        .cloned()
+        .collect();
+
+    Ok(filtered)
 }
 
 #[tauri::command]
@@ -71,10 +80,7 @@ pub async fn remove_paired_peer(state: State<'_, AppState>, peer_id: String) -> 
 
 // Pairing flow
 #[tauri::command]
-pub async fn initiate_pairing(
-    state: State<'_, AppState>,
-    peer_id: String,
-) -> Result<String> {
+pub async fn initiate_pairing(state: State<'_, AppState>, peer_id: String) -> Result<String> {
     // Check if already paired
     if state.is_peer_paired(&peer_id).await {
         return Err(DecentPasteError::AlreadyPaired(peer_id));
@@ -133,9 +139,19 @@ pub async fn respond_to_pairing(
                 tracing::debug!("respond_to_pairing called again for already-accepted session, returning existing PIN");
                 return Ok(session.pin.clone());
             }
-            if matches!(session.state, PairingState::Failed(_) | PairingState::Completed | PairingState::AwaitingPeerConfirmation) {
-                tracing::debug!("respond_to_pairing called for session in terminal state: {:?}", session.state);
-                return Err(DecentPasteError::Pairing("Session already processed".into()));
+            if matches!(
+                session.state,
+                PairingState::Failed(_)
+                    | PairingState::Completed
+                    | PairingState::AwaitingPeerConfirmation
+            ) {
+                tracing::debug!(
+                    "respond_to_pairing called for session in terminal state: {:?}",
+                    session.state
+                );
+                return Err(DecentPasteError::Pairing(
+                    "Session already processed".into(),
+                ));
             }
 
             peer_id = session.peer_id.clone();
@@ -180,12 +196,14 @@ pub async fn respond_to_pairing(
                 {
                     // Rollback session state on network failure
                     let mut sessions = state.pairing_sessions.write().await;
-                    if let Some(session) =
-                        sessions.iter_mut().find(|s| s.session_id == session_id)
+                    if let Some(session) = sessions.iter_mut().find(|s| s.session_id == session_id)
                     {
                         session.state = PairingState::Initiated;
                         session.pin = None;
-                        tracing::warn!("Rolled back session {} after network send failure", session_id);
+                        tracing::warn!(
+                            "Rolled back session {} after network send failure",
+                            session_id
+                        );
                     }
                     return Err(DecentPasteError::ChannelSend);
                 }
@@ -301,10 +319,10 @@ pub async fn share_clipboard_content(
     state: State<'_, AppState>,
     content: String,
 ) -> Result<()> {
-    use chrono::Utc;
     use crate::clipboard::ClipboardEntry;
     use crate::network::{ClipboardMessage, NetworkCommand};
     use crate::security::{encrypt_content, hash_content};
+    use chrono::Utc;
     use tauri::Emitter;
 
     let content_hash = hash_content(&content);
@@ -368,10 +386,7 @@ pub async fn get_settings(state: State<'_, AppState>) -> Result<AppSettings> {
 }
 
 #[tauri::command]
-pub async fn update_settings(
-    state: State<'_, AppState>,
-    settings: AppSettings,
-) -> Result<()> {
+pub async fn update_settings(state: State<'_, AppState>, settings: AppSettings) -> Result<()> {
     save_settings(&settings)?;
     let mut current = state.settings.write().await;
     *current = settings;

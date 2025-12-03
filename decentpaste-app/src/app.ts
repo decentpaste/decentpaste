@@ -1,142 +1,150 @@
-import { store, type View, type Toast } from './state/store';
-import { eventManager } from './api/events';
+import {store, type Toast, type View} from './state/store';
+import {eventManager} from './api/events';
 import * as commands from './api/commands';
-import { readText } from '@tauri-apps/plugin-clipboard-manager';
-import { icon } from './components/icons';
-import { $, formatTime, truncate, getStatusColor, getStatusText } from './utils/dom';
-import type { ClipboardEntry, DiscoveredPeer, PairedPeer } from './api/types';
+import {readText} from '@tauri-apps/plugin-clipboard-manager';
+import {icon} from './components/icons';
+import {$, formatTime, getStatusColor, getStatusText, truncate} from './utils/dom';
+import type {ClipboardEntry, DiscoveredPeer, PairedPeer} from './api/types';
 
 class App {
-  private root: HTMLElement;
-  private pairingInProgress: boolean = false; // Guard against duplicate pairing operations
-  private modalRenderPending: boolean = false; // Debounce modal renders
+    private root: HTMLElement;
+    private pairingInProgress: boolean = false; // Guard against duplicate pairing operations
+    private modalRenderPending: boolean = false; // Debounce modal renders
 
-  constructor(rootElement: HTMLElement) {
-    this.root = rootElement;
-  }
-
-  async init(): Promise<void> {
-    // Setup event listeners from backend
-    await eventManager.setup();
-    this.setupEventHandlers();
-
-    // Load initial data
-    await this.loadInitialData();
-
-    // Render UI
-    this.render();
-
-    // Subscribe to state changes
-    this.setupStateSubscriptions();
-  }
-
-  private setupEventHandlers(): void {
-    eventManager.on('networkStatus', (status) => {
-      store.set('networkStatus', status);
-    });
-
-    eventManager.on('peerDiscovered', (peer) => {
-      store.addDiscoveredPeer(peer);
-    });
-
-    eventManager.on('peerLost', (peerId) => {
-      store.removeDiscoveredPeer(peerId);
-    });
-
-    eventManager.on('clipboardReceived', (entry) => {
-      store.addClipboardEntry(entry);
-      store.addToast(`Clipboard received from ${entry.origin_device_name}`, 'success');
-    });
-
-    eventManager.on('clipboardSent', (entry) => {
-      store.addClipboardEntry(entry);
-    });
-
-    eventManager.on('pairingRequest', (payload) => {
-      store.set('showPairingModal', true);
-      store.set('pairingModalMode', 'respond');
-      store.set('activePairingSession', {
-        session_id: payload.sessionId,
-        peer_id: payload.peerId,
-        peer_name: payload.deviceName,
-        pin: null,
-        state: 'Initiated',
-        is_initiator: false,
-        created_at: new Date().toISOString(),
-      });
-    });
-
-    eventManager.on('pairingPin', (payload) => {
-      store.update('activePairingSession', (session) =>
-        session ? { ...session, pin: payload.pin, peer_name: payload.peerDeviceName, state: 'AwaitingPinConfirmation' } : null
-      );
-      store.set('pairingModalMode', 'confirm');
-    });
-
-    eventManager.on('pairingComplete', (payload) => {
-      store.set('showPairingModal', false);
-      store.set('activePairingSession', null);
-      store.addToast(`Paired with ${payload.deviceName}!`, 'success');
-      this.loadPairedPeers();
-    });
-
-    eventManager.on('pairingFailed', (payload) => {
-      store.addToast(`Pairing failed: ${payload.error}`, 'error');
-      store.set('showPairingModal', false);
-      store.set('activePairingSession', null);
-    });
-
-    eventManager.on('networkError', (error) => {
-      store.addToast(`Network error: ${error}`, 'error');
-    });
-  }
-
-  private async loadInitialData(): Promise<void> {
-    try {
-      const [deviceInfo, settings, pairedPeers, discoveredPeers, clipboardHistory] = await Promise.all([
-        commands.getDeviceInfo(),
-        commands.getSettings(),
-        commands.getPairedPeers(),
-        commands.getDiscoveredPeers(),
-        commands.getClipboardHistory(),
-      ]);
-
-      store.set('deviceInfo', deviceInfo);
-      store.set('settings', settings);
-      store.set('pairedPeers', pairedPeers);
-      store.set('discoveredPeers', discoveredPeers);
-      store.set('clipboardHistory', clipboardHistory);
-    } catch (error) {
-      console.error('Failed to load initial data:', error);
-      store.addToast('Failed to load app data', 'error');
-    } finally {
-      store.set('isLoading', false);
+    constructor(rootElement: HTMLElement) {
+        this.root = rootElement;
     }
-  }
 
-  private async loadPairedPeers(): Promise<void> {
-    const peers = await commands.getPairedPeers();
-    store.set('pairedPeers', peers);
-  }
+    async init(): Promise<void> {
+        // Setup event listeners from backend
+        await eventManager.setup();
+        this.setupEventHandlers();
 
-  private setupStateSubscriptions(): void {
-    store.subscribe('currentView', () => this.render());
-    store.subscribe('networkStatus', () => this.updateStatusIndicator());
-    store.subscribe('discoveredPeers', () => this.renderPeersList());
-    store.subscribe('pairedPeers', () => this.renderPeersList());
-    store.subscribe('clipboardHistory', () => this.renderClipboardHistory());
-    store.subscribe('toasts', () => this.renderToasts());
-    store.subscribe('showPairingModal', () => this.renderPairingModal());
-    store.subscribe('pairingModalMode', () => this.renderPairingModal());
-    store.subscribe('activePairingSession', () => this.renderPairingModal());
-    store.subscribe('isLoading', () => this.render());
-  }
+        // Load initial data
+        await this.loadInitialData();
 
-  private render(): void {
-    const state = store.getState();
+        // Render UI
+        this.render();
 
-    if (state.isLoading) {
-      this.root.innerHTML = `
+        // Subscribe to state changes
+        this.setupStateSubscriptions();
+    }
+
+    private setupEventHandlers(): void {
+        eventManager.on('networkStatus', (status) => {
+            store.set('networkStatus', status);
+        });
+
+        eventManager.on('peerDiscovered', (peer) => {
+            store.addDiscoveredPeer(peer);
+        });
+
+        eventManager.on('peerLost', (peerId) => {
+            store.removeDiscoveredPeer(peerId);
+        });
+
+        eventManager.on('clipboardReceived', (entry) => {
+            store.addClipboardEntry(entry);
+            store.addToast(`Clipboard received from ${entry.origin_device_name}`, 'success');
+        });
+
+        eventManager.on('clipboardSent', (entry) => {
+            store.addClipboardEntry(entry);
+        });
+
+        eventManager.on('pairingRequest', (payload) => {
+            store.set('showPairingModal', true);
+            store.set('pairingModalMode', 'respond');
+            store.set('activePairingSession', {
+                session_id: payload.sessionId,
+                peer_id: payload.peerId,
+                peer_name: payload.deviceName,
+                pin: null,
+                state: 'Initiated',
+                is_initiator: false,
+                created_at: new Date().toISOString(),
+            });
+        });
+
+        eventManager.on('pairingPin', (payload) => {
+            store.update('activePairingSession', (session) =>
+                session ? {
+                    ...session,
+                    pin: payload.pin,
+                    peer_name: payload.peerDeviceName,
+                    state: 'AwaitingPinConfirmation'
+                } : null
+            );
+            store.set('pairingModalMode', 'confirm');
+        });
+
+        eventManager.on('pairingComplete', (payload) => {
+            store.set('showPairingModal', false);
+            store.set('activePairingSession', null);
+            store.addToast(`Paired with ${payload.deviceName}!`, 'success');
+            // Remove the newly paired peer from discovered list immediately
+            store.removeDiscoveredPeer(payload.peerId);
+            // Reload both lists to ensure consistency
+            this.loadPairedPeers();
+        });
+
+        eventManager.on('pairingFailed', (payload) => {
+            store.addToast(`Pairing failed: ${payload.error}`, 'error');
+            store.set('showPairingModal', false);
+            store.set('activePairingSession', null);
+        });
+
+        eventManager.on('networkError', (error) => {
+            store.addToast(`Network error: ${error}`, 'error');
+        });
+    }
+
+    private async loadInitialData(): Promise<void> {
+        try {
+            const [deviceInfo, settings, pairedPeers, discoveredPeers, clipboardHistory] = await Promise.all([
+                commands.getDeviceInfo(),
+                commands.getSettings(),
+                commands.getPairedPeers(),
+                commands.getDiscoveredPeers(),
+                commands.getClipboardHistory(),
+            ]);
+
+            store.set('deviceInfo', deviceInfo);
+            store.set('settings', settings);
+            store.set('pairedPeers', pairedPeers);
+            store.set('discoveredPeers', discoveredPeers);
+            store.set('clipboardHistory', clipboardHistory);
+        } catch (error) {
+            console.error('Failed to load initial data:', error);
+            store.addToast('Failed to load app data', 'error');
+        } finally {
+            store.set('isLoading', false);
+        }
+    }
+
+    private async loadPairedPeers(): Promise<void> {
+        const peers = await commands.getPairedPeers();
+        store.set('pairedPeers', peers);
+    }
+
+    private setupStateSubscriptions(): void {
+        store.subscribe('currentView', () => this.render());
+        store.subscribe('networkStatus', () => this.updateStatusIndicator());
+        store.subscribe('discoveredPeers', () => this.renderPeersList());
+        store.subscribe('pairedPeers', () => this.renderPeersList());
+        store.subscribe('clipboardHistory', () => this.renderClipboardHistory());
+        store.subscribe('toasts', () => this.renderToasts());
+        store.subscribe('showPairingModal', () => this.renderPairingModal());
+        store.subscribe('pairingModalMode', () => this.renderPairingModal());
+        store.subscribe('activePairingSession', () => this.renderPairingModal());
+        store.subscribe('isLoading', () => this.render());
+    }
+
+    private render(): void {
+        const state = store.getState();
+
+        if (state.isLoading) {
+            this.root.innerHTML = `
         <div class="flex items-center justify-center h-screen bg-gray-50 dark:bg-gray-900">
           <div class="text-center">
             <div class="inline-block animate-spin mb-4">${icon('loader', 48)}</div>
@@ -144,10 +152,10 @@ class App {
           </div>
         </div>
       `;
-      return;
-    }
+            return;
+        }
 
-    this.root.innerHTML = `
+        this.root.innerHTML = `
       <div class="flex flex-col h-screen bg-gray-50 dark:bg-gray-900">
         <!-- Header -->
         <header class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3">
@@ -194,35 +202,35 @@ class App {
       </div>
     `;
 
-    this.attachEventListeners();
-  }
+        this.attachEventListeners();
+    }
 
-  private renderStatusIndicator(): string {
-    const status = store.get('networkStatus');
-    const statusText = getStatusText(status);
-    const colorClass = getStatusColor(statusText);
+    private renderStatusIndicator(): string {
+        const status = store.get('networkStatus');
+        const statusText = getStatusText(status);
+        const colorClass = getStatusColor(statusText);
 
-    return `
+        return `
       <div class="flex items-center gap-2 px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-700">
         <div class="w-2 h-2 rounded-full ${colorClass} ${statusText === 'Connecting' ? 'animate-pulse' : ''}"></div>
         <span class="text-xs text-gray-600 dark:text-gray-300">${statusText}</span>
       </div>
     `;
-  }
-
-  private updateStatusIndicator(): void {
-    const indicator = $('#status-indicator');
-    if (indicator) {
-      indicator.innerHTML = this.renderStatusIndicator();
     }
-  }
 
-  private renderNavItem(view: View, iconName: keyof typeof import('./components/icons').icons, label: string): string {
-    const currentView = store.get('currentView');
-    const isActive = currentView === view;
-    const activeClass = isActive ? 'text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-gray-400';
+    private updateStatusIndicator(): void {
+        const indicator = $('#status-indicator');
+        if (indicator) {
+            indicator.innerHTML = this.renderStatusIndicator();
+        }
+    }
 
-    return `
+    private renderNavItem(view: View, iconName: keyof typeof import('./components/icons').icons, label: string): string {
+        const currentView = store.get('currentView');
+        const isActive = currentView === view;
+        const activeClass = isActive ? 'text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-gray-400';
+
+        return `
       <button
         data-nav="${view}"
         class="flex flex-col items-center gap-1 px-4 py-1 ${activeClass} hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
@@ -231,32 +239,32 @@ class App {
         <span class="text-xs">${label}</span>
       </button>
     `;
-  }
-
-  private renderCurrentView(): string {
-    const view = store.get('currentView');
-
-    switch (view) {
-      case 'dashboard':
-        return this.renderDashboard();
-      case 'peers':
-        return this.renderPeersView();
-      case 'history':
-        return this.renderHistoryView();
-      case 'settings':
-        return this.renderSettingsView();
-      default:
-        return this.renderDashboard();
     }
-  }
 
-  private renderDashboard(): string {
-    const state = store.getState();
-    const pairedCount = state.pairedPeers.length;
-    const historyCount = state.clipboardHistory.length;
-    const recentItems = state.clipboardHistory.slice(0, 3);
+    private renderCurrentView(): string {
+        const view = store.get('currentView');
 
-    return `
+        switch (view) {
+            case 'dashboard':
+                return this.renderDashboard();
+            case 'peers':
+                return this.renderPeersView();
+            case 'history':
+                return this.renderHistoryView();
+            case 'settings':
+                return this.renderSettingsView();
+            default:
+                return this.renderDashboard();
+        }
+    }
+
+    private renderDashboard(): string {
+        const state = store.getState();
+        const pairedCount = state.pairedPeers.length;
+        const historyCount = state.clipboardHistory.length;
+        const recentItems = state.clipboardHistory.slice(0, 3);
+
+        return `
       <div class="p-4 h-full overflow-y-auto">
         <!-- Stats -->
         <div class="grid grid-cols-2 gap-3 mb-6">
@@ -326,16 +334,16 @@ class App {
         </div>
       </div>
     `;
-  }
+    }
 
-  private renderPeersView(): string {
-    const state = store.getState();
-    const pairedPeers = state.pairedPeers;
-    const discoveredPeers = state.discoveredPeers.filter(
-      (d) => !pairedPeers.some((p) => p.peer_id === d.peer_id)
-    );
+    private renderPeersView(): string {
+        const state = store.getState();
+        const pairedPeers = state.pairedPeers;
+        const discoveredPeers = state.discoveredPeers.filter(
+            (d) => !pairedPeers.some((p) => p.peer_id === d.peer_id)
+        );
 
-    return `
+        return `
       <div class="p-4 h-full overflow-y-auto">
         <!-- Paired Devices -->
         <div class="mb-6">
@@ -354,12 +362,12 @@ class App {
         </div>
       </div>
     `;
-  }
+    }
 
-  private renderHistoryView(): string {
-    const history = store.get('clipboardHistory');
+    private renderHistoryView(): string {
+        const history = store.get('clipboardHistory');
 
-    return `
+        return `
       <div class="p-4 h-full overflow-y-auto">
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-sm font-semibold text-gray-900 dark:text-white">Clipboard History</h2>
@@ -375,13 +383,13 @@ class App {
         </div>
       </div>
     `;
-  }
+    }
 
-  private renderSettingsView(): string {
-    const settings = store.get('settings');
-    const deviceInfo = store.get('deviceInfo');
+    private renderSettingsView(): string {
+        const settings = store.get('settings');
+        const deviceInfo = store.get('deviceInfo');
 
-    return `
+        return `
       <div class="p-4 h-full overflow-y-auto">
         <!-- Device Info -->
         <div class="mb-6">
@@ -466,10 +474,10 @@ class App {
         </div>
       </div>
     `;
-  }
+    }
 
-  private renderClipboardItem(item: ClipboardEntry): string {
-    return `
+    private renderClipboardItem(item: ClipboardEntry): string {
+        return `
       <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-3 group hover:border-primary-300 dark:hover:border-primary-600 transition-colors">
         <div class="flex items-start justify-between gap-2">
           <div class="flex-1 min-w-0">
@@ -492,10 +500,10 @@ class App {
         </div>
       </div>
     `;
-  }
+    }
 
-  private renderPairedPeer(peer: PairedPeer): string {
-    return `
+    private renderPairedPeer(peer: PairedPeer): string {
+        return `
       <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-3 flex items-center justify-between">
         <div class="flex items-center gap-3">
           <div class="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
@@ -517,10 +525,10 @@ class App {
         </button>
       </div>
     `;
-  }
+    }
 
-  private renderDiscoveredPeer(peer: DiscoveredPeer): string {
-    return `
+    private renderDiscoveredPeer(peer: DiscoveredPeer): string {
+        return `
       <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-3 flex items-center justify-between">
         <div class="flex items-center gap-3">
           <div class="w-10 h-10 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg flex items-center justify-center">
@@ -539,38 +547,38 @@ class App {
         </button>
       </div>
     `;
-  }
+    }
 
-  private renderEmptyState(title: string, subtitle: string): string {
-    return `
+    private renderEmptyState(title: string, subtitle: string): string {
+        return `
       <div class="text-center py-8">
         <p class="text-gray-600 dark:text-gray-400 text-sm">${title}</p>
         <p class="text-gray-400 dark:text-gray-500 text-xs mt-1">${subtitle}</p>
       </div>
     `;
-  }
-
-  private renderToastsContent(): string {
-    const toasts = store.get('toasts');
-    return toasts.map((toast) => this.renderToast(toast)).join('');
-  }
-
-  private renderToasts(): void {
-    const container = $('#toast-container');
-    if (container) {
-      container.innerHTML = this.renderToastsContent();
     }
-  }
 
-  private renderToast(toast: Toast): string {
-    const bgColor =
-      toast.type === 'success'
-        ? 'bg-green-500'
-        : toast.type === 'error'
-        ? 'bg-red-500'
-        : 'bg-gray-700';
+    private renderToastsContent(): string {
+        const toasts = store.get('toasts');
+        return toasts.map((toast) => this.renderToast(toast)).join('');
+    }
 
-    return `
+    private renderToasts(): void {
+        const container = $('#toast-container');
+        if (container) {
+            container.innerHTML = this.renderToastsContent();
+        }
+    }
+
+    private renderToast(toast: Toast): string {
+        const bgColor =
+            toast.type === 'success'
+                ? 'bg-green-500'
+                : toast.type === 'error'
+                    ? 'bg-red-500'
+                    : 'bg-gray-700';
+
+        return `
       <div class="${bgColor} text-white px-4 py-3 rounded-lg shadow-lg flex items-center justify-between animate-slide-up">
         <span class="text-sm">${toast.message}</span>
         <button data-dismiss-toast="${toast.id}" class="ml-3 hover:opacity-80">
@@ -578,18 +586,18 @@ class App {
         </button>
       </div>
     `;
-  }
+    }
 
-  private renderPairingModalContent(): string {
-    const session = store.get('activePairingSession');
-    const mode = store.get('pairingModalMode');
+    private renderPairingModalContent(): string {
+        const session = store.get('activePairingSession');
+        const mode = store.get('pairingModalMode');
 
-    if (!session) return '';
+        if (!session) return '';
 
-    let content = '';
+        let content = '';
 
-    if (mode === 'respond') {
-      content = `
+        if (mode === 'respond') {
+            content = `
         <div class="text-center">
           <div class="w-16 h-16 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
             ${icon('link', 32, 'text-primary-600 dark:text-primary-400')}
@@ -614,10 +622,10 @@ class App {
           </div>
         </div>
       `;
-    } else if (mode === 'confirm' && session.pin) {
-      // Initiator shows Confirm button, Responder shows waiting message
-      const isInitiator = session.is_initiator;
-      const buttonArea = isInitiator ? `
+        } else if (mode === 'confirm' && session.pin) {
+            // Initiator shows Confirm button, Responder shows waiting message
+            const isInitiator = session.is_initiator;
+            const buttonArea = isInitiator ? `
           <div class="flex gap-3">
             <button
               id="btn-cancel-pairing"
@@ -645,7 +653,7 @@ class App {
           </button>
       `;
 
-      content = `
+            content = `
         <div class="text-center">
           <div class="w-16 h-16 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
             ${icon('check', 32, 'text-primary-600 dark:text-primary-400')}
@@ -658,8 +666,8 @@ class App {
           ${buttonArea}
         </div>
       `;
-    } else if (mode === 'initiate') {
-      content = `
+        } else if (mode === 'initiate') {
+            content = `
         <div class="text-center">
           <div class="animate-spin w-16 h-16 mx-auto mb-4">
             ${icon('loader', 64, 'text-primary-600 dark:text-primary-400')}
@@ -674,315 +682,315 @@ class App {
           </button>
         </div>
       `;
-    }
+        }
 
-    return `
+        return `
       <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
         <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 m-4 max-w-sm w-full shadow-xl">
           ${content}
         </div>
       </div>
     `;
-  }
-
-  private renderPairingModal(): void {
-    // Debounce rapid re-renders (e.g., when multiple state changes happen at once)
-    if (this.modalRenderPending) return;
-    this.modalRenderPending = true;
-
-    // Use microtask to batch multiple state changes
-    queueMicrotask(() => {
-      this.modalRenderPending = false;
-      const modal = $('#pairing-modal');
-      if (modal) {
-        const show = store.get('showPairingModal');
-        modal.className = show ? '' : 'hidden';
-        modal.innerHTML = this.renderPairingModalContent();
-        this.attachPairingModalListeners();
-      }
-    });
-  }
-
-  private renderPeersList(): void {
-    const view = store.get('currentView');
-    if (view === 'peers') {
-      const content = $('main');
-      if (content) {
-        content.innerHTML = this.renderPeersView();
-        this.attachEventListeners();
-      }
     }
-  }
 
-  private renderClipboardHistory(): void {
-    const view = store.get('currentView');
-    if (view === 'history') {
-      const container = $('#clipboard-history');
-      if (container) {
-        const history = store.get('clipboardHistory');
-        container.innerHTML = history.length > 0
-          ? history.map((item) => this.renderClipboardItem(item)).join('')
-          : this.renderEmptyState('No clipboard history', 'Your copied items will appear here');
-        this.attachEventListeners();
-      }
-    } else if (view === 'dashboard') {
-      const container = $('#recent-clipboard');
-      if (container) {
-        const recentItems = store.get('clipboardHistory').slice(0, 3);
-        container.innerHTML = recentItems.length > 0
-          ? recentItems.map((item) => this.renderClipboardItem(item)).join('')
-          : this.renderEmptyState('No clipboard items yet', 'Copy something to get started');
-        this.attachEventListeners();
-      }
+    private renderPairingModal(): void {
+        // Debounce rapid re-renders (e.g., when multiple state changes happen at once)
+        if (this.modalRenderPending) return;
+        this.modalRenderPending = true;
+
+        // Use microtask to batch multiple state changes
+        queueMicrotask(() => {
+            this.modalRenderPending = false;
+            const modal = $('#pairing-modal');
+            if (modal) {
+                const show = store.get('showPairingModal');
+                modal.className = show ? '' : 'hidden';
+                modal.innerHTML = this.renderPairingModalContent();
+                this.attachPairingModalListeners();
+            }
+        });
     }
-  }
 
-  private attachEventListeners(): void {
-    // Navigation
-    document.querySelectorAll('[data-nav]').forEach((el) => {
-      el.addEventListener('click', () => {
-        const view = el.getAttribute('data-nav') as View;
-        store.set('currentView', view);
-      });
-    });
-
-    // Copy buttons
-    document.querySelectorAll('[data-copy]').forEach((el) => {
-      el.addEventListener('click', async () => {
-        const id = el.getAttribute('data-copy');
-        const history = store.get('clipboardHistory');
-        const item = history.find((h) => h.id === id);
-        if (item) {
-          await commands.setClipboard(item.content);
-          store.addToast('Copied to clipboard', 'success');
+    private renderPeersList(): void {
+        const view = store.get('currentView');
+        if (view === 'peers') {
+            const content = $('main');
+            if (content) {
+                content.innerHTML = this.renderPeersView();
+                this.attachEventListeners();
+            }
         }
-      });
-    });
+    }
 
-    // Pair buttons
-    document.querySelectorAll('[data-pair]').forEach((el) => {
-      el.addEventListener('click', async () => {
-        const peerId = el.getAttribute('data-pair');
-        if (peerId) {
-          const peers = store.get('discoveredPeers');
-          const peer = peers.find((p) => p.peer_id === peerId);
+    private renderClipboardHistory(): void {
+        const view = store.get('currentView');
+        if (view === 'history') {
+            const container = $('#clipboard-history');
+            if (container) {
+                const history = store.get('clipboardHistory');
+                container.innerHTML = history.length > 0
+                    ? history.map((item) => this.renderClipboardItem(item)).join('')
+                    : this.renderEmptyState('No clipboard history', 'Your copied items will appear here');
+                this.attachEventListeners();
+            }
+        } else if (view === 'dashboard') {
+            const container = $('#recent-clipboard');
+            if (container) {
+                const recentItems = store.get('clipboardHistory').slice(0, 3);
+                container.innerHTML = recentItems.length > 0
+                    ? recentItems.map((item) => this.renderClipboardItem(item)).join('')
+                    : this.renderEmptyState('No clipboard items yet', 'Copy something to get started');
+                this.attachEventListeners();
+            }
+        }
+    }
 
-          store.set('showPairingModal', true);
-          store.set('pairingModalMode', 'initiate');
-          store.set('activePairingSession', {
-            session_id: '',
-            peer_id: peerId,
-            peer_name: peer?.device_name || null,
-            pin: null,
-            state: 'Initiated',
-            is_initiator: true,
-            created_at: new Date().toISOString(),
-          });
+    private attachEventListeners(): void {
+        // Navigation
+        document.querySelectorAll('[data-nav]').forEach((el) => {
+            el.addEventListener('click', () => {
+                const view = el.getAttribute('data-nav') as View;
+                store.set('currentView', view);
+            });
+        });
 
-          try {
-            const sessionId = await commands.initiatePairing(peerId);
-            store.update('activePairingSession', (s) => (s ? { ...s, session_id: sessionId } : null));
-          } catch (error) {
-            store.addToast(`Failed to initiate pairing: ${error}`, 'error');
+        // Copy buttons
+        document.querySelectorAll('[data-copy]').forEach((el) => {
+            el.addEventListener('click', async () => {
+                const id = el.getAttribute('data-copy');
+                const history = store.get('clipboardHistory');
+                const item = history.find((h) => h.id === id);
+                if (item) {
+                    await commands.setClipboard(item.content);
+                    store.addToast('Copied to clipboard', 'success');
+                }
+            });
+        });
+
+        // Pair buttons
+        document.querySelectorAll('[data-pair]').forEach((el) => {
+            el.addEventListener('click', async () => {
+                const peerId = el.getAttribute('data-pair');
+                if (peerId) {
+                    const peers = store.get('discoveredPeers');
+                    const peer = peers.find((p) => p.peer_id === peerId);
+
+                    store.set('showPairingModal', true);
+                    store.set('pairingModalMode', 'initiate');
+                    store.set('activePairingSession', {
+                        session_id: '',
+                        peer_id: peerId,
+                        peer_name: peer?.device_name || null,
+                        pin: null,
+                        state: 'Initiated',
+                        is_initiator: true,
+                        created_at: new Date().toISOString(),
+                    });
+
+                    try {
+                        const sessionId = await commands.initiatePairing(peerId);
+                        store.update('activePairingSession', (s) => (s ? {...s, session_id: sessionId} : null));
+                    } catch (error) {
+                        store.addToast(`Failed to initiate pairing: ${error}`, 'error');
+                        store.set('showPairingModal', false);
+                        store.set('activePairingSession', null);
+                    }
+                }
+            });
+        });
+
+        // Unpair buttons
+        document.querySelectorAll('[data-unpair]').forEach((el) => {
+            el.addEventListener('click', async () => {
+                const peerId = el.getAttribute('data-unpair');
+                if (peerId) {
+                    try {
+                        await commands.removePairedPeer(peerId);
+                        store.removePairedPeer(peerId);
+                        store.addToast('Device unpaired', 'success');
+                    } catch (error) {
+                        store.addToast(`Failed to unpair: ${error}`, 'error');
+                    }
+                }
+            });
+        });
+
+        // Dismiss toasts
+        document.querySelectorAll('[data-dismiss-toast]').forEach((el) => {
+            el.addEventListener('click', () => {
+                const id = el.getAttribute('data-dismiss-toast');
+                if (id) store.removeToast(id);
+            });
+        });
+
+        // Refresh peers
+        $('#btn-refresh-peers')?.addEventListener('click', async () => {
+            const peers = await commands.getDiscoveredPeers();
+            store.set('discoveredPeers', peers);
+            store.addToast('Refreshed peer list', 'info');
+        });
+
+        // Clear history
+        $('#btn-clear-history')?.addEventListener('click', async () => {
+            await commands.clearClipboardHistory();
+            store.set('clipboardHistory', []);
+            store.addToast('History cleared', 'success');
+        });
+
+        // Share clipboard (reads clipboard and sends to peers)
+        $('#btn-share-clipboard')?.addEventListener('click', async () => {
+            try {
+                const content = await readText();
+                if (!content || content.trim() === '') {
+                    store.addToast('Clipboard is empty', 'error');
+                    return;
+                }
+                await commands.shareClipboardContent(content);
+                store.addToast('Clipboard shared with peers', 'success');
+            } catch (e) {
+                const error = e instanceof Error ? e.message : String(e);
+                store.addToast(`Failed to share: ${error}`, 'error');
+            }
+        });
+
+        $('#btn-clear-all-history')?.addEventListener('click', async () => {
+            await commands.clearClipboardHistory();
+            store.set('clipboardHistory', []);
+            store.addToast('History cleared', 'success');
+        });
+
+        // Settings listeners
+        this.attachSettingsListeners();
+        this.attachPairingModalListeners();
+    }
+
+    private attachSettingsListeners(): void {
+        // Auto-sync toggle
+        $('#auto-sync-toggle')?.addEventListener('change', async (e) => {
+            const checked = (e.target as HTMLInputElement).checked;
+            const settings = {...store.get('settings'), auto_sync_enabled: checked};
+            await commands.updateSettings(settings);
+            store.set('settings', settings);
+        });
+
+        // Notifications toggle
+        $('#notifications-toggle')?.addEventListener('change', async (e) => {
+            const checked = (e.target as HTMLInputElement).checked;
+            const settings = {...store.get('settings'), show_notifications: checked};
+            await commands.updateSettings(settings);
+            store.set('settings', settings);
+        });
+
+        // History limit select
+        $('#history-limit-select')?.addEventListener('change', async (e) => {
+            const value = parseInt((e.target as HTMLSelectElement).value, 10);
+            const settings = {...store.get('settings'), clipboard_history_limit: value};
+            await commands.updateSettings(settings);
+            store.set('settings', settings);
+        });
+
+        // Clear on exit toggle
+        $('#clear-on-exit-toggle')?.addEventListener('change', async (e) => {
+            const checked = (e.target as HTMLInputElement).checked;
+            const settings = {...store.get('settings'), clear_history_on_exit: checked};
+            await commands.updateSettings(settings);
+            store.set('settings', settings);
+        });
+
+        // Device name input
+        $('#device-name-input')?.addEventListener('blur', async (e) => {
+            const value = (e.target as HTMLInputElement).value.trim();
+            if (value) {
+                const settings = {...store.get('settings'), device_name: value};
+                await commands.updateSettings(settings);
+                store.set('settings', settings);
+            }
+        });
+    }
+
+    private attachPairingModalListeners(): void {
+        // Accept pairing
+        const acceptBtn = $('#btn-accept-pairing') as HTMLButtonElement | null;
+        acceptBtn?.addEventListener('click', async () => {
+            const session = store.get('activePairingSession');
+            // Guard against duplicate calls using both button state AND app flag
+            if (session && !acceptBtn.disabled && !this.pairingInProgress) {
+                acceptBtn.disabled = true;
+                this.pairingInProgress = true;
+                acceptBtn.textContent = 'Accepting...';
+                try {
+                    const pin = await commands.respondToPairing(session.session_id, true);
+                    if (pin) {
+                        store.update('activePairingSession', (s) =>
+                            s ? {...s, pin, state: 'AwaitingPinConfirmation'} : null
+                        );
+                        store.set('pairingModalMode', 'confirm');
+                    }
+                } catch (error) {
+                    store.addToast(`Failed to accept pairing: ${error}`, 'error');
+                    acceptBtn.disabled = false;
+                    acceptBtn.textContent = 'Accept';
+                } finally {
+                    this.pairingInProgress = false;
+                }
+            }
+        });
+
+        // Reject pairing
+        const rejectBtn = $('#btn-reject-pairing') as HTMLButtonElement | null;
+        rejectBtn?.addEventListener('click', async () => {
+            const session = store.get('activePairingSession');
+            if (session && !rejectBtn.disabled) {
+                rejectBtn.disabled = true;
+                try {
+                    await commands.respondToPairing(session.session_id, false);
+                } catch (error) {
+                    store.addToast(`Failed to reject pairing: ${error}`, 'error');
+                } finally {
+                    store.set('showPairingModal', false);
+                    store.set('activePairingSession', null);
+                }
+            }
+        });
+
+        // Confirm PIN
+        const confirmBtn = $('#btn-confirm-pin') as HTMLButtonElement | null;
+        confirmBtn?.addEventListener('click', async () => {
+            const session = store.get('activePairingSession');
+            if (session && session.pin && !confirmBtn.disabled) {
+                confirmBtn.disabled = true;
+                confirmBtn.textContent = 'Confirming...';
+                try {
+                    const success = await commands.confirmPairing(session.session_id, session.pin);
+                    if (!success) {
+                        store.addToast('PIN verification failed', 'error');
+                        confirmBtn.disabled = false;
+                        confirmBtn.textContent = 'Confirm';
+                    }
+                    // If success, the pairing-complete event will close the modal
+                } catch (error) {
+                    store.addToast(`Failed to confirm pairing: ${error}`, 'error');
+                    confirmBtn.disabled = false;
+                    confirmBtn.textContent = 'Confirm';
+                }
+            }
+        });
+
+        // Cancel pairing
+        const cancelBtn = $('#btn-cancel-pairing') as HTMLButtonElement | null;
+        cancelBtn?.addEventListener('click', async () => {
+            const session = store.get('activePairingSession');
+            if (session && !cancelBtn.disabled) {
+                cancelBtn.disabled = true;
+                await commands.cancelPairing(session.session_id);
+            }
             store.set('showPairingModal', false);
             store.set('activePairingSession', null);
-          }
-        }
-      });
-    });
-
-    // Unpair buttons
-    document.querySelectorAll('[data-unpair]').forEach((el) => {
-      el.addEventListener('click', async () => {
-        const peerId = el.getAttribute('data-unpair');
-        if (peerId) {
-          try {
-            await commands.removePairedPeer(peerId);
-            store.removePairedPeer(peerId);
-            store.addToast('Device unpaired', 'success');
-          } catch (error) {
-            store.addToast(`Failed to unpair: ${error}`, 'error');
-          }
-        }
-      });
-    });
-
-    // Dismiss toasts
-    document.querySelectorAll('[data-dismiss-toast]').forEach((el) => {
-      el.addEventListener('click', () => {
-        const id = el.getAttribute('data-dismiss-toast');
-        if (id) store.removeToast(id);
-      });
-    });
-
-    // Refresh peers
-    $('#btn-refresh-peers')?.addEventListener('click', async () => {
-      const peers = await commands.getDiscoveredPeers();
-      store.set('discoveredPeers', peers);
-      store.addToast('Refreshed peer list', 'info');
-    });
-
-    // Clear history
-    $('#btn-clear-history')?.addEventListener('click', async () => {
-      await commands.clearClipboardHistory();
-      store.set('clipboardHistory', []);
-      store.addToast('History cleared', 'success');
-    });
-
-    // Share clipboard (reads clipboard and sends to peers)
-    $('#btn-share-clipboard')?.addEventListener('click', async () => {
-      try {
-        const content = await readText();
-        if (!content || content.trim() === '') {
-          store.addToast('Clipboard is empty', 'error');
-          return;
-        }
-        await commands.shareClipboardContent(content);
-        store.addToast('Clipboard shared with peers', 'success');
-      } catch (e) {
-        const error = e instanceof Error ? e.message : String(e);
-        store.addToast(`Failed to share: ${error}`, 'error');
-      }
-    });
-
-    $('#btn-clear-all-history')?.addEventListener('click', async () => {
-      await commands.clearClipboardHistory();
-      store.set('clipboardHistory', []);
-      store.addToast('History cleared', 'success');
-    });
-
-    // Settings listeners
-    this.attachSettingsListeners();
-    this.attachPairingModalListeners();
-  }
-
-  private attachSettingsListeners(): void {
-    // Auto-sync toggle
-    $('#auto-sync-toggle')?.addEventListener('change', async (e) => {
-      const checked = (e.target as HTMLInputElement).checked;
-      const settings = { ...store.get('settings'), auto_sync_enabled: checked };
-      await commands.updateSettings(settings);
-      store.set('settings', settings);
-    });
-
-    // Notifications toggle
-    $('#notifications-toggle')?.addEventListener('change', async (e) => {
-      const checked = (e.target as HTMLInputElement).checked;
-      const settings = { ...store.get('settings'), show_notifications: checked };
-      await commands.updateSettings(settings);
-      store.set('settings', settings);
-    });
-
-    // History limit select
-    $('#history-limit-select')?.addEventListener('change', async (e) => {
-      const value = parseInt((e.target as HTMLSelectElement).value, 10);
-      const settings = { ...store.get('settings'), clipboard_history_limit: value };
-      await commands.updateSettings(settings);
-      store.set('settings', settings);
-    });
-
-    // Clear on exit toggle
-    $('#clear-on-exit-toggle')?.addEventListener('change', async (e) => {
-      const checked = (e.target as HTMLInputElement).checked;
-      const settings = { ...store.get('settings'), clear_history_on_exit: checked };
-      await commands.updateSettings(settings);
-      store.set('settings', settings);
-    });
-
-    // Device name input
-    $('#device-name-input')?.addEventListener('blur', async (e) => {
-      const value = (e.target as HTMLInputElement).value.trim();
-      if (value) {
-        const settings = { ...store.get('settings'), device_name: value };
-        await commands.updateSettings(settings);
-        store.set('settings', settings);
-      }
-    });
-  }
-
-  private attachPairingModalListeners(): void {
-    // Accept pairing
-    const acceptBtn = $('#btn-accept-pairing') as HTMLButtonElement | null;
-    acceptBtn?.addEventListener('click', async () => {
-      const session = store.get('activePairingSession');
-      // Guard against duplicate calls using both button state AND app flag
-      if (session && !acceptBtn.disabled && !this.pairingInProgress) {
-        acceptBtn.disabled = true;
-        this.pairingInProgress = true;
-        acceptBtn.textContent = 'Accepting...';
-        try {
-          const pin = await commands.respondToPairing(session.session_id, true);
-          if (pin) {
-            store.update('activePairingSession', (s) =>
-              s ? { ...s, pin, state: 'AwaitingPinConfirmation' } : null
-            );
-            store.set('pairingModalMode', 'confirm');
-          }
-        } catch (error) {
-          store.addToast(`Failed to accept pairing: ${error}`, 'error');
-          acceptBtn.disabled = false;
-          acceptBtn.textContent = 'Accept';
-        } finally {
-          this.pairingInProgress = false;
-        }
-      }
-    });
-
-    // Reject pairing
-    const rejectBtn = $('#btn-reject-pairing') as HTMLButtonElement | null;
-    rejectBtn?.addEventListener('click', async () => {
-      const session = store.get('activePairingSession');
-      if (session && !rejectBtn.disabled) {
-        rejectBtn.disabled = true;
-        try {
-          await commands.respondToPairing(session.session_id, false);
-        } catch (error) {
-          store.addToast(`Failed to reject pairing: ${error}`, 'error');
-        } finally {
-          store.set('showPairingModal', false);
-          store.set('activePairingSession', null);
-        }
-      }
-    });
-
-    // Confirm PIN
-    const confirmBtn = $('#btn-confirm-pin') as HTMLButtonElement | null;
-    confirmBtn?.addEventListener('click', async () => {
-      const session = store.get('activePairingSession');
-      if (session && session.pin && !confirmBtn.disabled) {
-        confirmBtn.disabled = true;
-        confirmBtn.textContent = 'Confirming...';
-        try {
-          const success = await commands.confirmPairing(session.session_id, session.pin);
-          if (!success) {
-            store.addToast('PIN verification failed', 'error');
-            confirmBtn.disabled = false;
-            confirmBtn.textContent = 'Confirm';
-          }
-          // If success, the pairing-complete event will close the modal
-        } catch (error) {
-          store.addToast(`Failed to confirm pairing: ${error}`, 'error');
-          confirmBtn.disabled = false;
-          confirmBtn.textContent = 'Confirm';
-        }
-      }
-    });
-
-    // Cancel pairing
-    const cancelBtn = $('#btn-cancel-pairing') as HTMLButtonElement | null;
-    cancelBtn?.addEventListener('click', async () => {
-      const session = store.get('activePairingSession');
-      if (session && !cancelBtn.disabled) {
-        cancelBtn.disabled = true;
-        await commands.cancelPairing(session.session_id);
-      }
-      store.set('showPairingModal', false);
-      store.set('activePairingSession', null);
-    });
-  }
+        });
+    }
 }
 
 export async function initApp(rootElement: HTMLElement): Promise<void> {
-  const app = new App(rootElement);
-  await app.init();
+    const app = new App(rootElement);
+    await app.init();
 }

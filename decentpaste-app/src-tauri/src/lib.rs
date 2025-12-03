@@ -13,10 +13,10 @@ use tracing::{error, info};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use clipboard::{ClipboardChange, ClipboardEntry, ClipboardMonitor, SyncManager};
-use network::{NetworkCommand, NetworkEvent, NetworkManager, NetworkStatus, ClipboardMessage};
+use network::{ClipboardMessage, NetworkCommand, NetworkEvent, NetworkManager, NetworkStatus};
 use security::get_or_create_identity;
 use state::AppState;
-use storage::{init_data_dir, load_paired_peers, load_settings};
+use storage::{get_or_create_libp2p_keypair, init_data_dir, load_paired_peers, load_settings};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -71,7 +71,9 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 
-async fn initialize_app(app_handle: AppHandle) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn initialize_app(
+    app_handle: AppHandle,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Initialize data directory first (required for all storage operations)
     init_data_dir(&app_handle)?;
 
@@ -110,12 +112,19 @@ async fn initialize_app(app_handle: AppHandle) -> Result<(), Box<dyn std::error:
         *tx = Some(network_cmd_tx.clone());
     }
 
+    // Load or create the libp2p keypair for consistent peer ID across restarts
+    let libp2p_keypair = get_or_create_libp2p_keypair()?;
+    info!("Loaded libp2p keypair, peer ID will be consistent across restarts");
+
     // Start network manager
     let network_event_tx_clone = network_event_tx.clone();
     tokio::spawn(async move {
-        match NetworkManager::new(network_cmd_rx, network_event_tx_clone).await {
+        match NetworkManager::new(network_cmd_rx, network_event_tx_clone, libp2p_keypair).await {
             Ok(mut manager) => {
-                info!("Network manager started, peer ID: {}", manager.local_peer_id());
+                info!(
+                    "Network manager started, peer ID: {}",
+                    manager.local_peer_id()
+                );
                 manager.run().await;
             }
             Err(e) => {
@@ -126,7 +135,9 @@ async fn initialize_app(app_handle: AppHandle) -> Result<(), Box<dyn std::error:
 
     // Start clipboard monitor
     let clipboard_monitor = ClipboardMonitor::new(settings.clipboard_poll_interval_ms);
-    clipboard_monitor.start(app_handle.clone(), clipboard_tx).await;
+    clipboard_monitor
+        .start(app_handle.clone(), clipboard_tx)
+        .await;
 
     // Handle clipboard changes - broadcast to network
     let app_handle_clipboard = app_handle.clone();
@@ -202,11 +213,19 @@ async fn initialize_app(app_handle: AppHandle) -> Result<(), Box<dyn std::error:
                 }
 
                 NetworkEvent::PeerDiscovered(peer) => {
-                    let mut peers = state.discovered_peers.write().await;
-                    if !peers.iter().any(|p| p.peer_id == peer.peer_id) {
-                        peers.push(peer.clone());
+                    // Check if this peer is already paired - if so, skip adding to discovered
+                    let is_paired = {
+                        let paired = state.paired_peers.read().await;
+                        paired.iter().any(|p| p.peer_id == peer.peer_id)
+                    };
+
+                    if !is_paired {
+                        let mut peers = state.discovered_peers.write().await;
+                        if !peers.iter().any(|p| p.peer_id == peer.peer_id) {
+                            peers.push(peer.clone());
+                        }
+                        let _ = app_handle_network.emit("peer-discovered", peer);
                     }
-                    let _ = app_handle_network.emit("peer-discovered", peer);
                 }
 
                 NetworkEvent::PeerLost(peer_id) => {
@@ -228,24 +247,28 @@ async fn initialize_app(app_handle: AppHandle) -> Result<(), Box<dyn std::error:
                     peer_id,
                     request,
                 } => {
-                    let session = security::PairingSession::new(
-                        session_id.clone(),
-                        peer_id.clone(),
-                        false,
-                    )
-                    .with_peer_name(request.device_name.clone());
+                    let session =
+                        security::PairingSession::new(session_id.clone(), peer_id.clone(), false)
+                            .with_peer_name(request.device_name.clone());
 
                     let mut sessions = state.pairing_sessions.write().await;
                     sessions.push(session);
 
-                    let _ = app_handle_network.emit("pairing-request", serde_json::json!({
-                        "sessionId": session_id,
-                        "peerId": peer_id,
-                        "deviceName": request.device_name,
-                    }));
+                    let _ = app_handle_network.emit(
+                        "pairing-request",
+                        serde_json::json!({
+                            "sessionId": session_id,
+                            "peerId": peer_id,
+                            "deviceName": request.device_name,
+                        }),
+                    );
                 }
 
-                NetworkEvent::PairingPinReady { session_id, pin, peer_device_name } => {
+                NetworkEvent::PairingPinReady {
+                    session_id,
+                    pin,
+                    peer_device_name,
+                } => {
                     let mut sessions = state.pairing_sessions.write().await;
                     if let Some(session) = sessions.iter_mut().find(|s| s.session_id == session_id)
                     {
@@ -253,11 +276,14 @@ async fn initialize_app(app_handle: AppHandle) -> Result<(), Box<dyn std::error:
                         session.peer_name = Some(peer_device_name.clone());
                         session.state = security::PairingState::AwaitingPinConfirmation;
                     }
-                    let _ = app_handle_network.emit("pairing-pin", serde_json::json!({
-                        "sessionId": session_id,
-                        "pin": pin,
-                        "peerDeviceName": peer_device_name,
-                    }));
+                    let _ = app_handle_network.emit(
+                        "pairing-pin",
+                        serde_json::json!({
+                            "sessionId": session_id,
+                            "pin": pin,
+                            "peerDeviceName": peer_device_name,
+                        }),
+                    );
                 }
 
                 NetworkEvent::PairingComplete {
@@ -275,8 +301,13 @@ async fn initialize_app(app_handle: AppHandle) -> Result<(), Box<dyn std::error:
                         {
                             session.state = security::PairingState::Completed;
                             // Use the peer_name from session if available, otherwise use the one from event
-                            final_device_name = session.peer_name.clone()
-                                .unwrap_or_else(|| if device_name == "Unknown" { "Unknown Device".to_string() } else { device_name.clone() });
+                            final_device_name = session.peer_name.clone().unwrap_or_else(|| {
+                                if device_name == "Unknown" {
+                                    "Unknown Device".to_string()
+                                } else {
+                                    device_name.clone()
+                                }
+                            });
                         } else {
                             final_device_name = device_name.clone();
                         }
@@ -299,11 +330,20 @@ async fn initialize_app(app_handle: AppHandle) -> Result<(), Box<dyn std::error:
                         }
                     }
 
-                    let _ = app_handle_network.emit("pairing-complete", serde_json::json!({
-                        "sessionId": session_id,
-                        "peerId": peer_id,
-                        "deviceName": final_device_name,
-                    }));
+                    // Remove from discovered peers since they're now paired
+                    {
+                        let mut discovered = state.discovered_peers.write().await;
+                        discovered.retain(|p| p.peer_id != peer_id);
+                    }
+
+                    let _ = app_handle_network.emit(
+                        "pairing-complete",
+                        serde_json::json!({
+                            "sessionId": session_id,
+                            "peerId": peer_id,
+                            "deviceName": final_device_name,
+                        }),
+                    );
                 }
 
                 NetworkEvent::PairingFailed { session_id, error } => {
@@ -312,10 +352,13 @@ async fn initialize_app(app_handle: AppHandle) -> Result<(), Box<dyn std::error:
                     {
                         session.state = security::PairingState::Failed(error.clone());
                     }
-                    let _ = app_handle_network.emit("pairing-failed", serde_json::json!({
-                        "sessionId": session_id,
-                        "error": error,
-                    }));
+                    let _ = app_handle_network.emit(
+                        "pairing-failed",
+                        serde_json::json!({
+                            "sessionId": session_id,
+                            "error": error,
+                        }),
+                    );
                 }
 
                 NetworkEvent::ClipboardReceived(msg) => {
@@ -335,7 +378,10 @@ async fn initialize_app(app_handle: AppHandle) -> Result<(), Box<dyn std::error:
                                         if sync_manager.on_received(&msg.content_hash) {
                                             // Update local clipboard
                                             if let Err(e) =
-                                                clipboard::monitor::set_clipboard_content(&app_handle_network, &content)
+                                                clipboard::monitor::set_clipboard_content(
+                                                    &app_handle_network,
+                                                    &content,
+                                                )
                                             {
                                                 error!("Failed to set clipboard: {}", e);
                                             }
@@ -351,8 +397,8 @@ async fn initialize_app(app_handle: AppHandle) -> Result<(), Box<dyn std::error:
                                             state.add_clipboard_entry(entry.clone()).await;
 
                                             // Emit to frontend
-                                            let _ =
-                                                app_handle_network.emit("clipboard-received", entry);
+                                            let _ = app_handle_network
+                                                .emit("clipboard-received", entry);
                                         }
                                         break;
                                     }
@@ -364,10 +410,13 @@ async fn initialize_app(app_handle: AppHandle) -> Result<(), Box<dyn std::error:
                 }
 
                 NetworkEvent::ClipboardSent { id, peer_count } => {
-                    let _ = app_handle_network.emit("clipboard-broadcast", serde_json::json!({
-                        "id": id,
-                        "peerCount": peer_count,
-                    }));
+                    let _ = app_handle_network.emit(
+                        "clipboard-broadcast",
+                        serde_json::json!({
+                            "id": id,
+                            "peerCount": peer_count,
+                        }),
+                    );
                 }
 
                 NetworkEvent::Error(error) => {

@@ -104,7 +104,8 @@ impl SyncManager {
         self.cleanup_expired();
 
         // Track hash to prevent echo
-        self.recent_hashes.insert(content_hash.to_string(), Instant::now());
+        self.recent_hashes
+            .insert(content_hash.to_string(), Instant::now());
 
         // Don't apply if hash matches current clipboard
         if self.local_hash.as_ref() == Some(&content_hash.to_string()) {
@@ -123,9 +124,8 @@ impl SyncManager {
 
     fn cleanup_expired(&mut self) {
         let now = Instant::now();
-        self.recent_hashes.retain(|_, time| {
-            now.duration_since(*time).as_secs() < RECENT_HASH_TTL_SECS
-        });
+        self.recent_hashes
+            .retain(|_, time| now.duration_since(*time).as_secs() < RECENT_HASH_TTL_SECS);
 
         // Also limit size
         if self.recent_hashes.len() > MAX_RECENT_HASHES {

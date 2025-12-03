@@ -2,9 +2,9 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
 
 use crate::clipboard::ClipboardEntry;
-use crate::network::{NetworkCommand, NetworkStatus, DiscoveredPeer};
+use crate::network::{DiscoveredPeer, NetworkCommand, NetworkStatus};
 use crate::security::PairingSession;
-use crate::storage::{AppSettings, PairedPeer, DeviceIdentity};
+use crate::storage::{AppSettings, DeviceIdentity, PairedPeer};
 
 pub struct AppState {
     pub device_identity: Arc<RwLock<Option<DeviceIdentity>>>,

@@ -1,5 +1,5 @@
 pub mod monitor;
 pub mod sync;
 
-pub use monitor::{ClipboardMonitor, ClipboardChange};
+pub use monitor::{ClipboardChange, ClipboardMonitor};
 pub use sync::{ClipboardEntry, SyncManager};
