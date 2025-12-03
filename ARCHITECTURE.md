@@ -322,26 +322,34 @@ Device A (Initiator)              Device B (Responder)
         │  1. User clicks "Pair"         │
         │────────────────────────────────>│
         │     PairingRequest              │
+        │     {session_id, device_name}   │
         │                                │
         │                                │ 2. Show pairing request UI
         │                                │    User clicks "Accept"
+        │                                │    Generate PIN
         │                                │
         │  3. PairingChallenge           │
         │<────────────────────────────────│
-        │     {session_id, pin}           │
+        │     {session_id, pin,           │
+        │      device_name}               │
         │                                │
         │ 4. Display PIN: "123456"       │ 5. Display PIN: "123456"
+        │    User confirms PIN            │    (waiting for initiator)
         │                                │
-        │ 6. User confirms PIN matches   │
+        │ 6. PairingConfirm              │
         │────────────────────────────────>│
-        │     PairingResponse             │
+        │    {session_id, success,        │
+        │     shared_secret, device_name} │
         │                                │
-        │  7. PairingConfirm             │
+        │  7. PairingConfirm (ack)       │
         │<────────────────────────────────│
-        │     {success, shared_secret}    │
+        │     {success}                   │
         │                                │
         │ 8. Store pairing               │ 9. Store pairing
 ```
+
+Note: The initiator generates the shared secret and sends it to the responder.
+Both devices use the same session_id (provided by initiator in step 1).
 
 ### Encryption
 
