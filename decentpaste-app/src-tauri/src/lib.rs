@@ -7,7 +7,6 @@ mod state;
 mod storage;
 
 use chrono::Utc;
-use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::mpsc;
 use tracing::{error, info};
@@ -246,16 +245,18 @@ async fn initialize_app(app_handle: AppHandle) -> Result<(), Box<dyn std::error:
                     }));
                 }
 
-                NetworkEvent::PairingPinReady { session_id, pin } => {
+                NetworkEvent::PairingPinReady { session_id, pin, peer_device_name } => {
                     let mut sessions = state.pairing_sessions.write().await;
                     if let Some(session) = sessions.iter_mut().find(|s| s.session_id == session_id)
                     {
                         session.pin = Some(pin.clone());
+                        session.peer_name = Some(peer_device_name.clone());
                         session.state = security::PairingState::AwaitingPinConfirmation;
                     }
                     let _ = app_handle_network.emit("pairing-pin", serde_json::json!({
                         "sessionId": session_id,
                         "pin": pin,
+                        "peerDeviceName": peer_device_name,
                     }));
                 }
 
@@ -265,20 +266,26 @@ async fn initialize_app(app_handle: AppHandle) -> Result<(), Box<dyn std::error:
                     device_name,
                     shared_secret,
                 } => {
-                    // Update session state
+                    // Get the device name from the session if available (more reliable)
+                    let final_device_name: String;
                     {
                         let mut sessions = state.pairing_sessions.write().await;
                         if let Some(session) =
                             sessions.iter_mut().find(|s| s.session_id == session_id)
                         {
                             session.state = security::PairingState::Completed;
+                            // Use the peer_name from session if available, otherwise use the one from event
+                            final_device_name = session.peer_name.clone()
+                                .unwrap_or_else(|| if device_name == "Unknown" { "Unknown Device".to_string() } else { device_name.clone() });
+                        } else {
+                            final_device_name = device_name.clone();
                         }
                     }
 
-                    // Add to paired peers
+                    // Add to paired peers (with duplicate check)
                     let paired_peer = storage::PairedPeer {
                         peer_id: peer_id.clone(),
-                        device_name: device_name.clone(),
+                        device_name: final_device_name.clone(),
                         shared_secret,
                         paired_at: Utc::now(),
                         last_seen: Some(Utc::now()),
@@ -295,7 +302,7 @@ async fn initialize_app(app_handle: AppHandle) -> Result<(), Box<dyn std::error:
                     let _ = app_handle_network.emit("pairing-complete", serde_json::json!({
                         "sessionId": session_id,
                         "peerId": peer_id,
-                        "deviceName": device_name,
+                        "deviceName": final_device_name,
                     }));
                 }
 

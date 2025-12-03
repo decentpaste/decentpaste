@@ -8,6 +8,8 @@ import type { ClipboardEntry, DiscoveredPeer, PairedPeer } from './api/types';
 
 class App {
   private root: HTMLElement;
+  private pairingInProgress: boolean = false; // Guard against duplicate pairing operations
+  private modalRenderPending: boolean = false; // Debounce modal renders
 
   constructor(rootElement: HTMLElement) {
     this.root = rootElement;
@@ -66,7 +68,7 @@ class App {
 
     eventManager.on('pairingPin', (payload) => {
       store.update('activePairingSession', (session) =>
-        session ? { ...session, pin: payload.pin, state: 'AwaitingPinConfirmation' } : null
+        session ? { ...session, pin: payload.pin, peer_name: payload.peerDeviceName, state: 'AwaitingPinConfirmation' } : null
       );
       store.set('pairingModalMode', 'confirm');
     });
@@ -125,6 +127,7 @@ class App {
     store.subscribe('clipboardHistory', () => this.renderClipboardHistory());
     store.subscribe('toasts', () => this.renderToasts());
     store.subscribe('showPairingModal', () => this.renderPairingModal());
+    store.subscribe('pairingModalMode', () => this.renderPairingModal());
     store.subscribe('activePairingSession', () => this.renderPairingModal());
     store.subscribe('isLoading', () => this.render());
   }
@@ -597,12 +600,14 @@ class App {
             <button
               id="btn-reject-pairing"
               class="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              style="touch-action: manipulation"
             >
               Reject
             </button>
             <button
               id="btn-accept-pairing"
               class="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors"
+              style="touch-action: manipulation"
             >
               Accept
             </button>
@@ -610,6 +615,36 @@ class App {
         </div>
       `;
     } else if (mode === 'confirm' && session.pin) {
+      // Initiator shows Confirm button, Responder shows waiting message
+      const isInitiator = session.is_initiator;
+      const buttonArea = isInitiator ? `
+          <div class="flex gap-3">
+            <button
+              id="btn-cancel-pairing"
+              class="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              style="touch-action: manipulation"
+            >
+              Cancel
+            </button>
+            <button
+              id="btn-confirm-pin"
+              class="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors"
+              style="touch-action: manipulation"
+            >
+              Confirm
+            </button>
+          </div>
+      ` : `
+          <p class="text-gray-500 dark:text-gray-400 text-sm mb-4">Waiting for other device to confirm...</p>
+          <button
+            id="btn-cancel-pairing"
+            class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+            style="touch-action: manipulation"
+          >
+            Cancel
+          </button>
+      `;
+
       content = `
         <div class="text-center">
           <div class="w-16 h-16 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -620,20 +655,7 @@ class App {
           <div class="text-4xl font-mono font-bold text-primary-600 dark:text-primary-400 tracking-widest mb-6">
             ${session.pin}
           </div>
-          <div class="flex gap-3">
-            <button
-              id="btn-cancel-pairing"
-              class="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              id="btn-confirm-pin"
-              class="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors"
-            >
-              Confirm
-            </button>
-          </div>
+          ${buttonArea}
         </div>
       `;
     } else if (mode === 'initiate') {
@@ -664,13 +686,21 @@ class App {
   }
 
   private renderPairingModal(): void {
-    const modal = $('#pairing-modal');
-    if (modal) {
-      const show = store.get('showPairingModal');
-      modal.className = show ? '' : 'hidden';
-      modal.innerHTML = this.renderPairingModalContent();
-      this.attachPairingModalListeners();
-    }
+    // Debounce rapid re-renders (e.g., when multiple state changes happen at once)
+    if (this.modalRenderPending) return;
+    this.modalRenderPending = true;
+
+    // Use microtask to batch multiple state changes
+    queueMicrotask(() => {
+      this.modalRenderPending = false;
+      const modal = $('#pairing-modal');
+      if (modal) {
+        const show = store.get('showPairingModal');
+        modal.className = show ? '' : 'hidden';
+        modal.innerHTML = this.renderPairingModalContent();
+        this.attachPairingModalListeners();
+      }
+    });
   }
 
   private renderPeersList(): void {
@@ -872,9 +902,14 @@ class App {
 
   private attachPairingModalListeners(): void {
     // Accept pairing
-    $('#btn-accept-pairing')?.addEventListener('click', async () => {
+    const acceptBtn = $('#btn-accept-pairing') as HTMLButtonElement | null;
+    acceptBtn?.addEventListener('click', async () => {
       const session = store.get('activePairingSession');
-      if (session) {
+      // Guard against duplicate calls using both button state AND app flag
+      if (session && !acceptBtn.disabled && !this.pairingInProgress) {
+        acceptBtn.disabled = true;
+        this.pairingInProgress = true;
+        acceptBtn.textContent = 'Accepting...';
         try {
           const pin = await commands.respondToPairing(session.session_id, true);
           if (pin) {
@@ -885,39 +920,60 @@ class App {
           }
         } catch (error) {
           store.addToast(`Failed to accept pairing: ${error}`, 'error');
+          acceptBtn.disabled = false;
+          acceptBtn.textContent = 'Accept';
+        } finally {
+          this.pairingInProgress = false;
         }
       }
     });
 
     // Reject pairing
-    $('#btn-reject-pairing')?.addEventListener('click', async () => {
+    const rejectBtn = $('#btn-reject-pairing') as HTMLButtonElement | null;
+    rejectBtn?.addEventListener('click', async () => {
       const session = store.get('activePairingSession');
-      if (session) {
-        await commands.respondToPairing(session.session_id, false);
-        store.set('showPairingModal', false);
-        store.set('activePairingSession', null);
+      if (session && !rejectBtn.disabled) {
+        rejectBtn.disabled = true;
+        try {
+          await commands.respondToPairing(session.session_id, false);
+        } catch (error) {
+          store.addToast(`Failed to reject pairing: ${error}`, 'error');
+        } finally {
+          store.set('showPairingModal', false);
+          store.set('activePairingSession', null);
+        }
       }
     });
 
     // Confirm PIN
-    $('#btn-confirm-pin')?.addEventListener('click', async () => {
+    const confirmBtn = $('#btn-confirm-pin') as HTMLButtonElement | null;
+    confirmBtn?.addEventListener('click', async () => {
       const session = store.get('activePairingSession');
-      if (session && session.pin) {
+      if (session && session.pin && !confirmBtn.disabled) {
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = 'Confirming...';
         try {
           const success = await commands.confirmPairing(session.session_id, session.pin);
           if (!success) {
             store.addToast('PIN verification failed', 'error');
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = 'Confirm';
           }
+          // If success, the pairing-complete event will close the modal
         } catch (error) {
           store.addToast(`Failed to confirm pairing: ${error}`, 'error');
+          confirmBtn.disabled = false;
+          confirmBtn.textContent = 'Confirm';
         }
       }
     });
 
     // Cancel pairing
-    $('#btn-cancel-pairing')?.addEventListener('click', async () => {
+    const cancelBtn = $('#btn-cancel-pairing') as HTMLButtonElement | null;
+    cancelBtn?.addEventListener('click', async () => {
       const session = store.get('activePairingSession');
-      if (session) {
+      if (session && !cancelBtn.disabled) {
+        cancelBtn.disabled = true;
         await commands.cancelPairing(session.session_id);
       }
       store.set('showPairingModal', false);

@@ -93,6 +93,7 @@ pub async fn initiate_pairing(
         let tx = state.network_command_tx.read().await;
         if let Some(tx) = tx.as_ref() {
             let request = crate::network::PairingRequest {
+                session_id: session_id.clone(), // Include session_id so responder uses the same one
                 device_name: identity.device_name.clone(),
                 device_id: identity.device_id.clone(),
                 public_key: identity.public_key.clone(),
@@ -120,22 +121,87 @@ pub async fn respond_to_pairing(
     session_id: String,
     accept: bool,
 ) -> Result<Option<String>> {
-    let mut sessions = state.pairing_sessions.write().await;
+    let peer_id: String;
+    let pin_result: Option<String>;
 
-    if let Some(session) = sessions.iter_mut().find(|s| s.session_id == session_id) {
-        if accept {
-            // Generate PIN
-            let pin = generate_pin();
-            session.pin = Some(pin.clone());
-            session.state = PairingState::AwaitingPinConfirmation;
-            Ok(Some(pin))
+    {
+        let mut sessions = state.pairing_sessions.write().await;
+
+        if let Some(session) = sessions.iter_mut().find(|s| s.session_id == session_id) {
+            // Guard against duplicate calls - if already processed, return existing PIN
+            if session.state == PairingState::AwaitingPinConfirmation {
+                tracing::debug!("respond_to_pairing called again for already-accepted session, returning existing PIN");
+                return Ok(session.pin.clone());
+            }
+            if matches!(session.state, PairingState::Failed(_) | PairingState::Completed | PairingState::AwaitingPeerConfirmation) {
+                tracing::debug!("respond_to_pairing called for session in terminal state: {:?}", session.state);
+                return Err(DecentPasteError::Pairing("Session already processed".into()));
+            }
+
+            peer_id = session.peer_id.clone();
+
+            if accept {
+                // Generate PIN
+                let pin = generate_pin();
+                session.pin = Some(pin.clone());
+                session.state = PairingState::AwaitingPinConfirmation;
+                pin_result = Some(pin);
+                tracing::debug!("Generated PIN for session {}, peer {}", session_id, peer_id);
+            } else {
+                session.state = PairingState::Failed("User rejected".into());
+                pin_result = None;
+            }
         } else {
-            session.state = PairingState::Failed("User rejected".into());
-            Ok(None)
+            return Err(DecentPasteError::Pairing("Session not found".into()));
         }
-    } else {
-        Err(DecentPasteError::Pairing("Session not found".into()))
     }
+
+    // Send the response via network (outside the lock)
+    let tx = state.network_command_tx.read().await;
+    if let Some(tx) = tx.as_ref() {
+        if accept {
+            if let Some(ref pin) = pin_result {
+                // Get device name for the challenge
+                let device_identity = state.device_identity.read().await;
+                let device_name = device_identity
+                    .as_ref()
+                    .map(|id| id.device_name.clone())
+                    .unwrap_or_else(|| "Unknown Device".to_string());
+
+                if tx
+                    .send(NetworkCommand::SendPairingChallenge {
+                        peer_id,
+                        session_id: session_id.clone(),
+                        pin: pin.clone(),
+                        device_name,
+                    })
+                    .await
+                    .is_err()
+                {
+                    // Rollback session state on network failure
+                    let mut sessions = state.pairing_sessions.write().await;
+                    if let Some(session) =
+                        sessions.iter_mut().find(|s| s.session_id == session_id)
+                    {
+                        session.state = PairingState::Initiated;
+                        session.pin = None;
+                        tracing::warn!("Rolled back session {} after network send failure", session_id);
+                    }
+                    return Err(DecentPasteError::ChannelSend);
+                }
+            }
+        } else {
+            // For reject, failure to send is less critical - session is already marked failed
+            let _ = tx
+                .send(NetworkCommand::RejectPairing {
+                    peer_id,
+                    session_id,
+                })
+                .await;
+        }
+    }
+
+    Ok(pin_result)
 }
 
 #[tauri::command]
@@ -144,35 +210,62 @@ pub async fn confirm_pairing(
     session_id: String,
     pin: String,
 ) -> Result<bool> {
-    let mut sessions = state.pairing_sessions.write().await;
+    let peer_id: String;
+    let is_initiator: bool;
 
-    if let Some(session) = sessions.iter_mut().find(|s| s.session_id == session_id) {
-        if session.pin.as_ref() == Some(&pin) {
-            session.state = PairingState::Completed;
+    {
+        let mut sessions = state.pairing_sessions.write().await;
 
-            // Generate shared secret and store pairing
-            let shared_secret = crate::security::generate_shared_secret();
+        if let Some(session) = sessions.iter_mut().find(|s| s.session_id == session_id) {
+            if session.pin.as_ref() != Some(&pin) {
+                session.state = PairingState::Failed("Invalid PIN".into());
+                return Ok(false);
+            }
 
-            let paired_peer = PairedPeer {
-                peer_id: session.peer_id.clone(),
-                device_name: session.peer_name.clone().unwrap_or_else(|| "Unknown Device".into()),
-                shared_secret: shared_secret.clone(),
-                paired_at: chrono::Utc::now(),
-                last_seen: Some(chrono::Utc::now()),
-            };
-
-            // Add to paired peers
-            let mut peers = state.paired_peers.write().await;
-            peers.push(paired_peer);
-            crate::storage::save_paired_peers(&peers)?;
-
-            Ok(true)
+            peer_id = session.peer_id.clone();
+            is_initiator = session.is_initiator;
+            session.state = PairingState::AwaitingPeerConfirmation;
         } else {
-            session.state = PairingState::Failed("Invalid PIN".into());
-            Ok(false)
+            return Err(DecentPasteError::Pairing("Session not found".into()));
         }
+    }
+
+    if is_initiator {
+        // Initiator: Generate shared secret and send PairingConfirm to responder
+        let shared_secret = crate::security::generate_shared_secret();
+
+        // Get our device name to send to the responder
+        let device_identity = state.device_identity.read().await;
+        let device_name = device_identity
+            .as_ref()
+            .map(|id| id.device_name.clone())
+            .unwrap_or_else(|| "Unknown Device".to_string());
+
+        tracing::debug!("Initiator confirming pairing, sending to peer {}", peer_id);
+
+        let tx = state.network_command_tx.read().await;
+        if let Some(tx) = tx.as_ref() {
+            tx.send(NetworkCommand::SendPairingConfirm {
+                peer_id: peer_id.clone(),
+                session_id: session_id.clone(),
+                success: true,
+                shared_secret: Some(shared_secret.clone()),
+                device_name,
+            })
+            .await
+            .map_err(|_| DecentPasteError::ChannelSend)?;
+        }
+
+        // Note: Don't add to paired peers yet - wait for confirmation response
+        // The PairingComplete event will be emitted when we receive the ack from responder
+
+        Ok(true)
     } else {
-        Err(DecentPasteError::Pairing("Session not found".into()))
+        // Responder: Just mark as locally confirmed.
+        // The actual completion happens when we receive the PairingConfirm from the initiator
+        // via the network. The NetworkManager will emit PairingComplete when that happens.
+        tracing::debug!("Responder confirmed PIN locally, waiting for initiator's confirmation");
+        Ok(true)
     }
 }
 

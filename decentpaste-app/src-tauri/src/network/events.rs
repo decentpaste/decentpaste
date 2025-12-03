@@ -46,6 +46,7 @@ pub enum NetworkEvent {
     PairingPinReady {
         session_id: String,
         pin: String,
+        peer_device_name: String, // Responder's device name (for initiator to display)
     },
     PairingComplete {
         session_id: String,

@@ -78,6 +78,7 @@ export interface PairingRequestPayload {
 export interface PairingPinPayload {
   sessionId: string;
   pin: string;
+  peerDeviceName: string;
 }
 
 export interface PairingCompletePayload {

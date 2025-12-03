@@ -24,10 +24,26 @@ pub enum NetworkCommand {
         peer_id: String,
         message: Vec<u8>,
     },
-    SendPairingResponse {
+    /// Send a pairing challenge (PIN) as a response to an incoming pairing request.
+    /// The NetworkManager will look up the stored ResponseChannel for this peer.
+    SendPairingChallenge {
         peer_id: String,
-        channel: ResponseChannel<ReqPairingResponse>,
-        message: Vec<u8>,
+        session_id: String,
+        pin: String,
+        device_name: String,
+    },
+    /// Reject a pairing request
+    RejectPairing {
+        peer_id: String,
+        session_id: String,
+    },
+    /// Send pairing confirmation (after PIN verification on initiator side)
+    SendPairingConfirm {
+        peer_id: String,
+        session_id: String,
+        success: bool,
+        shared_secret: Option<Vec<u8>>,
+        device_name: String,
     },
     BroadcastClipboard {
         message: ClipboardMessage,
@@ -179,18 +195,78 @@ impl NetworkManager {
                     request_response::Event::Message { peer, message } => {
                         match message {
                             request_response::Message::Request { request, channel, .. } => {
-                                debug!("Received pairing request from {}", peer);
-                                self.pending_responses.insert(peer, channel);
+                                debug!("Received pairing message from {}", peer);
 
                                 // Parse the message
                                 if let Ok(protocol_msg) = ProtocolMessage::from_bytes(&request.message) {
-                                    if let ProtocolMessage::Pairing(PairingMessage::Request(req)) = protocol_msg {
-                                        let session_id = uuid::Uuid::new_v4().to_string();
-                                        let _ = self.event_tx.send(NetworkEvent::PairingRequestReceived {
-                                            session_id,
-                                            peer_id: peer.to_string(),
-                                            request: req,
-                                        }).await;
+                                    match protocol_msg {
+                                        ProtocolMessage::Pairing(PairingMessage::Request(req)) => {
+                                            // Store channel for later response
+                                            self.pending_responses.insert(peer, channel);
+
+                                            // Use the session_id from the initiator's request
+                                            let session_id = req.session_id.clone();
+                                            let _ = self.event_tx.send(NetworkEvent::PairingRequestReceived {
+                                                session_id,
+                                                peer_id: peer.to_string(),
+                                                request: req,
+                                            }).await;
+                                        }
+                                        ProtocolMessage::Pairing(PairingMessage::Confirm(confirm)) => {
+                                            // Initiator sent confirmation after PIN verification
+                                            // We (responder) need to complete pairing and send back acknowledgment
+                                            debug!("Received pairing confirm from initiator: success={}", confirm.success);
+
+                                            let initiator_device_name = confirm.device_name.clone().unwrap_or_else(|| "Unknown Device".to_string());
+
+                                            if confirm.success {
+                                                if let Some(shared_secret) = confirm.shared_secret.clone() {
+                                                    // Send success acknowledgment back
+                                                    let ack = super::protocol::PairingConfirm {
+                                                        session_id: confirm.session_id.clone(),
+                                                        success: true,
+                                                        shared_secret: Some(shared_secret.clone()),
+                                                        error: None,
+                                                        device_name: None, // Not needed in ack
+                                                    };
+                                                    let ack_msg = ProtocolMessage::Pairing(PairingMessage::Confirm(ack));
+                                                    if let Ok(message) = ack_msg.to_bytes() {
+                                                        let response = ReqPairingResponse { message };
+                                                        let _ = self.swarm.behaviour_mut().request_response.send_response(channel, response);
+                                                    }
+
+                                                    // Emit pairing complete event for responder
+                                                    let _ = self.event_tx.send(NetworkEvent::PairingComplete {
+                                                        session_id: confirm.session_id,
+                                                        peer_id: peer.to_string(),
+                                                        device_name: initiator_device_name,
+                                                        shared_secret,
+                                                    }).await;
+                                                }
+                                            } else {
+                                                // Send failure acknowledgment
+                                                let ack = super::protocol::PairingConfirm {
+                                                    session_id: confirm.session_id.clone(),
+                                                    success: false,
+                                                    shared_secret: None,
+                                                    error: confirm.error.clone(),
+                                                    device_name: None,
+                                                };
+                                                let ack_msg = ProtocolMessage::Pairing(PairingMessage::Confirm(ack));
+                                                if let Ok(message) = ack_msg.to_bytes() {
+                                                    let response = ReqPairingResponse { message };
+                                                    let _ = self.swarm.behaviour_mut().request_response.send_response(channel, response);
+                                                }
+
+                                                let _ = self.event_tx.send(NetworkEvent::PairingFailed {
+                                                    session_id: confirm.session_id,
+                                                    error: confirm.error.unwrap_or_else(|| "Pairing cancelled".to_string()),
+                                                }).await;
+                                            }
+                                        }
+                                        _ => {
+                                            debug!("Received unexpected pairing message type as request");
+                                        }
                                     }
                                 }
                             }
@@ -205,6 +281,7 @@ impl NetworkManager {
                                                 let _ = self.event_tx.send(NetworkEvent::PairingPinReady {
                                                     session_id: challenge.session_id,
                                                     pin: challenge.pin,
+                                                    peer_device_name: challenge.device_name,
                                                 }).await;
                                             }
                                             PairingMessage::Confirm(confirm) => {
@@ -302,10 +379,66 @@ impl NetworkManager {
                 }
             }
 
-            NetworkCommand::SendPairingResponse { peer_id, channel, message } => {
-                let response = ReqPairingResponse { message };
-                let _ = self.swarm.behaviour_mut().request_response.send_response(channel, response);
-                debug!("Sent pairing response to {}", peer_id);
+            NetworkCommand::SendPairingChallenge { peer_id, session_id, pin, device_name } => {
+                if let Ok(peer) = peer_id.parse::<PeerId>() {
+                    if let Some(channel) = self.pending_responses.remove(&peer) {
+                        let challenge = super::protocol::PairingChallenge {
+                            session_id: session_id.clone(),
+                            pin,
+                            device_name,
+                        };
+                        let protocol_msg = ProtocolMessage::Pairing(PairingMessage::Challenge(challenge));
+                        if let Ok(message) = protocol_msg.to_bytes() {
+                            let response = ReqPairingResponse { message };
+                            if self.swarm.behaviour_mut().request_response.send_response(channel, response).is_ok() {
+                                debug!("Sent pairing challenge to {}", peer_id);
+                            } else {
+                                warn!("Failed to send pairing challenge to {}", peer_id);
+                            }
+                        }
+                    } else {
+                        warn!("No pending response channel for peer {}", peer_id);
+                    }
+                }
+            }
+
+            NetworkCommand::RejectPairing { peer_id, session_id } => {
+                if let Ok(peer) = peer_id.parse::<PeerId>() {
+                    if let Some(channel) = self.pending_responses.remove(&peer) {
+                        let confirm = super::protocol::PairingConfirm {
+                            session_id,
+                            success: false,
+                            shared_secret: None,
+                            error: Some("Pairing rejected by user".to_string()),
+                            device_name: None,
+                        };
+                        let protocol_msg = ProtocolMessage::Pairing(PairingMessage::Confirm(confirm));
+                        if let Ok(message) = protocol_msg.to_bytes() {
+                            let response = ReqPairingResponse { message };
+                            let _ = self.swarm.behaviour_mut().request_response.send_response(channel, response);
+                            debug!("Sent pairing rejection to {}", peer_id);
+                        }
+                    }
+                }
+            }
+
+            NetworkCommand::SendPairingConfirm { peer_id, session_id, success, shared_secret, device_name } => {
+                // This is sent as a NEW request from initiator to responder after PIN confirmation
+                if let Ok(peer) = peer_id.parse::<PeerId>() {
+                    let confirm = super::protocol::PairingConfirm {
+                        session_id,
+                        success,
+                        shared_secret,
+                        error: None,
+                        device_name: Some(device_name),
+                    };
+                    let protocol_msg = ProtocolMessage::Pairing(PairingMessage::Confirm(confirm));
+                    if let Ok(message) = protocol_msg.to_bytes() {
+                        let request = ReqPairingRequest { message };
+                        self.swarm.behaviour_mut().request_response.send_request(&peer, request);
+                        debug!("Sent pairing confirm to {}", peer_id);
+                    }
+                }
             }
 
             NetworkCommand::GetPeers => {

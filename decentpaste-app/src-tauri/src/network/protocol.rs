@@ -18,6 +18,7 @@ pub enum PairingMessage {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PairingRequest {
+    pub session_id: String, // Session ID from initiator - responder must use this
     pub device_name: String,
     pub device_id: String,
     pub public_key: Vec<u8>,
@@ -27,6 +28,7 @@ pub struct PairingRequest {
 pub struct PairingChallenge {
     pub session_id: String,
     pub pin: String, // In real implementation, this would be encrypted
+    pub device_name: String, // Responder's device name
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -42,6 +44,7 @@ pub struct PairingConfirm {
     pub success: bool,
     pub shared_secret: Option<Vec<u8>>, // Encrypted shared secret
     pub error: Option<String>,
+    pub device_name: Option<String>, // Sender's device name
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
