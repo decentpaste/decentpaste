@@ -113,7 +113,9 @@ impl DecentPasteBehaviour {
 
         // Gossipsub for clipboard broadcast
         let gossipsub_config = gossipsub::ConfigBuilder::default()
-            .heartbeat_interval(Duration::from_secs(10))
+            // Use 1-second heartbeat for faster mesh building after reconnection
+            // This is important for quick clipboard sync after peer restart
+            .heartbeat_interval(Duration::from_secs(1))
             .validation_mode(gossipsub::ValidationMode::Strict)
             .message_id_fn(|message| {
                 // Use content hash as message ID for deduplication

@@ -7,9 +7,14 @@ use libp2p::{
     tcp, yamux, Multiaddr, PeerId, Swarm,
 };
 use std::collections::HashMap;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
+
+/// Maximum number of connection retries per peer
+const MAX_CONNECTION_RETRIES: u32 = 3;
+/// Delay between connection retries
+const RETRY_DELAY: Duration = Duration::from_secs(2);
 
 use super::behaviour::{
     DecentPasteBehaviour, PairingRequest as ReqPairingRequest,
@@ -53,6 +58,14 @@ pub enum NetworkCommand {
     GetPeers,
 }
 
+/// Tracks retry state for a peer connection
+#[derive(Debug, Clone)]
+struct PeerRetryState {
+    address: Multiaddr,
+    retry_count: u32,
+    next_retry: Instant,
+}
+
 pub struct NetworkManager {
     swarm: Swarm<DecentPasteBehaviour>,
     command_rx: mpsc::Receiver<NetworkCommand>,
@@ -60,6 +73,8 @@ pub struct NetworkManager {
     discovered_peers: HashMap<PeerId, DiscoveredPeer>,
     connected_peers: HashMap<PeerId, ConnectedPeer>,
     pending_responses: HashMap<PeerId, ResponseChannel<ReqPairingResponse>>,
+    /// Tracks peers that need connection retries
+    pending_retries: HashMap<PeerId, PeerRetryState>,
 }
 
 impl NetworkManager {
@@ -93,6 +108,7 @@ impl NetworkManager {
             discovered_peers: HashMap::new(),
             connected_peers: HashMap::new(),
             pending_responses: HashMap::new(),
+            pending_retries: HashMap::new(),
         })
     }
 
@@ -124,6 +140,9 @@ impl NetworkManager {
             .send(NetworkEvent::StatusChanged(NetworkStatus::Connecting))
             .await;
 
+        // Interval for processing connection retries
+        let mut retry_interval = tokio::time::interval(Duration::from_millis(500));
+
         loop {
             tokio::select! {
                 // Handle swarm events
@@ -135,6 +154,47 @@ impl NetworkManager {
                 Some(command) = self.command_rx.recv() => {
                     self.handle_command(command).await;
                 }
+
+                // Process pending retries
+                _ = retry_interval.tick() => {
+                    self.process_pending_retries();
+                }
+            }
+        }
+    }
+
+    /// Process pending connection retries
+    fn process_pending_retries(&mut self) {
+        let now = Instant::now();
+        let mut to_retry = Vec::new();
+
+        // Find peers that are ready to retry
+        for (peer_id, state) in &self.pending_retries {
+            if now >= state.next_retry {
+                to_retry.push((*peer_id, state.address.clone(), state.retry_count));
+            }
+        }
+
+        // Process retries
+        for (peer_id, addr, retry_count) in to_retry {
+            // Remove from pending (will be re-added if it fails again)
+            self.pending_retries.remove(&peer_id);
+
+            // Skip if already connected
+            if self.connected_peers.contains_key(&peer_id) {
+                debug!("Skipping retry for {} - already connected", peer_id);
+                continue;
+            }
+
+            info!(
+                "Retrying connection to {} (attempt {}/{})",
+                peer_id,
+                retry_count + 1,
+                MAX_CONNECTION_RETRIES
+            );
+
+            if let Err(e) = self.swarm.dial(addr) {
+                warn!("Failed to initiate retry dial to {}: {}", peer_id, e);
             }
         }
     }
@@ -194,8 +254,8 @@ impl NetworkManager {
 
             SwarmEvent::Behaviour(super::behaviour::DecentPasteBehaviourEvent::Gossipsub(
                 event,
-            )) => {
-                if let gossipsub::Event::Message { message, .. } = event {
+            )) => match event {
+                gossipsub::Event::Message { message, .. } => {
                     match ProtocolMessage::from_bytes(&message.data) {
                         Ok(ProtocolMessage::Clipboard(clipboard_msg)) => {
                             debug!(
@@ -215,13 +275,29 @@ impl NetworkManager {
                         }
                     }
                 }
-            }
+                gossipsub::Event::Subscribed { peer_id, topic } => {
+                    info!("Peer {} subscribed to topic {}", peer_id, topic);
+                }
+                gossipsub::Event::Unsubscribed { peer_id, topic } => {
+                    info!("Peer {} unsubscribed from topic {}", peer_id, topic);
+                }
+                gossipsub::Event::GossipsubNotSupported { peer_id } => {
+                    warn!("Peer {} does not support gossipsub", peer_id);
+                }
+                gossipsub::Event::SlowPeer { peer_id, .. } => {
+                    warn!("Peer {} is slow", peer_id);
+                }
+            },
 
             SwarmEvent::Behaviour(
                 super::behaviour::DecentPasteBehaviourEvent::RequestResponse(event),
             ) => {
                 match event {
-                    request_response::Event::Message { peer, connection_id: _connection_id, message } => {
+                    request_response::Event::Message {
+                        peer,
+                        connection_id: _connection_id,
+                        message,
+                    } => {
                         match message {
                             request_response::Message::Request {
                                 request, channel, ..
@@ -408,6 +484,18 @@ impl NetworkManager {
 
             SwarmEvent::ConnectionEstablished { peer_id, .. } => {
                 debug!("Connection established with {}", peer_id);
+
+                // Clear any pending retries for this peer
+                self.pending_retries.remove(&peer_id);
+
+                // Add peer to gossipsub mesh explicitly to ensure immediate message delivery
+                // This is critical for reconnecting peers after restart
+                self.swarm
+                    .behaviour_mut()
+                    .gossipsub
+                    .add_explicit_peer(&peer_id);
+                debug!("Added {} to gossipsub explicit peers", peer_id);
+
                 let connected = ConnectedPeer {
                     peer_id: peer_id.to_string(),
                     device_name: self
@@ -426,11 +514,71 @@ impl NetworkManager {
 
             SwarmEvent::ConnectionClosed { peer_id, .. } => {
                 debug!("Connection closed with {}", peer_id);
+
+                // Remove peer from gossipsub explicit peers
+                self.swarm
+                    .behaviour_mut()
+                    .gossipsub
+                    .remove_explicit_peer(&peer_id);
+                debug!("Removed {} from gossipsub explicit peers", peer_id);
+
                 self.connected_peers.remove(&peer_id);
                 let _ = self
                     .event_tx
                     .send(NetworkEvent::PeerDisconnected(peer_id.to_string()))
                     .await;
+            }
+
+            SwarmEvent::OutgoingConnectionError { peer_id, error, .. } => {
+                warn!(
+                    "Outgoing connection error to {:?}: {}",
+                    peer_id, error
+                );
+
+                // Schedule retry if we have the peer's address and haven't exceeded max retries
+                if let Some(peer_id) = peer_id {
+                    if let Some(discovered) = self.discovered_peers.get(&peer_id) {
+                        // Get current retry count
+                        let current_retry = self
+                            .pending_retries
+                            .get(&peer_id)
+                            .map(|s| s.retry_count)
+                            .unwrap_or(0);
+
+                        if current_retry < MAX_CONNECTION_RETRIES {
+                            if let Ok(addr) = discovered.addresses[0].parse::<Multiaddr>() {
+                                info!(
+                                    "Scheduling retry {} for peer {} in {:?}",
+                                    current_retry + 1,
+                                    peer_id,
+                                    RETRY_DELAY
+                                );
+                                self.pending_retries.insert(
+                                    peer_id,
+                                    PeerRetryState {
+                                        address: addr,
+                                        retry_count: current_retry + 1,
+                                        next_retry: Instant::now() + RETRY_DELAY,
+                                    },
+                                );
+                            }
+                        } else {
+                            warn!(
+                                "Max retries ({}) exceeded for peer {}",
+                                MAX_CONNECTION_RETRIES, peer_id
+                            );
+                            self.pending_retries.remove(&peer_id);
+                        }
+                    }
+                }
+            }
+
+            SwarmEvent::IncomingConnectionError { error, .. } => {
+                warn!("Incoming connection error: {}", error);
+            }
+
+            SwarmEvent::Dialing { peer_id, .. } => {
+                info!("Dialing peer: {:?}", peer_id);
             }
 
             _ => {}
