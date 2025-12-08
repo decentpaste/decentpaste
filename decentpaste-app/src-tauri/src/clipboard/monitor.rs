@@ -62,32 +62,37 @@ impl ClipboardMonitor {
                 // Note: On Android/iOS, the Rust clipboard API may not work for reading.
                 // In that case, clipboard monitoring is disabled and users share manually.
                 #[cfg(not(any(target_os = "android", target_os = "ios")))]
-                match app_handle.clipboard().read_text() {
-                    Ok(text) => {
-                        if !text.is_empty() {
-                            let hash = hash_content(&text);
-                            let mut last = last_hash.write().await;
+                {
+                    const MAX_CLIPBOARD_SIZE: usize = 1024 * 1024; // 1MB limit
+                    match app_handle.clipboard().read_text() {
+                        Ok(text) => {
+                            if !text.is_empty() && text.len() <= MAX_CLIPBOARD_SIZE {
+                                let hash = hash_content(&text);
+                                let mut last = last_hash.write().await;
 
-                            if last.as_ref() != Some(&hash) {
-                                debug!("Clipboard content changed, hash: {}", &hash[..8]);
-                                *last = Some(hash.clone());
+                                if last.as_ref() != Some(&hash) {
+                                    debug!("Clipboard content changed, hash: {}", &hash[..8]);
+                                    *last = Some(hash.clone());
 
-                                let change = ClipboardChange {
-                                    content: text,
-                                    content_hash: hash,
-                                    is_local: true,
-                                };
+                                    let change = ClipboardChange {
+                                        content: text,
+                                        content_hash: hash,
+                                        is_local: true,
+                                    };
 
-                                if tx.send(change).await.is_err() {
-                                    error!("Failed to send clipboard change - receiver dropped");
-                                    break;
+                                    if tx.send(change).await.is_err() {
+                                        error!("Failed to send clipboard change - receiver dropped");
+                                        break;
+                                    }
                                 }
+                            } else if text.len() > MAX_CLIPBOARD_SIZE {
+                                debug!("Clipboard content too large to sync: {} bytes", text.len());
                             }
                         }
-                    }
-                    Err(e) => {
-                        // This can happen if clipboard is empty or contains non-text
-                        debug!("Could not read clipboard: {}", e);
+                        Err(e) => {
+                            // This can happen if clipboard is empty or contains non-text
+                            debug!("Could not read clipboard: {}", e);
+                        }
                     }
                 }
 

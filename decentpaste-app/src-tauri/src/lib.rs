@@ -196,10 +196,14 @@ async fn initialize_app(
                                     origin_device_name: identity.device_name.clone(),
                                 };
 
-                                let _ = network_cmd_tx_clipboard
+                                if let Err(e) = network_cmd_tx_clipboard
                                     .send(NetworkCommand::BroadcastClipboard { message: msg })
-                                    .await;
-                                broadcast_count += 1;
+                                    .await
+                                {
+                                    error!("Failed to send clipboard to network: {}", e);
+                                } else {
+                                    broadcast_count += 1;
+                                }
                             }
                             Err(e) => {
                                 error!("Failed to encrypt clipboard for peer {}: {}", peer.peer_id, e);
@@ -380,17 +384,48 @@ async fn initialize_app(
                                         }
                                         Err(e) => {
                                             error!("Failed to derive shared secret: {}", e);
-                                            received_secret
+                                            let _ = app_handle_network.emit(
+                                                "pairing-failed",
+                                                serde_json::json!({
+                                                    "sessionId": session_id,
+                                                    "error": "Failed to derive shared secret",
+                                                }),
+                                            );
+                                            continue;
                                         }
                                     }
                                 } else {
-                                    received_secret
+                                    error!("No private key available for ECDH derivation");
+                                    let _ = app_handle_network.emit(
+                                        "pairing-failed",
+                                        serde_json::json!({
+                                            "sessionId": session_id,
+                                            "error": "Device identity incomplete",
+                                        }),
+                                    );
+                                    continue;
                                 }
                             } else {
-                                received_secret
+                                error!("No device identity for ECDH derivation");
+                                let _ = app_handle_network.emit(
+                                    "pairing-failed",
+                                    serde_json::json!({
+                                        "sessionId": session_id,
+                                        "error": "Device identity not found",
+                                    }),
+                                );
+                                continue;
                             }
                         } else {
-                            received_secret
+                            error!("No peer public key for ECDH derivation");
+                            let _ = app_handle_network.emit(
+                                "pairing-failed",
+                                serde_json::json!({
+                                    "sessionId": session_id,
+                                    "error": "Peer public key missing",
+                                }),
+                            );
+                            continue;
                         }
                     } else {
                         // Initiator already derived the secret

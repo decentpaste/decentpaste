@@ -313,7 +313,8 @@ impl NetworkManager {
                                 {
                                     match protocol_msg {
                                         ProtocolMessage::Pairing(PairingMessage::Request(req)) => {
-                                            // Store channel for later response
+                                            // Store channel for later response (remove any existing to prevent accumulation)
+                                            self.pending_responses.remove(&peer);
                                             self.pending_responses.insert(peer, channel);
 
                                             // Use the session_id from the initiator's request
