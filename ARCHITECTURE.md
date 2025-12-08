@@ -23,6 +23,7 @@ macOS, Linux, Android, iOS).
 - **Frontend**: TypeScript with Tailwind CSS v4
 - **Networking**: libp2p (mDNS, gossipsub, request-response)
 - **Encryption**: AES-256-GCM, SHA-256
+- **Key Exchange**: X25519 ECDH (Elliptic Curve Diffie-Hellman)
 
 ---
 
@@ -219,22 +220,25 @@ pub enum ProtocolMessage {
 
 - `encrypt_content()` / `decrypt_content()` - AES-256-GCM encryption
 - `hash_content()` - SHA-256 hashing for deduplication
-- `generate_shared_secret()` - Random 32-byte secret generation
-
-#### `pairing.rs`
-
-PIN-based pairing protocol:
-
-1. Device A initiates pairing with Device B
-2. Device B generates 6-digit PIN, displays to user
-3. Both devices display PIN for visual verification
-4. User confirms PIN matches on initiating device
-5. Devices establish shared secret for encryption
 
 #### `identity.rs`
 
-- Generates unique device identity on first run
-- Stores device ID, name, and keypair
+- Generates unique device identity with **X25519 keypair** on first run
+- `derive_shared_secret()` - ECDH key derivation using X25519
+- Stores device ID, name, and keypair (public + private)
+
+#### `pairing.rs`
+
+PIN-based pairing protocol with X25519 key exchange:
+
+1. Device A initiates pairing, sends **public key** in request
+2. Device B generates 6-digit PIN, responds with **own public key**
+3. Both devices display PIN for visual verification
+4. User confirms PIN matches on initiating device
+5. Both devices independently derive the **same shared secret** using ECDH:
+   - Device A: `shared = ECDH(A_private, B_public)`
+   - Device B: `shared = ECDH(B_private, A_public)`
+6. No secret is transmitted over the network - only public keys
 
 ### 4. Storage Layer (`src/storage/`)
 
@@ -352,7 +356,7 @@ Single-file application with four main views:
 7. Device B's clipboard is updated
 8. SyncManager records hash to prevent echo
 
-### Pairing Flow
+### Pairing Flow (with X25519 ECDH Key Exchange)
 
 ```
 Device A (Initiator)              Device B (Responder)
@@ -360,41 +364,53 @@ Device A (Initiator)              Device B (Responder)
         │  1. User clicks "Pair"         │
         │────────────────────────────────>│
         │     PairingRequest              │
-        │     {session_id, device_name}   │
+        │     {session_id, device_name,   │
+        │      public_key: A_pub}         │
         │                                │
         │                                │ 2. Show pairing request UI
+        │                                │    Store A_pub for ECDH
         │                                │    User clicks "Accept"
         │                                │    Generate PIN
         │                                │
         │  3. PairingChallenge           │
         │<────────────────────────────────│
         │     {session_id, pin,           │
-        │      device_name}               │
+        │      device_name,               │
+        │      public_key: B_pub}         │
         │                                │
-        │ 4. Display PIN: "123456"       │ 5. Display PIN: "123456"
+        │ 4. Store B_pub for ECDH        │
+        │    Display PIN: "123456"       │ 5. Display PIN: "123456"
         │    User confirms PIN            │    (waiting for initiator)
         │                                │
-        │ 6. PairingConfirm              │
+        │ 6. Derive shared_secret =      │
+        │    ECDH(A_priv, B_pub)          │
+        │    PairingConfirm              │
         │────────────────────────────────>│
         │    {session_id, success,        │
         │     shared_secret, device_name} │
         │                                │
-        │  7. PairingConfirm (ack)       │
+        │                                │ 7. Derive shared_secret =
+        │                                │    ECDH(B_priv, A_pub)
+        │                                │    Verify: derived == received
+        │  8. PairingConfirm (ack)       │
         │<────────────────────────────────│
         │     {success}                   │
         │                                │
-        │ 8. Store pairing               │ 9. Store pairing
+        │ 9. Store pairing               │ 10. Store pairing
 ```
 
-Note: The initiator generates the shared secret and sends it to the responder.
-Both devices use the same session_id (provided by initiator in step 1).
+**Security**: Both devices derive the same shared secret independently using ECDH.
+The secret sent in step 6 is for verification only - Device B also derives it locally
+and compares. Even if intercepted, an attacker cannot derive the secret without
+a private key.
 
 ### Encryption
 
 - All clipboard content is encrypted before transmission
-- Each paired device pair shares a unique 256-bit secret
+- Each paired device pair shares a unique 256-bit secret (derived via X25519 ECDH)
 - AES-256-GCM provides authenticated encryption
 - Content hash (SHA-256) is sent alongside for verification
+- **Per-peer encryption**: Messages are encrypted separately for each paired peer using their specific shared secret
 
 ---
 
@@ -451,10 +467,10 @@ yarn build
 
 1. **Text-only clipboard**: Currently only supports text. Images/files could be added.
 2. **Local network only**: Uses mDNS, so devices must be on same network. Internet relay could be added.
-3. **Single shared secret**: All paired peers currently use first peer's secret. Should use per-peer secrets.
-4. **Mobile clipboard**: On Android/iOS, automatic clipboard monitoring is not supported. Users must manually share
+3. **Mobile clipboard**: On Android/iOS, automatic clipboard monitoring is not supported. Users must manually share
    content using the "Share" button. Receiving clipboard from desktop works automatically.
-5. **No persistence of clipboard history**: History is in-memory only.
+4. **No persistence of clipboard history**: History is in-memory only.
+5. **Plaintext secret storage**: Shared secrets are stored in `peers.json` without OS keychain integration.
 
 ---
 
@@ -485,9 +501,10 @@ yarn build
 ### Rust (Key Dependencies)
 
 - `tauri` v2 - Application framework
-- `libp2p` v0.54 - P2P networking
+- `libp2p` v0.56 - P2P networking
 - `tauri-plugin-clipboard-manager` v2 - Cross-platform clipboard (including mobile)
-- `aes-gcm` v0.10 - Encryption
+- `aes-gcm` v0.10 - AES-256-GCM encryption
+- `x25519-dalek` v2 - X25519 ECDH key exchange
 - `tokio` v1 - Async runtime
 
 ### Frontend (Key Dependencies)

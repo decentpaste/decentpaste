@@ -174,8 +174,9 @@ async fn initialize_app(
                         continue;
                     }
 
-                    // Encrypt content for each paired peer (simplified - using first peer's secret)
-                    if let Some(peer) = paired_peers.first() {
+                    // Encrypt and broadcast to EACH paired peer with their specific shared secret
+                    let mut broadcast_count = 0;
+                    for peer in paired_peers.iter() {
                         match security::encrypt_content(
                             change.content.as_bytes(),
                             &peer.shared_secret,
@@ -193,22 +194,25 @@ async fn initialize_app(
                                 let _ = network_cmd_tx_clipboard
                                     .send(NetworkCommand::BroadcastClipboard { message: msg })
                                     .await;
-
-                                // Add to history
-                                let entry = ClipboardEntry::new_local(
-                                    change.content,
-                                    &identity.device_id,
-                                    &identity.device_name,
-                                );
-                                state.add_clipboard_entry(entry.clone()).await;
-
-                                // Emit to frontend
-                                let _ = app_handle_clipboard.emit("clipboard-sent", entry);
+                                broadcast_count += 1;
                             }
                             Err(e) => {
-                                error!("Failed to encrypt clipboard content: {}", e);
+                                error!("Failed to encrypt clipboard for peer {}: {}", peer.peer_id, e);
                             }
                         }
+                    }
+
+                    if broadcast_count > 0 {
+                        // Add to history (once, not per peer)
+                        let entry = ClipboardEntry::new_local(
+                            change.content,
+                            &identity.device_id,
+                            &identity.device_name,
+                        );
+                        state.add_clipboard_entry(entry.clone()).await;
+
+                        // Emit to frontend
+                        let _ = app_handle_clipboard.emit("clipboard-sent", entry);
                     }
                 }
             }
@@ -264,9 +268,11 @@ async fn initialize_app(
                     peer_id,
                     request,
                 } => {
+                    // Store the initiator's public key for ECDH key derivation later
                     let session =
                         security::PairingSession::new(session_id.clone(), peer_id.clone(), false)
-                            .with_peer_name(request.device_name.clone());
+                            .with_peer_name(request.device_name.clone())
+                            .with_peer_public_key(request.public_key.clone());
 
                     let mut sessions = state.pairing_sessions.write().await;
                     sessions.push(session);
@@ -285,12 +291,14 @@ async fn initialize_app(
                     session_id,
                     pin,
                     peer_device_name,
+                    peer_public_key,
                 } => {
                     let mut sessions = state.pairing_sessions.write().await;
                     if let Some(session) = sessions.iter_mut().find(|s| s.session_id == session_id)
                     {
                         session.pin = Some(pin.clone());
                         session.peer_name = Some(peer_device_name.clone());
+                        session.peer_public_key = Some(peer_public_key);  // Store for ECDH
                         session.state = security::PairingState::AwaitingPinConfirmation;
                     }
                     let _ = app_handle_network.emit(
@@ -307,17 +315,19 @@ async fn initialize_app(
                     session_id,
                     peer_id,
                     device_name,
-                    shared_secret,
+                    shared_secret: received_secret,
                 } => {
-                    // Get the device name from the session if available (more reliable)
+                    // Get the device name and peer's public key from the session
                     let final_device_name: String;
+                    let peer_public_key: Option<Vec<u8>>;
+                    let is_responder: bool;
                     {
                         let mut sessions = state.pairing_sessions.write().await;
                         if let Some(session) =
                             sessions.iter_mut().find(|s| s.session_id == session_id)
                         {
                             session.state = security::PairingState::Completed;
-                            // Use the peer_name from session if available, otherwise use the one from event
+                            // Use the peer_name from session if available
                             final_device_name = session.peer_name.clone().unwrap_or_else(|| {
                                 if device_name == "Unknown" {
                                     "Unknown Device".to_string()
@@ -325,10 +335,48 @@ async fn initialize_app(
                                     device_name.clone()
                                 }
                             });
+                            peer_public_key = session.peer_public_key.clone();
+                            is_responder = !session.is_initiator;
                         } else {
                             final_device_name = device_name.clone();
+                            peer_public_key = None;
+                            is_responder = false;
                         }
                     }
+
+                    // Derive shared secret using ECDH if we're the responder
+                    // (Initiator already derived and sent it; responder derives independently)
+                    let shared_secret = if is_responder {
+                        if let Some(peer_pubkey) = peer_public_key {
+                            let device_identity = state.device_identity.read().await;
+                            if let Some(ref identity) = *device_identity {
+                                if let Some(ref our_private_key) = identity.private_key {
+                                    match security::derive_shared_secret(our_private_key, &peer_pubkey) {
+                                        Ok(derived) => {
+                                            // Verify it matches what initiator sent (if available)
+                                            if derived != received_secret {
+                                                error!("ECDH verification failed: derived secret doesn't match received");
+                                            }
+                                            derived
+                                        }
+                                        Err(e) => {
+                                            error!("Failed to derive shared secret: {}", e);
+                                            received_secret
+                                        }
+                                    }
+                                } else {
+                                    received_secret
+                                }
+                            } else {
+                                received_secret
+                            }
+                        } else {
+                            received_secret
+                        }
+                    } else {
+                        // Initiator already derived the secret
+                        received_secret
+                    };
 
                     // Add to paired peers (with duplicate check)
                     let paired_peer = storage::PairedPeer {

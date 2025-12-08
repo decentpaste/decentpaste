@@ -8,6 +8,7 @@ uses:
 - **Tauri v2** for the desktop/mobile app
 - **libp2p** for decentralized P2P networking
 - **mDNS** for local network device discovery
+- **X25519 ECDH** for secure key exchange during pairing
 - **AES-256-GCM** for end-to-end encryption
 
 ## Quick Start
@@ -37,7 +38,8 @@ decentpaste-app/
     │   ├── monitor.rs      # Polls clipboard every 500ms
     │   └── sync.rs         # Deduplication logic
     ├── security/           # Encryption & pairing
-    │   ├── crypto.rs       # AES-256-GCM
+    │   ├── crypto.rs       # AES-256-GCM encryption
+    │   ├── identity.rs     # X25519 keypair & ECDH key derivation
     │   └── pairing.rs      # 6-digit PIN pairing
     └── storage/            # Settings & peer persistence
 ```
@@ -55,18 +57,23 @@ decentpaste-app/
 ## How Clipboard Sync Works
 
 1. `ClipboardMonitor` polls every 500ms, hashes content
-2. If content changed & is local → encrypt with shared secret
-3. Broadcast via gossipsub to all peers
-4. Receiving peer decrypts, updates clipboard
+2. If content changed & is local → encrypt separately for **each paired peer** using their specific shared secret
+3. Broadcast via gossipsub (one message per peer)
+4. Receiving peer decrypts with their shared secret, updates clipboard
 5. Hash tracked to prevent echo loops
 
-## How Pairing Works
+## How Pairing Works (X25519 ECDH Key Exchange)
 
-1. Device A sends `PairingRequest`
-2. Device B shows 6-digit PIN to user
-3. User confirms PIN matches on both devices
-4. Devices exchange encrypted shared secret
-5. Stored in `~/.local/share/com.decentpaste.app/peers.json`
+1. Device A sends `PairingRequest` with **X25519 public key**
+2. Device B stores A's public key, generates 6-digit PIN
+3. Device B sends `PairingChallenge` with PIN and **own public key**
+4. Device A stores B's public key, displays PIN
+5. User confirms PIN matches on both devices
+6. Both devices independently derive **same shared secret** via ECDH:
+   - `shared_secret = ECDH(my_private_key, peer_public_key)`
+7. Stored in `~/.local/share/com.decentpaste.app/peers.json`
+
+**Security**: No secret is transmitted - both sides derive it from the exchanged public keys.
 
 ## Persistent Identity
 
@@ -144,14 +151,15 @@ All UI is in `src/app.ts`. Key methods:
 3. **Why gossipsub?** Efficiently broadcasts to multiple peers
 4. **Why request-response for pairing?** Needs reliable 1:1 communication
 5. **Why shared secret per pair?** Each device pair has unique encryption key
+6. **Why X25519 ECDH?** Industry-standard key exchange - shared secret derived, never transmitted
 
 ## Current Limitations
 
 - **Text only** - No image/file support yet
 - **Local network only** - mDNS doesn't work across networks
-- **Single shared secret** - Currently uses first peer's secret for all (bug)
 - **In-memory history** - Not persisted to disk
 - **Mobile clipboard** - Auto-monitoring disabled on Android/iOS; use "Share Clipboard" button on Dashboard
+- **Plaintext storage** - Shared secrets stored in JSON without OS keychain integration
 
 ## Testing
 

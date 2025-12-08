@@ -38,6 +38,7 @@ pub enum NetworkCommand {
         session_id: String,
         pin: String,
         device_name: String,
+        public_key: Vec<u8>,  // Our X25519 public key for ECDH
     },
     /// Reject a pairing request
     RejectPairing {
@@ -428,6 +429,7 @@ impl NetworkManager {
                                                         session_id: challenge.session_id,
                                                         pin: challenge.pin,
                                                         peer_device_name: challenge.device_name,
+                                                        peer_public_key: challenge.public_key,
                                                     })
                                                     .await;
                                             }
@@ -624,6 +626,7 @@ impl NetworkManager {
                 session_id,
                 pin,
                 device_name,
+                public_key,
             } => {
                 if let Ok(peer) = peer_id.parse::<PeerId>() {
                     if let Some(channel) = self.pending_responses.remove(&peer) {
@@ -631,6 +634,7 @@ impl NetworkManager {
                             session_id: session_id.clone(),
                             pin,
                             device_name,
+                            public_key,
                         };
                         let protocol_msg =
                             ProtocolMessage::Pairing(PairingMessage::Challenge(challenge));

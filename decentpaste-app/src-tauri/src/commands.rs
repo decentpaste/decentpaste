@@ -190,19 +190,19 @@ pub async fn respond_to_pairing(
     if let Some(tx) = tx.as_ref() {
         if accept {
             if let Some(ref pin) = pin_result {
-                // Get device name for the challenge
+                // Get device identity for the challenge (includes our public key for ECDH)
                 let device_identity = state.device_identity.read().await;
-                let device_name = device_identity
+                let identity = device_identity
                     .as_ref()
-                    .map(|id| id.device_name.clone())
-                    .unwrap_or_else(|| "Unknown Device".to_string());
+                    .ok_or_else(|| DecentPasteError::NotInitialized)?;
 
                 if tx
                     .send(NetworkCommand::SendPairingChallenge {
                         peer_id,
                         session_id: session_id.clone(),
                         pin: pin.clone(),
-                        device_name,
+                        device_name: identity.device_name.clone(),
+                        public_key: identity.public_key.clone(),  // Our X25519 public key for ECDH
                     })
                     .await
                     .is_err()
@@ -262,17 +262,31 @@ pub async fn confirm_pairing(
     }
 
     if is_initiator {
-        // Initiator: Generate shared secret and send PairingConfirm to responder
-        let shared_secret = crate::security::generate_shared_secret();
-
-        // Get our device name to send to the responder
+        // Initiator: Derive shared secret using X25519 ECDH
         let device_identity = state.device_identity.read().await;
-        let device_name = device_identity
+        let identity = device_identity
             .as_ref()
-            .map(|id| id.device_name.clone())
-            .unwrap_or_else(|| "Unknown Device".to_string());
+            .ok_or_else(|| DecentPasteError::NotInitialized)?;
 
-        tracing::debug!("Initiator confirming pairing, sending to peer {}", peer_id);
+        // Get the peer's public key from the session
+        let peer_public_key = {
+            let sessions = state.pairing_sessions.read().await;
+            sessions
+                .iter()
+                .find(|s| s.session_id == session_id)
+                .and_then(|s| s.peer_public_key.clone())
+                .ok_or_else(|| DecentPasteError::Pairing("Peer public key not found".into()))?
+        };
+
+        // Derive shared secret using ECDH: our_private_key + their_public_key
+        let our_private_key = identity
+            .private_key
+            .as_ref()
+            .ok_or_else(|| DecentPasteError::Pairing("Private key not found".into()))?;
+
+        let shared_secret = crate::security::derive_shared_secret(our_private_key, &peer_public_key)?;
+
+        tracing::debug!("Initiator derived shared secret via ECDH, sending confirm to peer {}", peer_id);
 
         let tx = state.network_command_tx.read().await;
         if let Some(tx) = tx.as_ref() {
@@ -280,8 +294,8 @@ pub async fn confirm_pairing(
                 peer_id: peer_id.clone(),
                 session_id: session_id.clone(),
                 success: true,
-                shared_secret: Some(shared_secret.clone()),
-                device_name,
+                shared_secret: Some(shared_secret),  // Send for verification (responder will also derive)
+                device_name: identity.device_name.clone(),
             })
             .await
             .map_err(|_| DecentPasteError::ChannelSend)?;
@@ -295,6 +309,7 @@ pub async fn confirm_pairing(
         // Responder: Just mark as locally confirmed.
         // The actual completion happens when we receive the PairingConfirm from the initiator
         // via the network. The NetworkManager will emit PairingComplete when that happens.
+        // At that point, responder will also derive shared secret via ECDH.
         tracing::debug!("Responder confirmed PIN locally, waiting for initiator's confirmation");
         Ok(true)
     }
@@ -352,29 +367,37 @@ pub async fn share_clipboard_content(
         return Err(DecentPasteError::Pairing("No paired peers".into()));
     }
 
-    // Encrypt content (using first peer's secret - simplified)
-    let peer = paired_peers.first().unwrap();
-    let encrypted = encrypt_content(content.as_bytes(), &peer.shared_secret)
-        .map_err(|e| DecentPasteError::Encryption(e.to_string()))?;
-
-    let msg = ClipboardMessage {
-        id: uuid::Uuid::new_v4().to_string(),
-        content_hash: content_hash.clone(),
-        encrypted_content: encrypted,
-        timestamp: Utc::now(),
-        origin_device_id: identity.device_id.clone(),
-        origin_device_name: identity.device_name.clone(),
-    };
-
-    // Send via network
+    // Encrypt and send to EACH paired peer with their specific shared secret
     let tx = state.network_command_tx.read().await;
-    if let Some(tx) = tx.as_ref() {
-        tx.send(NetworkCommand::BroadcastClipboard { message: msg })
-            .await
-            .map_err(|_| DecentPasteError::ChannelSend)?;
+    let mut broadcast_count = 0;
+
+    for peer in paired_peers.iter() {
+        let encrypted = encrypt_content(content.as_bytes(), &peer.shared_secret)
+            .map_err(|e| DecentPasteError::Encryption(e.to_string()))?;
+
+        let msg = ClipboardMessage {
+            id: uuid::Uuid::new_v4().to_string(),
+            content_hash: content_hash.clone(),
+            encrypted_content: encrypted,
+            timestamp: Utc::now(),
+            origin_device_id: identity.device_id.clone(),
+            origin_device_name: identity.device_name.clone(),
+        };
+
+        // Send via network
+        if let Some(tx) = tx.as_ref() {
+            tx.send(NetworkCommand::BroadcastClipboard { message: msg })
+                .await
+                .map_err(|_| DecentPasteError::ChannelSend)?;
+            broadcast_count += 1;
+        }
     }
 
-    // Add to history
+    if broadcast_count == 0 {
+        return Err(DecentPasteError::ChannelSend);
+    }
+
+    // Add to history (once, not per peer)
     let entry = ClipboardEntry::new_local(content, &identity.device_id, &identity.device_name);
     state.add_clipboard_entry(entry.clone()).await;
 
