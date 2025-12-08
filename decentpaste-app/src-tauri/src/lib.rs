@@ -156,15 +156,20 @@ async fn initialize_app(
         .start(app_handle.clone(), clipboard_tx)
         .await;
 
+    // Create shared SyncManager for echo loop prevention
+    // Both clipboard and network handlers need to share state
+    let sync_manager = std::sync::Arc::new(tokio::sync::Mutex::new(SyncManager::new()));
+    let sync_manager_clipboard = sync_manager.clone();
+    let sync_manager_network = sync_manager.clone();
+
     // Handle clipboard changes - broadcast to network
     let app_handle_clipboard = app_handle.clone();
     let network_cmd_tx_clipboard = network_cmd_tx.clone();
     tokio::spawn(async move {
         let state = app_handle_clipboard.state::<AppState>();
-        let mut sync_manager = SyncManager::new();
 
         while let Some(change) = clipboard_rx.recv().await {
-            if change.is_local && sync_manager.should_broadcast(&change.content_hash, true) {
+            if change.is_local && sync_manager_clipboard.lock().await.should_broadcast(&change.content_hash, true) {
                 // Get device info
                 let device_identity = state.device_identity.read().await;
                 if let Some(ref identity) = *device_identity {
@@ -223,7 +228,6 @@ async fn initialize_app(
     let app_handle_network = app_handle.clone();
     tokio::spawn(async move {
         let state = app_handle_network.state::<AppState>();
-        let mut sync_manager = SyncManager::new();
 
         while let Some(event) = network_event_rx.recv().await {
             match event {
@@ -275,6 +279,8 @@ async fn initialize_app(
                             .with_peer_public_key(request.public_key.clone());
 
                     let mut sessions = state.pairing_sessions.write().await;
+                    // Clean up expired sessions before adding a new one
+                    sessions.retain(|s| !s.is_expired());
                     sessions.push(session);
 
                     let _ = app_handle_network.emit(
@@ -353,9 +359,22 @@ async fn initialize_app(
                                 if let Some(ref our_private_key) = identity.private_key {
                                     match security::derive_shared_secret(our_private_key, &peer_pubkey) {
                                         Ok(derived) => {
-                                            // Verify it matches what initiator sent (if available)
+                                            // Verify it matches what initiator sent
                                             if derived != received_secret {
-                                                error!("ECDH verification failed: derived secret doesn't match received");
+                                                error!("ECDH verification failed: derived secret doesn't match received - possible MITM attack");
+                                                // Fail the pairing - this is a security issue
+                                                let mut sessions = state.pairing_sessions.write().await;
+                                                if let Some(session) = sessions.iter_mut().find(|s| s.session_id == session_id) {
+                                                    session.state = security::PairingState::Failed("Key verification failed".into());
+                                                }
+                                                let _ = app_handle_network.emit(
+                                                    "pairing-failed",
+                                                    serde_json::json!({
+                                                        "sessionId": session_id,
+                                                        "error": "Key verification failed - secrets don't match",
+                                                    }),
+                                                );
+                                                continue; // Skip adding to paired peers
                                             }
                                             derived
                                         }
@@ -431,7 +450,8 @@ async fn initialize_app(
                     let paired_peers = state.paired_peers.read().await;
 
                     // Find the peer's shared secret
-                    // For simplicity, try decrypting with any paired peer's secret
+                    // Try decrypting with each paired peer's secret until one succeeds
+                    let mut decrypted_successfully = false;
                     for peer in paired_peers.iter() {
                         match security::decrypt_content(&msg.encrypted_content, &peer.shared_secret)
                         {
@@ -440,7 +460,8 @@ async fn initialize_app(
                                     // Verify hash
                                     let hash = security::hash_content(&content);
                                     if hash == msg.content_hash {
-                                        if sync_manager.on_received(&msg.content_hash) {
+                                        decrypted_successfully = true;
+                                        if sync_manager_network.lock().await.on_received(&msg.content_hash) {
                                             // Update local clipboard
                                             if let Err(e) =
                                                 clipboard::monitor::set_clipboard_content(
@@ -471,6 +492,13 @@ async fn initialize_app(
                             }
                             Err(_) => continue,
                         }
+                    }
+
+                    if !decrypted_successfully && !paired_peers.is_empty() {
+                        tracing::warn!(
+                            "Failed to decrypt clipboard message from {} - no paired peer could decrypt it",
+                            msg.origin_device_name
+                        );
                     }
                 }
 

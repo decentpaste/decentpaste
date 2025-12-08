@@ -46,6 +46,9 @@ pub enum DecentPasteError {
 
     #[error("Not initialized")]
     NotInitialized,
+
+    #[error("Invalid input: {0}")]
+    InvalidInput(String),
 }
 
 impl serde::Serialize for DecentPasteError {

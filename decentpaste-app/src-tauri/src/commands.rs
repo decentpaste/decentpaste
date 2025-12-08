@@ -353,6 +353,14 @@ pub async fn share_clipboard_content(
     use chrono::Utc;
     use tauri::Emitter;
 
+    // Limit clipboard content size to prevent memory exhaustion (1MB max)
+    const MAX_CLIPBOARD_SIZE: usize = 1024 * 1024;
+    if content.len() > MAX_CLIPBOARD_SIZE {
+        return Err(DecentPasteError::InvalidInput(
+            "Clipboard content too large (max 1MB)".into(),
+        ));
+    }
+
     let content_hash = hash_content(&content);
 
     // Get device info

@@ -727,12 +727,16 @@ impl NetworkManager {
             NetworkCommand::ReconnectPeers => {
                 info!("Reconnecting to all discovered peers (app resumed from background)");
 
-                // Clear stale connection state
-                self.connected_peers.clear();
+                // Only clear pending retries - don't clear connected_peers as that
+                // drops valid connections and causes a brief disconnection window
                 self.pending_retries.clear();
 
-                // Try to dial all discovered peers
+                // Try to dial discovered peers that aren't already connected
                 for (peer_id, peer) in &self.discovered_peers {
+                    // Skip peers that are already connected
+                    if self.connected_peers.contains_key(peer_id) {
+                        continue;
+                    }
                     if let Some(addr_str) = peer.addresses.first() {
                         if let Ok(addr) = addr_str.parse::<Multiaddr>() {
                             info!("Attempting to reconnect to {} at {}", peer_id, addr);
