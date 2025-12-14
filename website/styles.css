@@ -1,6 +1,6 @@
 /**
- * DecentPaste Landing Page - Custom Styles
- * Animations, transitions, and custom effects
+ * DecentPaste Landing Page - Premium Dark Theme
+ * Inspired by LocalCan's sophisticated design
  */
 
 /* =============================================================================
@@ -12,74 +12,330 @@ html {
 }
 
 body {
-  overflow-x: hidden;
+  background-color: #0a0a0b;
+  color: #ffffff;
 }
 
 /* =============================================================================
-   Animated Mesh Gradient Background
+   Gradient Text Effect
    ============================================================================= */
 
-.mesh-gradient {
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(at 40% 20%, rgba(20, 184, 166, 0.25) 0px, transparent 50%),
-    radial-gradient(at 80% 0%, rgba(249, 115, 22, 0.2) 0px, transparent 50%),
-    radial-gradient(at 0% 50%, rgba(14, 165, 233, 0.15) 0px, transparent 50%),
-    radial-gradient(at 80% 50%, rgba(249, 115, 22, 0.1) 0px, transparent 50%),
-    radial-gradient(at 0% 100%, rgba(20, 184, 166, 0.2) 0px, transparent 50%);
-  animation: mesh-animation 20s ease-in-out infinite;
+.gradient-text {
+  background: linear-gradient(135deg, #14b8a6 0%, #2dd4bf 25%, #f97316 75%, #fb923c 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  background-size: 200% auto;
+  animation: gradient-shift 4s ease-in-out infinite;
 }
 
-@keyframes mesh-animation {
+@keyframes gradient-shift {
   0%, 100% {
-    background-position: 0% 0%, 100% 0%, 0% 50%, 100% 50%, 0% 100%;
-  }
-  25% {
-    background-position: 20% 20%, 80% 20%, 20% 50%, 80% 50%, 20% 80%;
+    background-position: 0% center;
   }
   50% {
-    background-position: 40% 0%, 60% 0%, 40% 50%, 60% 50%, 40% 100%;
+    background-position: 100% center;
   }
-  75% {
-    background-position: 20% 20%, 80% 20%, 20% 50%, 80% 50%, 20% 80%;
-  }
-}
-
-/* Dark mode gradient adjustments */
-.dark .mesh-gradient {
-  background:
-    radial-gradient(at 40% 20%, rgba(20, 184, 166, 0.15) 0px, transparent 50%),
-    radial-gradient(at 80% 0%, rgba(249, 115, 22, 0.1) 0px, transparent 50%),
-    radial-gradient(at 0% 50%, rgba(14, 165, 233, 0.08) 0px, transparent 50%),
-    radial-gradient(at 80% 50%, rgba(249, 115, 22, 0.05) 0px, transparent 50%),
-    radial-gradient(at 0% 100%, rgba(20, 184, 166, 0.1) 0px, transparent 50%);
 }
 
 /* =============================================================================
-   Floating Animation
+   CTA Buttons - Pill Shape with Gradients
+   ============================================================================= */
+
+.cta-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 1rem 2rem;
+  font-weight: 600;
+  font-size: 0.9375rem;
+  border-radius: 50px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  text-decoration: none;
+  position: relative;
+  overflow: hidden;
+}
+
+.cta-primary {
+  background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
+  color: white;
+  box-shadow: 0 4px 24px -4px rgba(20, 184, 166, 0.4);
+}
+
+.cta-primary:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 8px 32px -4px rgba(20, 184, 166, 0.5);
+}
+
+.cta-primary::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.2) 0%, transparent 50%);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.cta-primary:hover::before {
+  opacity: 1;
+}
+
+.cta-secondary {
+  background: rgba(255, 255, 255, 0.05);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(8px);
+}
+
+.cta-secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+}
+
+/* =============================================================================
+   Feature Cards
+   ============================================================================= */
+
+.feature-card {
+  padding: 1.5rem;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 1rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.feature-card:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
+  transform: translateY(-4px);
+}
+
+.feature-icon {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1rem;
+}
+
+/* =============================================================================
+   Download Cards
+   ============================================================================= */
+
+.download-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 1rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: visible;
+}
+
+.download-card:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.download-card.highlighted {
+  border-color: #14b8a6;
+  background: rgba(20, 184, 166, 0.05);
+}
+
+.download-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.6);
+  flex-shrink: 0;
+}
+
+.download-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: 50px;
+  text-decoration: none;
+  transition: all 0.3s;
+  white-space: nowrap;
+}
+
+.download-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 16px -4px rgba(20, 184, 166, 0.4);
+}
+
+.download-btn-secondary {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.download-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.15);
+  box-shadow: none;
+}
+
+.download-btn-disabled {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: 50px;
+  white-space: nowrap;
+  cursor: not-allowed;
+}
+
+/* Recommended badge for highlighted download */
+.download-card.highlighted::before {
+  content: 'Recommended';
+  position: absolute;
+  top: -0.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.25rem 0.75rem;
+  background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
+  color: white;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-radius: 50px;
+  white-space: nowrap;
+}
+
+/* =============================================================================
+   FAQ Accordion
+   ============================================================================= */
+
+.faq-item {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 1rem;
+  overflow: hidden;
+  transition: all 0.3s;
+}
+
+.faq-item:hover {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.faq-item.active {
+  border-color: rgba(20, 184, 166, 0.3);
+  background: rgba(20, 184, 166, 0.02);
+}
+
+.faq-question {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  background: transparent;
+  border: none;
+  color: white;
+  font-size: 1rem;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.faq-question:hover {
+  color: #14b8a6;
+}
+
+.faq-chevron {
+  flex-shrink: 0;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.faq-item.active .faq-chevron {
+  transform: rotate(180deg);
+  color: #14b8a6;
+}
+
+.faq-answer {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              padding 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.faq-item.active .faq-answer {
+  max-height: 500px;
+}
+
+.faq-answer p {
+  padding: 0 1.5rem 1.25rem;
+  color: rgba(255, 255, 255, 0.5);
+  line-height: 1.7;
+  font-size: 0.9375rem;
+}
+
+/* =============================================================================
+   Scroll Indicator Animation
+   ============================================================================= */
+
+@keyframes scroll-indicator {
+  0%, 100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(6px);
+    opacity: 0.5;
+  }
+}
+
+.animate-scroll-indicator {
+  animation: scroll-indicator 1.5s ease-in-out infinite;
+}
+
+/* =============================================================================
+   Floating Animation for Background Orbs
    ============================================================================= */
 
 @keyframes float {
   0%, 100% {
-    transform: translateY(0) scale(1);
+    transform: translate(0, 0) scale(1);
   }
-  50% {
-    transform: translateY(-20px) scale(1.02);
+  33% {
+    transform: translate(30px, -30px) scale(1.05);
+  }
+  66% {
+    transform: translate(-20px, 20px) scale(0.95);
   }
 }
 
 .animate-float {
-  animation: float 8s ease-in-out infinite;
+  animation: float 20s ease-in-out infinite;
 }
 
 .animate-float-delayed {
-  animation: float 10s ease-in-out infinite;
-  animation-delay: -4s;
+  animation: float 25s ease-in-out infinite;
+  animation-delay: -10s;
 }
 
 /* =============================================================================
-   Fade-in Up Animation
+   Fade In Up Animation
    ============================================================================= */
 
 .fade-in-up {
@@ -94,7 +350,7 @@ body {
   transform: translateY(0);
 }
 
-/* Staggered delays for scroll animation only (opacity & transform) */
+/* Staggered delays */
 .fade-in-up[style*="animation-delay: 0.1s"]:not(.visible) { transition-delay: 0.1s; }
 .fade-in-up[style*="animation-delay: 0.15s"]:not(.visible) { transition-delay: 0.15s; }
 .fade-in-up[style*="animation-delay: 0.2s"]:not(.visible) { transition-delay: 0.2s; }
@@ -102,47 +358,19 @@ body {
 .fade-in-up[style*="animation-delay: 0.4s"]:not(.visible) { transition-delay: 0.4s; }
 .fade-in-up[style*="animation-delay: 0.5s"]:not(.visible) { transition-delay: 0.5s; }
 
-/* Reset delay after animation completes so hover effects are instant */
+/* Reset delay after animation */
 .fade-in-up.visible {
   transition-delay: 0s !important;
 }
 
 /* =============================================================================
-   Pulse Animation
+   Navbar Background on Scroll
    ============================================================================= */
 
-@keyframes pulse-ring {
-  0% {
-    box-shadow: 0 0 0 0 rgba(20, 184, 166, 0.4);
-  }
-  70% {
-    box-shadow: 0 0 0 15px rgba(20, 184, 166, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(20, 184, 166, 0);
-  }
-}
-
-.animate-pulse-ring {
-  animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-/* =============================================================================
-   Gradient Text Animation
-   ============================================================================= */
-
-@keyframes gradient-shift {
-  0%, 100% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-}
-
-.animate-gradient-text {
-  background-size: 200% auto;
-  animation: gradient-shift 4s ease infinite;
+#navbar.scrolled {
+  background: rgba(10, 10, 11, 0.8);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 /* =============================================================================
@@ -159,30 +387,27 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: rgba(255, 255, 255, 0.15);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: rgba(255, 255, 255, 0.25);
 }
 
-.dark ::-webkit-scrollbar-thumb {
-  background: #475569;
-}
-
-.dark ::-webkit-scrollbar-thumb:hover {
-  background: #64748b;
-}
-
-/* Firefox scrollbar */
+/* Firefox */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #cbd5e1 transparent;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
 }
 
-.dark * {
-  scrollbar-color: #475569 transparent;
+/* =============================================================================
+   Selection
+   ============================================================================= */
+
+::selection {
+  background-color: rgba(20, 184, 166, 0.4);
+  color: white;
 }
 
 /* =============================================================================
@@ -196,74 +421,11 @@ button:focus-visible {
 }
 
 /* =============================================================================
-   Selection Styles
-   ============================================================================= */
-
-::selection {
-  background-color: rgba(20, 184, 166, 0.3);
-  color: inherit;
-}
-
-.dark ::selection {
-  background-color: rgba(20, 184, 166, 0.4);
-}
-
-/* =============================================================================
-   Download Card Highlight
-   ============================================================================= */
-
-.download-card.highlighted {
-  position: relative;
-}
-
-.download-card.highlighted::before {
-  content: 'Recommended';
-  position: absolute;
-  top: -12px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 4px 12px;
-  background: linear-gradient(to right, #14b8a6, #0d9488);
-  color: white;
-  font-size: 0.75rem;
-  font-weight: 600;
-  border-radius: 9999px;
-  white-space: nowrap;
-}
-
-/* =============================================================================
-   Button Hover Effects
-   ============================================================================= */
-
-.btn-primary {
-  position: relative;
-  overflow: hidden;
-}
-
-.btn-primary::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 255, 255, 0.2),
-    transparent
-  );
-  transform: translateX(-100%);
-  transition: transform 0.5s ease;
-}
-
-.btn-primary:hover::after {
-  transform: translateX(100%);
-}
-
-/* =============================================================================
    Mobile Menu Animation
    ============================================================================= */
 
 #mobile-menu {
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 #mobile-menu.hidden {
@@ -275,44 +437,6 @@ button:focus-visible {
 #mobile-menu:not(.hidden) {
   opacity: 1;
   transform: translateY(0);
-}
-
-/* =============================================================================
-   Smooth Link Underlines
-   ============================================================================= */
-
-nav a {
-  position: relative;
-}
-
-nav a::after {
-  content: '';
-  position: absolute;
-  bottom: -2px;
-  left: 0;
-  width: 0;
-  height: 2px;
-  background: linear-gradient(to right, #14b8a6, #f97316);
-  transition: width 0.3s ease;
-}
-
-nav a:hover::after {
-  width: 100%;
-}
-
-/* =============================================================================
-   Card Shine Effect on Hover
-   ============================================================================= */
-
-.download-card {
-  position: relative;
-  overflow: visible;
-}
-
-/* Shine effect wrapper - needed to clip the shine without clipping the badge */
-.download-card > * {
-  position: relative;
-  z-index: 1;
 }
 
 /* =============================================================================
@@ -337,12 +461,12 @@ nav a:hover::after {
     transform: none;
   }
 
-  .mesh-gradient {
+  .animate-float,
+  .animate-float-delayed {
     animation: none;
   }
 
-  .animate-float,
-  .animate-float-delayed {
+  .gradient-text {
     animation: none;
   }
 }
@@ -354,7 +478,6 @@ nav a:hover::after {
 @media print {
   nav,
   #mobile-menu,
-  .mesh-gradient,
   .animate-float,
   .animate-float-delayed {
     display: none !important;
@@ -368,5 +491,9 @@ nav a:hover::after {
   body {
     color: black;
     background: white;
+  }
+
+  .gradient-text {
+    -webkit-text-fill-color: #0d9488;
   }
 }
