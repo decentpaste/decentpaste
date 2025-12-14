@@ -21,24 +21,35 @@ body {
    ============================================================================= */
 
 #network-graph-container {
-  z-index: 1;
-  mask-image: radial-gradient(ellipse 80% 70% at 50% 40%, black 30%, transparent 70%);
-  -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 40%, black 30%, transparent 70%);
+  z-index: 5;
+  pointer-events: none;
+  /* Fade out at bottom to blend with hero content */
+  mask-image: linear-gradient(to bottom, black 0%, black 60%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, black 0%, black 60%, transparent 100%);
 }
 
 #network-graph {
   cursor: grab;
   touch-action: none;
+  pointer-events: auto;
 }
 
 #network-graph:active {
   cursor: grabbing;
 }
 
-/* Ensure hero content is above the graph */
+/* Hero content should not block graph interaction outside text area */
 #hero > div:not(#network-graph-container) {
   position: relative;
   z-index: 10;
+  pointer-events: none;
+}
+
+/* Re-enable pointer events for interactive elements within hero */
+#hero a,
+#hero button,
+#hero .fade-in-up {
+  pointer-events: auto;
 }
 
 /* =============================================================================

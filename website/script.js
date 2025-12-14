@@ -37,7 +37,7 @@ class NetworkGraph {
       { type: 'iphone', label: 'iPhone', color: '#f472b6', icon: 'phone' },
       { type: 'android', label: 'Android', color: '#4ade80', icon: 'phone' },
       { type: 'ipad', label: 'iPad', color: '#c084fc', icon: 'tablet' },
-      { type: 'linux', label: 'Linux Server', color: '#fbbf24', icon: 'server' },
+      { type: 'linux', label: 'Linux', color: '#fbbf24', icon: 'desktop' },
     ];
 
     this.init();
@@ -53,36 +53,66 @@ class NetworkGraph {
 
   resize() {
     const rect = this.canvas.getBoundingClientRect();
+    const oldWidth = this.width;
     this.width = rect.width;
     this.height = rect.height;
     this.canvas.width = this.width * this.dpr;
     this.canvas.height = this.height * this.dpr;
     this.ctx.scale(this.dpr, this.dpr);
 
-    // Update node positions if resizing
-    if (this.nodes.length > 0) {
+    // Detect significant layout change (crossing mobile/tablet/desktop breakpoints)
+    const wasMobile = oldWidth && oldWidth < 640;
+    const isMobile = this.width < 640;
+    const wasTablet = oldWidth && oldWidth >= 640 && oldWidth < 1024;
+    const isTablet = this.width >= 640 && this.width < 1024;
+
+    if (oldWidth && ((wasMobile !== isMobile) || (wasTablet !== isTablet))) {
+      // Recreate graph for new breakpoint
+      this.nodes = [];
+      this.edges = [];
+      this.dataPackets = [];
+      this.createNodes();
+      this.createEdges();
+    } else if (this.nodes.length > 0) {
+      // Just reposition existing nodes within bounds
+      const margin = isMobile ? 40 : 60;
       this.nodes.forEach(node => {
-        node.x = Math.max(60, Math.min(this.width - 60, node.x));
-        node.y = Math.max(60, Math.min(this.height - 60, node.y));
+        node.x = Math.max(margin, Math.min(this.width - margin, node.x));
+        node.y = Math.max(margin, Math.min(this.height - margin, node.y));
         node.targetX = node.x;
         node.targetY = node.y;
       });
     }
+
+    // Update physics for screen size
+    this.physics.springLength = isMobile ? 100 : (isTablet ? 140 : 180);
+    this.physics.repulsion = isMobile ? 4000 : (isTablet ? 6000 : 8000);
   }
 
   createNodes() {
     const centerX = this.width / 2;
-    const centerY = this.height * 0.4;
-    const radius = Math.min(this.width, this.height) * 0.28;
+    // Center vertically in the container (which is now constrained to top area)
+    const centerY = this.height * 0.45;
+    const isMobile = this.width < 640;
+    const isTablet = this.width >= 640 && this.width < 1024;
 
-    // Shuffle device types for random selection each load
-    const shuffled = [...this.deviceTypes].sort(() => Math.random() - 0.5);
-    const numNodes = 5 + Math.floor(Math.random() * 2); // 5-6 nodes
-    const selectedDevices = shuffled.slice(0, numNodes);
+    // Responsive settings
+    const nodeRadius = isMobile ? 24 : (isTablet ? 28 : 32);
+    const baseRadius = Math.min(this.width * 0.35, this.height * 0.35);
+    const numNodes = isMobile ? 6 : (isTablet ? 7 : 8); // More nodes!
+
+    // Create node pool with duplicates allowed
+    const nodePool = [];
+    while (nodePool.length < numNodes) {
+      const shuffled = [...this.deviceTypes].sort(() => Math.random() - 0.5);
+      nodePool.push(...shuffled);
+    }
+    const selectedDevices = nodePool.slice(0, numNodes);
 
     selectedDevices.forEach((device, i) => {
-      const angle = (i / numNodes) * Math.PI * 2 + Math.random() * 0.5 - 0.25;
-      const r = radius * (0.7 + Math.random() * 0.6);
+      // Distribute nodes in a ring, avoiding the center
+      const angle = (i / numNodes) * Math.PI * 2 + Math.random() * 0.4 - 0.2;
+      const r = baseRadius * (0.8 + Math.random() * 0.5);
       const x = centerX + Math.cos(angle) * r;
       const y = centerY + Math.sin(angle) * r;
 
@@ -94,10 +124,15 @@ class NetworkGraph {
         targetY: y,
         vx: 0,
         vy: 0,
-        radius: 32,
+        radius: nodeRadius,
         ...device,
         pulsePhase: Math.random() * Math.PI * 2,
         glowIntensity: 0,
+        // Drift parameters for gentle floating
+        driftPhaseX: Math.random() * Math.PI * 2,
+        driftPhaseY: Math.random() * Math.PI * 2,
+        driftSpeedX: 0.0003 + Math.random() * 0.0004,
+        driftSpeedY: 0.0003 + Math.random() * 0.0004,
       });
     });
   }
@@ -257,12 +292,19 @@ class NetworkGraph {
   updatePhysics() {
     const { friction, springStrength, springLength, repulsion, centerGravity, maxVelocity } = this.physics;
     const centerX = this.width / 2;
-    const centerY = this.height * 0.4;
+    const centerY = this.height * 0.45;
+    const time = Date.now();
 
     // Apply forces between nodes
     for (let i = 0; i < this.nodes.length; i++) {
       const nodeA = this.nodes[i];
       if (nodeA.isDragging) continue;
+
+      // Gentle drift force (slow floating)
+      const driftX = Math.sin(time * nodeA.driftSpeedX + nodeA.driftPhaseX) * 0.015;
+      const driftY = Math.sin(time * nodeA.driftSpeedY + nodeA.driftPhaseY) * 0.015;
+      nodeA.vx += driftX;
+      nodeA.vy += driftY;
 
       // Center gravity
       const dxCenter = centerX - nodeA.x;
@@ -313,6 +355,7 @@ class NetworkGraph {
     });
 
     // Update positions
+    const margin = this.width < 640 ? 40 : 60;
     this.nodes.forEach(node => {
       if (node.isDragging) return;
 
@@ -332,7 +375,6 @@ class NetworkGraph {
       node.y += node.vy;
 
       // Keep within bounds
-      const margin = 60;
       node.x = Math.max(margin, Math.min(this.width - margin, node.x));
       node.y = Math.max(margin, Math.min(this.height - margin, node.y));
     });
@@ -383,7 +425,7 @@ class NetworkGraph {
     // Draw edges
     this.edges.forEach(edge => {
       const pulse = Math.sin(time * 2 + edge.pulseOffset) * 0.5 + 0.5;
-      const opacity = edge.active ? 0.15 + pulse * 0.1 : 0.08;
+      const opacity = edge.active ? 0.3 + pulse * 0.15 : 0.15;
 
       ctx.beginPath();
       ctx.moveTo(edge.source.x, edge.source.y);
@@ -397,8 +439,8 @@ class NetworkGraph {
         ctx.beginPath();
         ctx.moveTo(edge.source.x, edge.source.y);
         ctx.lineTo(edge.target.x, edge.target.y);
-        ctx.strokeStyle = `rgba(20, 184, 166, ${0.1 + pulse * 0.15})`;
-        ctx.lineWidth = 4;
+        ctx.strokeStyle = `rgba(20, 184, 166, ${0.2 + pulse * 0.25})`;
+        ctx.lineWidth = 3;
         ctx.stroke();
       }
     });
@@ -411,19 +453,19 @@ class NetworkGraph {
       const y = edge.source.y + (edge.target.y - edge.source.y) * t;
 
       // Glow
-      const gradient = ctx.createRadialGradient(x, y, 0, x, y, packet.size * 4);
-      gradient.addColorStop(0, 'rgba(20, 184, 166, 0.8)');
-      gradient.addColorStop(0.5, 'rgba(20, 184, 166, 0.2)');
+      const gradient = ctx.createRadialGradient(x, y, 0, x, y, packet.size * 5);
+      gradient.addColorStop(0, 'rgba(20, 184, 166, 1)');
+      gradient.addColorStop(0.4, 'rgba(20, 184, 166, 0.4)');
       gradient.addColorStop(1, 'rgba(20, 184, 166, 0)');
       ctx.beginPath();
-      ctx.arc(x, y, packet.size * 4, 0, Math.PI * 2);
+      ctx.arc(x, y, packet.size * 5, 0, Math.PI * 2);
       ctx.fillStyle = gradient;
       ctx.fill();
 
       // Core
       ctx.beginPath();
       ctx.arc(x, y, packet.size, 0, Math.PI * 2);
-      ctx.fillStyle = '#14b8a6';
+      ctx.fillStyle = '#2dd4bf';
       ctx.fill();
     });
 
@@ -431,13 +473,13 @@ class NetworkGraph {
     this.nodes.forEach(node => {
       const isHovered = node === this.hoveredNode || node === this.draggedNode;
       const pulse = Math.sin(time * 1.5 + node.pulsePhase) * 0.5 + 0.5;
-      const scale = isHovered ? 1.1 : 1 + pulse * 0.03;
+      const scale = isHovered ? 1.15 : 1 + pulse * 0.03;
       const radius = node.radius * scale;
 
       // Outer glow (on data receive)
       if (node.glowIntensity > 0.01) {
         const gradient = ctx.createRadialGradient(node.x, node.y, radius, node.x, node.y, radius * 2.5);
-        gradient.addColorStop(0, `rgba(20, 184, 166, ${node.glowIntensity * 0.5})`);
+        gradient.addColorStop(0, `rgba(20, 184, 166, ${node.glowIntensity * 0.6})`);
         gradient.addColorStop(1, 'rgba(20, 184, 166, 0)');
         ctx.beginPath();
         ctx.arc(node.x, node.y, radius * 2.5, 0, Math.PI * 2);
@@ -454,8 +496,8 @@ class NetworkGraph {
         node.y,
         radius
       );
-      bgGradient.addColorStop(0, 'rgba(40, 40, 45, 0.95)');
-      bgGradient.addColorStop(1, 'rgba(25, 25, 30, 0.95)');
+      bgGradient.addColorStop(0, 'rgba(45, 45, 50, 0.98)');
+      bgGradient.addColorStop(1, 'rgba(30, 30, 35, 0.98)');
 
       ctx.beginPath();
       ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
@@ -467,26 +509,27 @@ class NetworkGraph {
       ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
       ctx.strokeStyle = isHovered
         ? node.color
-        : `rgba(255, 255, 255, ${0.1 + pulse * 0.05})`;
-      ctx.lineWidth = isHovered ? 2 : 1;
+        : `rgba(255, 255, 255, ${0.15 + pulse * 0.1})`;
+      ctx.lineWidth = isHovered ? 2.5 : 1.5;
       ctx.stroke();
 
       // Colored accent ring
       ctx.beginPath();
       ctx.arc(node.x, node.y, radius - 3, 0, Math.PI * 2);
-      ctx.strokeStyle = `${node.color}${isHovered ? 'ff' : '40'}`;
+      ctx.strokeStyle = isHovered ? node.color : `${node.color}88`;
       ctx.lineWidth = 2;
       ctx.stroke();
 
       // Draw icon
       this.drawIcon(ctx, node.x, node.y - 4, node.icon, node.color, isHovered);
 
-      // Draw label
-      ctx.font = '10px Inter, system-ui, sans-serif';
+      // Draw label (responsive font size)
+      const fontSize = this.width < 640 ? 9 : 11;
+      ctx.font = `${fontSize}px Inter, system-ui, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
-      ctx.fillStyle = isHovered ? 'rgba(255, 255, 255, 0.9)' : 'rgba(255, 255, 255, 0.5)';
-      ctx.fillText(node.label, node.x, node.y + radius + 8);
+      ctx.fillStyle = isHovered ? 'rgba(255, 255, 255, 1)' : 'rgba(255, 255, 255, 0.8)';
+      ctx.fillText(node.label, node.x, node.y + radius + 6);
     });
   }
 
@@ -545,21 +588,6 @@ class NetworkGraph {
         ctx.arc(x, y + size/3, 2, 0, Math.PI * 2);
         ctx.stroke();
         break;
-
-      case 'server':
-        // Server rack
-        const slotHeight = size / 4;
-        for (let i = 0; i < 3; i++) {
-          ctx.beginPath();
-          ctx.roundRect(x - size/2, y - size/2 + i * slotHeight + i * 2, size, slotHeight, 1);
-          ctx.stroke();
-          // LED indicator
-          ctx.beginPath();
-          ctx.arc(x + size/3, y - size/2 + i * slotHeight + i * 2 + slotHeight/2, 1.5, 0, Math.PI * 2);
-          ctx.fillStyle = isHovered ? '#4ade80' : 'rgba(74, 222, 128, 0.5)';
-          ctx.fill();
-        }
-        break;
     }
   }
 
@@ -582,9 +610,6 @@ class NetworkGraph {
 function initNetworkGraph() {
   const canvas = document.getElementById('network-graph');
   if (!canvas) return;
-
-  // Don't initialize on very small screens
-  if (window.innerWidth < 640) return;
 
   new NetworkGraph(canvas);
 }
