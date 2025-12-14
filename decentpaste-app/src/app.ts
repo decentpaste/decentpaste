@@ -438,10 +438,16 @@ class App {
 
     if (state.isLoading) {
       this.root.innerHTML = `
-        <div class="flex items-center justify-center h-screen bg-gray-50 dark:bg-gray-900">
-          <div class="text-center">
-            <div class="inline-block animate-spin mb-4">${icon('loader', 48)}</div>
-            <p class="text-gray-600 dark:text-gray-400">Loading DecentPaste...</p>
+        <div class="flex items-center justify-center h-screen" style="background: #0a0a0b;">
+          <!-- Ambient orbs -->
+          <div class="orb orb-teal animate-float" style="width: 300px; height: 300px; top: -10%; left: -5%;"></div>
+          <div class="orb orb-orange animate-float-delayed" style="width: 250px; height: 250px; bottom: 0; right: -10%;"></div>
+
+          <div class="text-center relative z-10">
+            <div class="inline-block animate-spin mb-6">
+              ${icon('loader', 48, 'text-teal-400')}
+            </div>
+            <p class="text-white/50 text-sm font-medium tracking-wide">Loading DecentPaste...</p>
           </div>
         </div>
       `;
@@ -449,32 +455,36 @@ class App {
     }
 
     this.root.innerHTML = `
-      <div class="flex flex-col h-screen bg-gray-50 dark:bg-gray-900">
+      <div class="flex flex-col h-screen relative" style="background: #0a0a0b;">
+        <!-- Ambient background orbs -->
+        <div class="orb orb-teal animate-float" style="width: 400px; height: 400px; top: -15%; left: -10%;"></div>
+        <div class="orb orb-orange animate-float-delayed" style="width: 300px; height: 300px; bottom: 10%; right: -15%;"></div>
+
         <!-- Header -->
-        <header class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3 pt-safe-top">
+        <header class="relative z-10 px-4 py-3 pt-safe-top border-b" style="background: rgba(17, 17, 19, 0.8); backdrop-filter: blur(12px); border-color: rgba(255, 255, 255, 0.06);">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-3">
-              <div class="w-8 h-8 bg-gradient-to-br from-primary-500 to-primary-700 rounded-lg flex items-center justify-center text-white">
-                ${icon('clipboard', 18)}
+              <div class="w-10 h-10 rounded-xl flex items-center justify-center glow-teal" style="background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);">
+                ${icon('clipboard', 20, 'text-white')}
               </div>
               <div>
-                <h1 class="font-semibold text-gray-900 dark:text-white">DecentPaste</h1>
-                <p class="text-xs text-gray-500 dark:text-gray-400">${state.deviceInfo?.device_name || 'Loading...'}</p>
+                <h1 class="font-semibold text-white text-sm tracking-tight">DecentPaste</h1>
+                <p class="text-xs text-white/40">${state.deviceInfo?.device_name || 'Loading...'}</p>
               </div>
             </div>
-            <div id="status-indicator" class="flex items-center gap-2">
+            <div id="status-indicator">
               ${this.renderStatusIndicator()}
             </div>
           </div>
         </header>
 
         <!-- Main Content -->
-        <main class="flex-1 overflow-hidden">
+        <main class="flex-1 overflow-hidden relative z-10">
           ${this.renderCurrentView()}
         </main>
 
         <!-- Bottom Navigation -->
-        <nav class="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 pb-safe-bottom">
+        <nav class="relative z-10 pb-safe-bottom" style="background: rgba(17, 17, 19, 0.9); backdrop-filter: blur(12px); border-top: 1px solid rgba(255, 255, 255, 0.06);">
           <div class="flex justify-around py-2">
             ${this.renderNavItem('dashboard', 'home', 'Home')}
             ${this.renderNavItem('peers', 'users', 'Peers')}
@@ -499,12 +509,12 @@ class App {
   private renderStatusIndicator(): string {
     const status = store.get('networkStatus');
     const statusText = getStatusText(status);
-    const colorClass = getStatusColor(statusText);
+    const statusClass = getStatusColor(statusText);
 
     return `
-      <div class="flex items-center gap-2 px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-700">
-        <div class="w-2 h-2 rounded-full ${colorClass} ${statusText === 'Connecting' ? 'animate-pulse' : ''}"></div>
-        <span class="text-xs text-gray-600 dark:text-gray-300">${statusText}</span>
+      <div class="flex items-center gap-2 px-3 py-1.5 rounded-full" style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.08);">
+        <div class="status-dot ${statusClass}"></div>
+        <span class="text-xs text-white/60 font-medium">${statusText}</span>
       </div>
     `;
   }
@@ -519,15 +529,14 @@ class App {
   private renderNavItem(view: View, iconName: keyof typeof import('./components/icons').icons, label: string): string {
     const currentView = store.get('currentView');
     const isActive = currentView === view;
-    const activeClass = isActive ? 'text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-gray-400';
 
     return `
       <button
         data-nav="${view}"
-        class="flex flex-col items-center gap-1 px-4 py-1 ${activeClass} hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
+        class="nav-item ${isActive ? 'nav-item-active' : ''}"
       >
         ${icon(iconName, 20)}
-        <span class="text-xs">${label}</span>
+        <span>${label}</span>
       </button>
     `;
   }
@@ -557,27 +566,27 @@ class App {
 
     return `
       <div class="p-4 h-full overflow-y-auto">
-        <!-- Stats -->
+        <!-- Stats Grid -->
         <div class="grid grid-cols-2 gap-3 mb-6">
-          <div class="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+          <div class="card p-4">
             <div class="flex items-center gap-3">
-              <div class="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center text-green-600 dark:text-green-400">
-                ${icon('users', 20)}
+              <div class="icon-container-green">
+                ${icon('users', 18)}
               </div>
               <div>
-                <p class="text-2xl font-bold text-gray-900 dark:text-white">${pairedCount}</p>
-                <p class="text-xs text-gray-500 dark:text-gray-400">Paired Devices</p>
+                <p class="text-2xl font-bold text-white tracking-tight">${pairedCount}</p>
+                <p class="text-xs text-white/40">Paired Devices</p>
               </div>
             </div>
           </div>
-          <div class="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+          <div class="card p-4">
             <div class="flex items-center gap-3">
-              <div class="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center text-blue-600 dark:text-blue-400">
-                ${icon('clipboard', 20)}
+              <div class="icon-container-teal">
+                ${icon('clipboard', 18)}
               </div>
               <div>
-                <p class="text-2xl font-bold text-gray-900 dark:text-white">${historyCount}</p>
-                <p class="text-xs text-gray-500 dark:text-gray-400">Clipboard Items</p>
+                <p class="text-2xl font-bold text-white tracking-tight">${historyCount}</p>
+                <p class="text-xs text-white/40">Clipboard Items</p>
               </div>
             </div>
           </div>
@@ -585,30 +594,19 @@ class App {
 
         <!-- Quick Actions -->
         <div class="mb-6">
-          <h2 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">Quick Actions</h2>
-          <div class="flex gap-3 mb-3">
-            <button
-              id="btn-share-clipboard"
-              class="flex-1 bg-primary-600 hover:bg-primary-700 text-white rounded-xl p-3 flex items-center justify-center gap-2 transition-colors"
-            >
-              ${icon('share', 18)}
-              <span class="text-sm font-medium">Share Clipboard</span>
-            </button>
-          </div>
+          <h2 class="text-sm font-semibold text-white/80 mb-3 tracking-tight">Quick Actions</h2>
+          <button id="btn-share-clipboard" class="btn-primary w-full mb-3">
+            ${icon('share', 18)}
+            <span>Share Clipboard</span>
+          </button>
           <div class="flex gap-3">
-            <button
-              id="btn-refresh-peers"
-              class="flex-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-3 flex items-center justify-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors"
-            >
-              ${icon('refreshCw', 18, 'text-gray-600 dark:text-gray-400')}
-              <span class="text-sm text-gray-700 dark:text-gray-300">Refresh</span>
+            <button id="btn-refresh-peers" class="btn-secondary flex-1">
+              ${icon('refreshCw', 16)}
+              <span>Refresh</span>
             </button>
-            <button
-              id="btn-clear-history"
-              class="flex-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-3 flex items-center justify-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors"
-            >
-              ${icon('trash', 18, 'text-gray-600 dark:text-gray-400')}
-              <span class="text-sm text-gray-700 dark:text-gray-300">Clear History</span>
+            <button id="btn-clear-history" class="btn-secondary flex-1">
+              ${icon('trash', 16)}
+              <span>Clear</span>
             </button>
           </div>
         </div>
@@ -616,8 +614,8 @@ class App {
         <!-- Recent Clipboard -->
         <div>
           <div class="flex items-center justify-between mb-3">
-            <h2 class="text-sm font-semibold text-gray-900 dark:text-white">Recent Clipboard</h2>
-            <button data-nav="history" class="text-xs text-primary-600 dark:text-primary-400 hover:underline">View all</button>
+            <h2 class="text-sm font-semibold text-white/80 tracking-tight">Recent Clipboard</h2>
+            <button data-nav="history" class="text-xs text-teal-400 hover:text-teal-300 font-medium transition-colors">View all</button>
           </div>
           <div id="recent-clipboard" class="space-y-2">
             ${recentItems.length > 0 ? recentItems.map((item) => this.renderClipboardItem(item)).join('') : this.renderEmptyState('No clipboard items yet', 'Copy something to get started')}
@@ -636,7 +634,13 @@ class App {
       <div class="p-4 h-full overflow-y-auto">
         <!-- Paired Devices -->
         <div class="mb-6">
-          <h2 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">Paired Devices</h2>
+          <div class="flex items-center gap-2 mb-3">
+            <div class="icon-container-green" style="width: 1.5rem; height: 1.5rem; border-radius: 0.5rem;">
+              ${icon('link', 12)}
+            </div>
+            <h2 class="text-sm font-semibold text-white/80 tracking-tight">Paired Devices</h2>
+            <span class="text-xs text-white/30 ml-auto">${pairedPeers.length}</span>
+          </div>
           <div id="paired-peers" class="space-y-2">
             ${pairedPeers.length > 0 ? pairedPeers.map((peer) => this.renderPairedPeer(peer)).join('') : this.renderEmptyState('No paired devices', 'Pair with a device below')}
           </div>
@@ -644,7 +648,13 @@ class App {
 
         <!-- Discovered Devices -->
         <div>
-          <h2 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">Discovered Devices</h2>
+          <div class="flex items-center gap-2 mb-3">
+            <div class="icon-container-orange" style="width: 1.5rem; height: 1.5rem; border-radius: 0.5rem;">
+              ${icon('wifi', 12)}
+            </div>
+            <h2 class="text-sm font-semibold text-white/80 tracking-tight">Discovered Devices</h2>
+            <span class="text-xs text-white/30 ml-auto">${discoveredPeers.length}</span>
+          </div>
           <div id="discovered-peers" class="space-y-2">
             ${discoveredPeers.length > 0 ? discoveredPeers.map((peer) => this.renderDiscoveredPeer(peer)).join('') : this.renderEmptyState('No devices found', 'Searching on local network...')}
           </div>
@@ -659,12 +669,15 @@ class App {
     return `
       <div class="p-4 h-full overflow-y-auto">
         <div class="flex items-center justify-between mb-4">
-          <h2 class="text-sm font-semibold text-gray-900 dark:text-white">Clipboard History</h2>
-          <button
-            id="btn-clear-all-history"
-            class="text-xs text-red-600 dark:text-red-400 hover:underline"
-          >
-            Clear All
+          <div class="flex items-center gap-2">
+            <div class="icon-container-teal" style="width: 1.5rem; height: 1.5rem; border-radius: 0.5rem;">
+              ${icon('history', 12)}
+            </div>
+            <h2 class="text-sm font-semibold text-white/80 tracking-tight">Clipboard History</h2>
+          </div>
+          <button id="btn-clear-all-history" class="btn-danger text-xs px-3 py-1.5">
+            ${icon('trash', 12)}
+            <span>Clear All</span>
           </button>
         </div>
         <div id="clipboard-history" class="space-y-2">
@@ -682,20 +695,26 @@ class App {
       <div class="p-4 h-full overflow-y-auto">
         <!-- Device Info -->
         <div class="mb-6">
-          <h2 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">Device</h2>
-          <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
-            <div class="flex items-center gap-3 mb-3">
-              <div class="w-12 h-12 bg-primary-100 dark:bg-primary-900/30 rounded-xl flex items-center justify-center text-primary-600 dark:text-primary-400">
+          <div class="flex items-center gap-2 mb-3">
+            <div class="icon-container-purple" style="width: 1.5rem; height: 1.5rem; border-radius: 0.5rem;">
+              ${icon('monitor', 12)}
+            </div>
+            <h2 class="text-sm font-semibold text-white/80 tracking-tight">Device</h2>
+          </div>
+          <div class="card p-4">
+            <div class="flex items-center gap-3">
+              <div class="icon-container-teal icon-container-lg">
                 ${icon('monitor', 24)}
               </div>
-              <div>
+              <div class="flex-1 min-w-0">
                 <input
                   id="device-name-input"
                   type="text"
                   value="${settings.device_name}"
-                  class="font-semibold text-gray-900 dark:text-white bg-transparent border-none p-0 focus:outline-none focus:ring-0"
+                  class="input w-full font-semibold text-white"
+                  style="padding: 0.5rem 0.75rem;"
                 />
-                <p class="text-xs text-gray-500 dark:text-gray-400">${deviceInfo?.device_id?.slice(0, 8) || 'Unknown'}...</p>
+                <p class="text-xs text-white/30 mt-1 font-mono">${deviceInfo?.device_id?.slice(0, 16) || 'Unknown'}...</p>
               </div>
             </div>
           </div>
@@ -703,24 +722,30 @@ class App {
 
         <!-- Sync Settings -->
         <div class="mb-6">
-          <h2 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">Sync</h2>
-          <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 divide-y divide-gray-200 dark:divide-gray-700">
-            <label class="flex items-center justify-between p-4 cursor-pointer">
-              <span class="text-sm text-gray-700 dark:text-gray-300">Auto-sync clipboard</span>
+          <div class="flex items-center gap-2 mb-3">
+            <div class="icon-container-green" style="width: 1.5rem; height: 1.5rem; border-radius: 0.5rem;">
+              ${icon('refreshCw', 12)}
+            </div>
+            <h2 class="text-sm font-semibold text-white/80 tracking-tight">Sync</h2>
+          </div>
+          <div class="card overflow-hidden">
+            <label class="flex items-center justify-between p-4 cursor-pointer hover:bg-white/[0.02] transition-colors">
+              <span class="text-sm text-white/70">Auto-sync clipboard</span>
               <input
                 type="checkbox"
                 id="auto-sync-toggle"
                 ${settings.auto_sync_enabled ? 'checked' : ''}
-                class="w-5 h-5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                class="checkbox"
               />
             </label>
-            <label class="flex items-center justify-between p-4 cursor-pointer">
-              <span class="text-sm text-gray-700 dark:text-gray-300">Show notifications</span>
+            <div class="divider"></div>
+            <label class="flex items-center justify-between p-4 cursor-pointer hover:bg-white/[0.02] transition-colors">
+              <span class="text-sm text-white/70">Show notifications</span>
               <input
                 type="checkbox"
                 id="notifications-toggle"
                 ${settings.show_notifications ? 'checked' : ''}
-                class="w-5 h-5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                class="checkbox"
               />
             </label>
           </div>
@@ -728,26 +753,29 @@ class App {
 
         <!-- History Settings -->
         <div class="mb-6">
-          <h2 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">History</h2>
-          <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 divide-y divide-gray-200 dark:divide-gray-700">
+          <div class="flex items-center gap-2 mb-3">
+            <div class="icon-container-blue" style="width: 1.5rem; height: 1.5rem; border-radius: 0.5rem;">
+              ${icon('history', 12)}
+            </div>
+            <h2 class="text-sm font-semibold text-white/80 tracking-tight">History</h2>
+          </div>
+          <div class="card overflow-hidden">
             <div class="flex items-center justify-between p-4">
-              <span class="text-sm text-gray-700 dark:text-gray-300">History limit</span>
-              <select
-                id="history-limit-select"
-                class="bg-gray-100 dark:bg-gray-700 border-none rounded-lg text-sm text-gray-900 dark:text-white px-3 py-1"
-              >
+              <span class="text-sm text-white/70">History limit</span>
+              <select id="history-limit-select" class="select">
                 <option value="25" ${settings.clipboard_history_limit === 25 ? 'selected' : ''}>25 items</option>
                 <option value="50" ${settings.clipboard_history_limit === 50 ? 'selected' : ''}>50 items</option>
                 <option value="100" ${settings.clipboard_history_limit === 100 ? 'selected' : ''}>100 items</option>
               </select>
             </div>
-            <label class="flex items-center justify-between p-4 cursor-pointer">
-              <span class="text-sm text-gray-700 dark:text-gray-300">Clear history on exit</span>
+            <div class="divider"></div>
+            <label class="flex items-center justify-between p-4 cursor-pointer hover:bg-white/[0.02] transition-colors">
+              <span class="text-sm text-white/70">Clear history on exit</span>
               <input
                 type="checkbox"
                 id="clear-on-exit-toggle"
                 ${settings.clear_history_on_exit ? 'checked' : ''}
-                class="w-5 h-5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                class="checkbox"
               />
             </label>
           </div>
@@ -755,10 +783,22 @@ class App {
 
         <!-- About -->
         <div>
-          <h2 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">About</h2>
-          <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
-            <p class="text-sm text-gray-600 dark:text-gray-400">DecentPaste v0.1.0</p>
-            <p class="text-xs text-gray-500 dark:text-gray-500 mt-1">Cross-platform clipboard sharing over P2P</p>
+          <div class="flex items-center gap-2 mb-3">
+            <div class="icon-container-orange" style="width: 1.5rem; height: 1.5rem; border-radius: 0.5rem;">
+              ${icon('clipboard', 12)}
+            </div>
+            <h2 class="text-sm font-semibold text-white/80 tracking-tight">About</h2>
+          </div>
+          <div class="card p-4">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl flex items-center justify-center glow-teal" style="background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);">
+                ${icon('clipboard', 20, 'text-white')}
+              </div>
+              <div>
+                <p class="text-sm font-semibold text-white">DecentPaste <span class="text-white/40 font-normal">v0.1.0</span></p>
+                <p class="text-xs text-white/40">Cross-platform P2P clipboard sharing</p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -766,22 +806,23 @@ class App {
   }
 
   private renderClipboardItem(item: ClipboardEntry): string {
+    const isLocal = item.is_local;
     return `
-      <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-3 group hover:border-primary-300 dark:hover:border-primary-600 transition-colors">
-        <div class="flex items-start justify-between gap-2">
+      <div class="card p-3 group cursor-pointer" style="transition: all 0.2s ease;">
+        <div class="flex items-start justify-between gap-3">
           <div class="flex-1 min-w-0">
-            <p class="text-sm text-gray-900 dark:text-white break-words line-clamp-2">${truncate(item.content, 100)}</p>
+            <p class="text-sm text-white/90 break-words line-clamp-2 leading-relaxed">${truncate(item.content, 120)}</p>
             <div class="flex items-center gap-2 mt-2">
-              <span class="text-xs text-gray-500 dark:text-gray-400">
-                ${item.is_local ? 'Local' : item.origin_device_name}
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${isLocal ? 'bg-teal-500/10 text-teal-400' : 'bg-orange-500/10 text-orange-400'}">
+                ${isLocal ? icon('monitor', 10) : icon('download', 10)}
+                ${isLocal ? 'Local' : item.origin_device_name}
               </span>
-              <span class="text-xs text-gray-400 dark:text-gray-500">&bull;</span>
-              <span class="text-xs text-gray-400 dark:text-gray-500">${formatTime(item.timestamp)}</span>
+              <span class="text-xs text-white/30">${formatTime(item.timestamp)}</span>
             </div>
           </div>
           <button
             data-copy="${item.id}"
-            class="p-2 text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
+            class="p-2 rounded-lg text-white/30 hover:text-teal-400 hover:bg-teal-500/10 transition-all flex-shrink-0"
             title="Copy to clipboard"
           >
             ${icon('copy', 16)}
@@ -793,24 +834,24 @@ class App {
 
   private renderPairedPeer(peer: PairedPeer): string {
     return `
-      <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-3 flex items-center justify-between">
+      <div class="card p-3 flex items-center justify-between">
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
-            ${icon('monitor', 20, 'text-green-600 dark:text-green-400')}
+          <div class="icon-container-green">
+            ${icon('monitor', 18)}
           </div>
           <div>
-            <p class="text-sm font-medium text-gray-900 dark:text-white">${peer.device_name}</p>
-            <p class="text-xs text-gray-500 dark:text-gray-400">
+            <p class="text-sm font-medium text-white">${peer.device_name}</p>
+            <p class="text-xs text-white/40">
               ${peer.last_seen ? `Last seen ${formatTime(peer.last_seen)}` : 'Paired'}
             </p>
           </div>
         </div>
         <button
           data-unpair="${peer.peer_id}"
-          class="p-2 text-gray-400 hover:text-red-500 transition-colors"
+          class="p-2 rounded-lg text-white/30 hover:text-red-400 hover:bg-red-500/10 transition-all"
           title="Unpair device"
         >
-          ${icon('unlink', 18)}
+          ${icon('unlink', 16)}
         </button>
       </div>
     `;
@@ -818,19 +859,19 @@ class App {
 
   private renderDiscoveredPeer(peer: DiscoveredPeer): string {
     return `
-      <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-3 flex items-center justify-between">
+      <div class="card p-3 flex items-center justify-between">
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg flex items-center justify-center">
-            ${icon('smartphone', 20, 'text-yellow-600 dark:text-yellow-400')}
+          <div class="icon-container-orange">
+            ${icon('smartphone', 18)}
           </div>
           <div>
-            <p class="text-sm font-medium text-gray-900 dark:text-white">${peer.device_name || 'Unknown Device'}</p>
-            <p class="text-xs text-gray-500 dark:text-gray-400">Discovered ${formatTime(peer.discovered_at)}</p>
+            <p class="text-sm font-medium text-white">${peer.device_name || 'Unknown Device'}</p>
+            <p class="text-xs text-white/40">Discovered ${formatTime(peer.discovered_at)}</p>
           </div>
         </div>
         <button
           data-pair="${peer.peer_id}"
-          class="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors"
+          class="btn-primary text-xs px-4 py-1.5"
         >
           Pair
         </button>
@@ -840,9 +881,12 @@ class App {
 
   private renderEmptyState(title: string, subtitle: string): string {
     return `
-      <div class="text-center py-8">
-        <p class="text-gray-600 dark:text-gray-400 text-sm">${title}</p>
-        <p class="text-gray-400 dark:text-gray-500 text-xs mt-1">${subtitle}</p>
+      <div class="text-center py-12">
+        <div class="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06);">
+          ${icon('clipboard', 24, 'text-white/20')}
+        </div>
+        <p class="text-white/50 text-sm font-medium">${title}</p>
+        <p class="text-white/30 text-xs mt-1">${subtitle}</p>
       </div>
     `;
   }
@@ -860,13 +904,17 @@ class App {
   }
 
   private renderToast(toast: Toast): string {
-    const bgColor = toast.type === 'success' ? 'bg-green-500' : toast.type === 'error' ? 'bg-red-500' : 'bg-gray-700';
+    const toastClass =
+      toast.type === 'success' ? 'toast-success' : toast.type === 'error' ? 'toast-error' : 'toast-info';
 
     return `
-      <div class="${bgColor} text-white px-4 py-3 rounded-lg shadow-lg flex items-center justify-between animate-slide-up">
-        <span class="text-sm">${toast.message}</span>
-        <button data-dismiss-toast="${toast.id}" class="ml-3 hover:opacity-80">
-          ${icon('x', 16)}
+      <div class="toast ${toastClass}">
+        <div class="flex items-center gap-2">
+          ${toast.type === 'success' ? icon('check', 16) : toast.type === 'error' ? icon('x', 16) : icon('clipboard', 16)}
+          <span class="text-sm font-medium">${toast.message}</span>
+        </div>
+        <button data-dismiss-toast="${toast.id}" class="p-1 hover:opacity-60 transition-opacity">
+          ${icon('x', 14)}
         </button>
       </div>
     `;
@@ -883,71 +931,52 @@ class App {
     if (mode === 'respond') {
       content = `
         <div class="text-center">
-          <div class="w-16 h-16 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-            ${icon('link', 32, 'text-primary-600 dark:text-primary-400')}
+          <div class="icon-container-teal icon-container-lg mx-auto mb-4" style="width: 4rem; height: 4rem;">
+            ${icon('link', 28)}
           </div>
-          <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Pairing Request</h3>
-          <p class="text-gray-600 dark:text-gray-400 mb-6">${session.peer_name || 'A device'} wants to pair with you</p>
+          <h3 class="text-lg font-semibold text-white mb-2 tracking-tight">Pairing Request</h3>
+          <p class="text-white/50 mb-6">${session.peer_name || 'A device'} wants to pair with you</p>
           <div class="flex gap-3">
-            <button
-              id="btn-reject-pairing"
-              class="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-              style="touch-action: manipulation"
-            >
+            <button id="btn-reject-pairing" class="btn-secondary flex-1" style="touch-action: manipulation">
               Reject
             </button>
-            <button
-              id="btn-accept-pairing"
-              class="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors"
-              style="touch-action: manipulation"
-            >
+            <button id="btn-accept-pairing" class="btn-primary flex-1" style="touch-action: manipulation">
               Accept
             </button>
           </div>
         </div>
       `;
     } else if (mode === 'confirm' && session.pin) {
-      // Initiator shows Confirm button, Responder shows waiting message
       const isInitiator = session.is_initiator;
+      const pinDigits = session.pin.split('').map((d) => `<span class="pin-digit">${d}</span>`).join('');
+
       const buttonArea = isInitiator
         ? `
           <div class="flex gap-3">
-            <button
-              id="btn-cancel-pairing"
-              class="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-              style="touch-action: manipulation"
-            >
+            <button id="btn-cancel-pairing" class="btn-secondary flex-1" style="touch-action: manipulation">
               Cancel
             </button>
-            <button
-              id="btn-confirm-pin"
-              class="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors"
-              style="touch-action: manipulation"
-            >
+            <button id="btn-confirm-pin" class="btn-primary flex-1" style="touch-action: manipulation">
               Confirm
             </button>
           </div>
-      `
+        `
         : `
-          <p class="text-gray-500 dark:text-gray-400 text-sm mb-4">Waiting for other device to confirm...</p>
-          <button
-            id="btn-cancel-pairing"
-            class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-            style="touch-action: manipulation"
-          >
+          <p class="text-white/40 text-sm mb-4">Waiting for other device to confirm...</p>
+          <button id="btn-cancel-pairing" class="btn-secondary" style="touch-action: manipulation">
             Cancel
           </button>
-      `;
+        `;
 
       content = `
         <div class="text-center">
-          <div class="w-16 h-16 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-            ${icon('check', 32, 'text-primary-600 dark:text-primary-400')}
+          <div class="icon-container-green icon-container-lg mx-auto mb-4" style="width: 4rem; height: 4rem;">
+            ${icon('check', 28)}
           </div>
-          <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Confirm PIN</h3>
-          <p class="text-gray-600 dark:text-gray-400 mb-4">Verify this PIN matches on both devices</p>
-          <div class="text-4xl font-mono font-bold text-primary-600 dark:text-primary-400 tracking-widest mb-6">
-            ${session.pin}
+          <h3 class="text-lg font-semibold text-white mb-2 tracking-tight">Confirm PIN</h3>
+          <p class="text-white/50 mb-6">Verify this PIN matches on both devices</p>
+          <div class="pin-display mx-auto mb-6">
+            ${pinDigits}
           </div>
           ${buttonArea}
         </div>
@@ -955,15 +984,12 @@ class App {
     } else if (mode === 'initiate') {
       content = `
         <div class="text-center">
-          <div class="animate-spin w-16 h-16 mx-auto mb-4">
-            ${icon('loader', 64, 'text-primary-600 dark:text-primary-400')}
+          <div class="animate-spin mx-auto mb-4">
+            ${icon('loader', 48, 'text-teal-400')}
           </div>
-          <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Pairing...</h3>
-          <p class="text-gray-600 dark:text-gray-400 mb-6">Waiting for ${session.peer_name || 'device'} to respond</p>
-          <button
-            id="btn-cancel-pairing"
-            class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-          >
+          <h3 class="text-lg font-semibold text-white mb-2 tracking-tight">Pairing...</h3>
+          <p class="text-white/50 mb-6">Waiting for ${session.peer_name || 'device'} to respond</p>
+          <button id="btn-cancel-pairing" class="btn-secondary" style="touch-action: manipulation">
             Cancel
           </button>
         </div>
@@ -971,8 +997,8 @@ class App {
     }
 
     return `
-      <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 m-4 max-w-sm w-full shadow-xl">
+      <div class="fixed inset-0 modal-overlay flex items-center justify-center z-50">
+        <div class="modal-content p-6 m-4 max-w-sm w-full">
           ${content}
         </div>
       </div>
@@ -980,11 +1006,9 @@ class App {
   }
 
   private renderPairingModal(): void {
-    // Debounce rapid re-renders (e.g., when multiple state changes happen at once)
     if (this.modalRenderPending) return;
     this.modalRenderPending = true;
 
-    // Use microtask to batch multiple state changes
     queueMicrotask(() => {
       this.modalRenderPending = false;
       const modal = $('#pairing-modal');
@@ -992,7 +1016,6 @@ class App {
         const show = store.get('showPairingModal');
         modal.className = show ? '' : 'hidden';
         modal.innerHTML = this.renderPairingModalContent();
-        // Note: Modal button listeners are handled via delegation in setupDelegatedListeners()
       }
     });
   }

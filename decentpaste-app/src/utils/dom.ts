@@ -75,13 +75,13 @@ export function truncate(str: string, maxLength: number): string {
 export function getStatusColor(status: string): string {
   switch (status) {
     case 'Connected':
-      return 'bg-green-500';
+      return 'status-connected';
     case 'Connecting':
-      return 'bg-yellow-500';
+      return 'status-connecting';
     case 'Disconnected':
-      return 'bg-gray-400';
+      return 'status-disconnected';
     default:
-      return 'bg-red-500';
+      return 'status-error';
   }
 }
 
