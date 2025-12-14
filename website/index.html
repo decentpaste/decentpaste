@@ -134,7 +134,12 @@
 
   <!-- Hero Section -->
   <section id="hero" class="relative min-h-screen flex items-center justify-center pt-20">
-    <div class="max-w-5xl mx-auto px-6 lg:px-8 py-32 text-center">
+    <!-- Interactive P2P Network Graph -->
+    <div id="network-graph-container" class="absolute inset-0 top-20 overflow-hidden pointer-events-none">
+      <canvas id="network-graph" class="w-full h-full pointer-events-auto"></canvas>
+    </div>
+
+    <div class="max-w-5xl mx-auto px-6 lg:px-8 py-32 text-center relative z-10">
       <!-- Badge -->
       <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-white/80 text-sm font-medium mb-8 fade-in-up backdrop-blur-sm">
         <span class="w-2 h-2 rounded-full bg-teal-400 animate-pulse"></span>

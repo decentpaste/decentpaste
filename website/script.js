@@ -4,6 +4,592 @@
  */
 
 // =============================================================================
+// Interactive P2P Network Graph
+// =============================================================================
+
+class NetworkGraph {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d');
+    this.nodes = [];
+    this.edges = [];
+    this.dataPackets = [];
+    this.draggedNode = null;
+    this.mousePos = { x: 0, y: 0 };
+    this.hoveredNode = null;
+    this.animationId = null;
+    this.dpr = window.devicePixelRatio || 1;
+
+    // Physics settings
+    this.physics = {
+      friction: 0.92,
+      springStrength: 0.008,
+      springLength: 180,
+      repulsion: 8000,
+      centerGravity: 0.0008,
+      maxVelocity: 3,
+    };
+
+    // Device types with their icons and colors
+    this.deviceTypes = [
+      { type: 'macbook', label: 'MacBook Pro', color: '#a78bfa', icon: 'laptop' },
+      { type: 'windows', label: 'Windows PC', color: '#60a5fa', icon: 'desktop' },
+      { type: 'iphone', label: 'iPhone', color: '#f472b6', icon: 'phone' },
+      { type: 'android', label: 'Android', color: '#4ade80', icon: 'phone' },
+      { type: 'ipad', label: 'iPad', color: '#c084fc', icon: 'tablet' },
+      { type: 'linux', label: 'Linux Server', color: '#fbbf24', icon: 'server' },
+    ];
+
+    this.init();
+  }
+
+  init() {
+    this.resize();
+    this.createNodes();
+    this.createEdges();
+    this.bindEvents();
+    this.animate();
+  }
+
+  resize() {
+    const rect = this.canvas.getBoundingClientRect();
+    this.width = rect.width;
+    this.height = rect.height;
+    this.canvas.width = this.width * this.dpr;
+    this.canvas.height = this.height * this.dpr;
+    this.ctx.scale(this.dpr, this.dpr);
+
+    // Update node positions if resizing
+    if (this.nodes.length > 0) {
+      this.nodes.forEach(node => {
+        node.x = Math.max(60, Math.min(this.width - 60, node.x));
+        node.y = Math.max(60, Math.min(this.height - 60, node.y));
+        node.targetX = node.x;
+        node.targetY = node.y;
+      });
+    }
+  }
+
+  createNodes() {
+    const centerX = this.width / 2;
+    const centerY = this.height * 0.4;
+    const radius = Math.min(this.width, this.height) * 0.28;
+
+    // Shuffle device types for random selection each load
+    const shuffled = [...this.deviceTypes].sort(() => Math.random() - 0.5);
+    const numNodes = 5 + Math.floor(Math.random() * 2); // 5-6 nodes
+    const selectedDevices = shuffled.slice(0, numNodes);
+
+    selectedDevices.forEach((device, i) => {
+      const angle = (i / numNodes) * Math.PI * 2 + Math.random() * 0.5 - 0.25;
+      const r = radius * (0.7 + Math.random() * 0.6);
+      const x = centerX + Math.cos(angle) * r;
+      const y = centerY + Math.sin(angle) * r;
+
+      this.nodes.push({
+        id: i,
+        x: x,
+        y: y,
+        targetX: x,
+        targetY: y,
+        vx: 0,
+        vy: 0,
+        radius: 32,
+        ...device,
+        pulsePhase: Math.random() * Math.PI * 2,
+        glowIntensity: 0,
+      });
+    });
+  }
+
+  createEdges() {
+    // Create a connected network - each node connects to 2-3 others
+    const numNodes = this.nodes.length;
+    const edgeSet = new Set();
+
+    // First, create a spanning tree to ensure connectivity
+    for (let i = 1; i < numNodes; i++) {
+      const j = Math.floor(Math.random() * i);
+      const key = `${Math.min(i, j)}-${Math.max(i, j)}`;
+      if (!edgeSet.has(key)) {
+        edgeSet.add(key);
+        this.edges.push({
+          source: this.nodes[i],
+          target: this.nodes[j],
+          pulseOffset: Math.random() * Math.PI * 2,
+          active: Math.random() > 0.3,
+        });
+      }
+    }
+
+    // Add a few more random edges for visual interest
+    const extraEdges = Math.floor(numNodes * 0.5);
+    for (let e = 0; e < extraEdges; e++) {
+      const i = Math.floor(Math.random() * numNodes);
+      let j = Math.floor(Math.random() * numNodes);
+      if (i === j) j = (j + 1) % numNodes;
+      const key = `${Math.min(i, j)}-${Math.max(i, j)}`;
+      if (!edgeSet.has(key)) {
+        edgeSet.add(key);
+        this.edges.push({
+          source: this.nodes[i],
+          target: this.nodes[j],
+          pulseOffset: Math.random() * Math.PI * 2,
+          active: Math.random() > 0.5,
+        });
+      }
+    }
+  }
+
+  bindEvents() {
+    // Mouse events
+    this.canvas.addEventListener('mousedown', this.onMouseDown.bind(this));
+    this.canvas.addEventListener('mousemove', this.onMouseMove.bind(this));
+    this.canvas.addEventListener('mouseup', this.onMouseUp.bind(this));
+    this.canvas.addEventListener('mouseleave', this.onMouseUp.bind(this));
+
+    // Touch events
+    this.canvas.addEventListener('touchstart', this.onTouchStart.bind(this), { passive: false });
+    this.canvas.addEventListener('touchmove', this.onTouchMove.bind(this), { passive: false });
+    this.canvas.addEventListener('touchend', this.onTouchEnd.bind(this));
+
+    // Resize
+    window.addEventListener('resize', () => {
+      this.resize();
+    });
+  }
+
+  getMousePos(e) {
+    const rect = this.canvas.getBoundingClientRect();
+    return {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    };
+  }
+
+  getTouchPos(e) {
+    const rect = this.canvas.getBoundingClientRect();
+    const touch = e.touches[0];
+    return {
+      x: touch.clientX - rect.left,
+      y: touch.clientY - rect.top,
+    };
+  }
+
+  findNodeAt(pos) {
+    for (let i = this.nodes.length - 1; i >= 0; i--) {
+      const node = this.nodes[i];
+      const dx = pos.x - node.x;
+      const dy = pos.y - node.y;
+      if (dx * dx + dy * dy < (node.radius + 10) * (node.radius + 10)) {
+        return node;
+      }
+    }
+    return null;
+  }
+
+  onMouseDown(e) {
+    const pos = this.getMousePos(e);
+    this.draggedNode = this.findNodeAt(pos);
+    if (this.draggedNode) {
+      this.draggedNode.isDragging = true;
+      this.canvas.style.cursor = 'grabbing';
+    }
+  }
+
+  onMouseMove(e) {
+    const pos = this.getMousePos(e);
+    this.mousePos = pos;
+
+    if (this.draggedNode) {
+      this.draggedNode.targetX = pos.x;
+      this.draggedNode.targetY = pos.y;
+      this.draggedNode.x = pos.x;
+      this.draggedNode.y = pos.y;
+      this.draggedNode.vx = 0;
+      this.draggedNode.vy = 0;
+    } else {
+      const hoveredNode = this.findNodeAt(pos);
+      if (hoveredNode !== this.hoveredNode) {
+        this.hoveredNode = hoveredNode;
+        this.canvas.style.cursor = hoveredNode ? 'grab' : 'default';
+      }
+    }
+  }
+
+  onMouseUp() {
+    if (this.draggedNode) {
+      this.draggedNode.isDragging = false;
+      this.draggedNode = null;
+      this.canvas.style.cursor = this.hoveredNode ? 'grab' : 'default';
+    }
+  }
+
+  onTouchStart(e) {
+    e.preventDefault();
+    const pos = this.getTouchPos(e);
+    this.draggedNode = this.findNodeAt(pos);
+    if (this.draggedNode) {
+      this.draggedNode.isDragging = true;
+    }
+  }
+
+  onTouchMove(e) {
+    e.preventDefault();
+    if (this.draggedNode && e.touches.length > 0) {
+      const pos = this.getTouchPos(e);
+      this.draggedNode.targetX = pos.x;
+      this.draggedNode.targetY = pos.y;
+      this.draggedNode.x = pos.x;
+      this.draggedNode.y = pos.y;
+      this.draggedNode.vx = 0;
+      this.draggedNode.vy = 0;
+    }
+  }
+
+  onTouchEnd() {
+    if (this.draggedNode) {
+      this.draggedNode.isDragging = false;
+      this.draggedNode = null;
+    }
+  }
+
+  updatePhysics() {
+    const { friction, springStrength, springLength, repulsion, centerGravity, maxVelocity } = this.physics;
+    const centerX = this.width / 2;
+    const centerY = this.height * 0.4;
+
+    // Apply forces between nodes
+    for (let i = 0; i < this.nodes.length; i++) {
+      const nodeA = this.nodes[i];
+      if (nodeA.isDragging) continue;
+
+      // Center gravity
+      const dxCenter = centerX - nodeA.x;
+      const dyCenter = centerY - nodeA.y;
+      nodeA.vx += dxCenter * centerGravity;
+      nodeA.vy += dyCenter * centerGravity;
+
+      // Repulsion between nodes
+      for (let j = i + 1; j < this.nodes.length; j++) {
+        const nodeB = this.nodes[j];
+        const dx = nodeB.x - nodeA.x;
+        const dy = nodeB.y - nodeA.y;
+        const distSq = dx * dx + dy * dy;
+        const dist = Math.sqrt(distSq) || 1;
+        const force = repulsion / distSq;
+        const fx = (dx / dist) * force;
+        const fy = (dy / dist) * force;
+
+        if (!nodeA.isDragging) {
+          nodeA.vx -= fx;
+          nodeA.vy -= fy;
+        }
+        if (!nodeB.isDragging) {
+          nodeB.vx += fx;
+          nodeB.vy += fy;
+        }
+      }
+    }
+
+    // Spring forces along edges
+    this.edges.forEach(edge => {
+      const dx = edge.target.x - edge.source.x;
+      const dy = edge.target.y - edge.source.y;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      const diff = dist - springLength;
+      const force = diff * springStrength;
+      const fx = (dx / dist) * force;
+      const fy = (dy / dist) * force;
+
+      if (!edge.source.isDragging) {
+        edge.source.vx += fx;
+        edge.source.vy += fy;
+      }
+      if (!edge.target.isDragging) {
+        edge.target.vx -= fx;
+        edge.target.vy -= fy;
+      }
+    });
+
+    // Update positions
+    this.nodes.forEach(node => {
+      if (node.isDragging) return;
+
+      // Apply friction
+      node.vx *= friction;
+      node.vy *= friction;
+
+      // Clamp velocity
+      const speed = Math.sqrt(node.vx * node.vx + node.vy * node.vy);
+      if (speed > maxVelocity) {
+        node.vx = (node.vx / speed) * maxVelocity;
+        node.vy = (node.vy / speed) * maxVelocity;
+      }
+
+      // Update position
+      node.x += node.vx;
+      node.y += node.vy;
+
+      // Keep within bounds
+      const margin = 60;
+      node.x = Math.max(margin, Math.min(this.width - margin, node.x));
+      node.y = Math.max(margin, Math.min(this.height - margin, node.y));
+    });
+  }
+
+  spawnDataPacket() {
+    if (this.edges.length === 0) return;
+    if (Math.random() > 0.02) return; // Spawn occasionally
+
+    const edge = this.edges[Math.floor(Math.random() * this.edges.length)];
+    if (!edge.active) return;
+
+    const reverse = Math.random() > 0.5;
+    this.dataPackets.push({
+      edge: edge,
+      progress: 0,
+      speed: 0.008 + Math.random() * 0.008,
+      reverse: reverse,
+      size: 3 + Math.random() * 2,
+    });
+  }
+
+  updateDataPackets() {
+    this.dataPackets = this.dataPackets.filter(packet => {
+      packet.progress += packet.speed;
+      if (packet.progress >= 1) {
+        // Trigger glow on receiving node
+        const targetNode = packet.reverse ? packet.edge.source : packet.edge.target;
+        targetNode.glowIntensity = 1;
+        return false;
+      }
+      return true;
+    });
+
+    // Decay glow
+    this.nodes.forEach(node => {
+      node.glowIntensity *= 0.95;
+    });
+  }
+
+  draw() {
+    const ctx = this.ctx;
+    const time = Date.now() * 0.001;
+
+    // Clear canvas
+    ctx.clearRect(0, 0, this.width, this.height);
+
+    // Draw edges
+    this.edges.forEach(edge => {
+      const pulse = Math.sin(time * 2 + edge.pulseOffset) * 0.5 + 0.5;
+      const opacity = edge.active ? 0.15 + pulse * 0.1 : 0.08;
+
+      ctx.beginPath();
+      ctx.moveTo(edge.source.x, edge.source.y);
+      ctx.lineTo(edge.target.x, edge.target.y);
+      ctx.strokeStyle = `rgba(255, 255, 255, ${opacity})`;
+      ctx.lineWidth = edge.active ? 1.5 : 1;
+      ctx.stroke();
+
+      // Active edge glow
+      if (edge.active) {
+        ctx.beginPath();
+        ctx.moveTo(edge.source.x, edge.source.y);
+        ctx.lineTo(edge.target.x, edge.target.y);
+        ctx.strokeStyle = `rgba(20, 184, 166, ${0.1 + pulse * 0.15})`;
+        ctx.lineWidth = 4;
+        ctx.stroke();
+      }
+    });
+
+    // Draw data packets
+    this.dataPackets.forEach(packet => {
+      const edge = packet.edge;
+      const t = packet.reverse ? 1 - packet.progress : packet.progress;
+      const x = edge.source.x + (edge.target.x - edge.source.x) * t;
+      const y = edge.source.y + (edge.target.y - edge.source.y) * t;
+
+      // Glow
+      const gradient = ctx.createRadialGradient(x, y, 0, x, y, packet.size * 4);
+      gradient.addColorStop(0, 'rgba(20, 184, 166, 0.8)');
+      gradient.addColorStop(0.5, 'rgba(20, 184, 166, 0.2)');
+      gradient.addColorStop(1, 'rgba(20, 184, 166, 0)');
+      ctx.beginPath();
+      ctx.arc(x, y, packet.size * 4, 0, Math.PI * 2);
+      ctx.fillStyle = gradient;
+      ctx.fill();
+
+      // Core
+      ctx.beginPath();
+      ctx.arc(x, y, packet.size, 0, Math.PI * 2);
+      ctx.fillStyle = '#14b8a6';
+      ctx.fill();
+    });
+
+    // Draw nodes
+    this.nodes.forEach(node => {
+      const isHovered = node === this.hoveredNode || node === this.draggedNode;
+      const pulse = Math.sin(time * 1.5 + node.pulsePhase) * 0.5 + 0.5;
+      const scale = isHovered ? 1.1 : 1 + pulse * 0.03;
+      const radius = node.radius * scale;
+
+      // Outer glow (on data receive)
+      if (node.glowIntensity > 0.01) {
+        const gradient = ctx.createRadialGradient(node.x, node.y, radius, node.x, node.y, radius * 2.5);
+        gradient.addColorStop(0, `rgba(20, 184, 166, ${node.glowIntensity * 0.5})`);
+        gradient.addColorStop(1, 'rgba(20, 184, 166, 0)');
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, radius * 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = gradient;
+        ctx.fill();
+      }
+
+      // Node background with gradient
+      const bgGradient = ctx.createRadialGradient(
+        node.x - radius * 0.3,
+        node.y - radius * 0.3,
+        0,
+        node.x,
+        node.y,
+        radius
+      );
+      bgGradient.addColorStop(0, 'rgba(40, 40, 45, 0.95)');
+      bgGradient.addColorStop(1, 'rgba(25, 25, 30, 0.95)');
+
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
+      ctx.fillStyle = bgGradient;
+      ctx.fill();
+
+      // Border
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
+      ctx.strokeStyle = isHovered
+        ? node.color
+        : `rgba(255, 255, 255, ${0.1 + pulse * 0.05})`;
+      ctx.lineWidth = isHovered ? 2 : 1;
+      ctx.stroke();
+
+      // Colored accent ring
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, radius - 3, 0, Math.PI * 2);
+      ctx.strokeStyle = `${node.color}${isHovered ? 'ff' : '40'}`;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Draw icon
+      this.drawIcon(ctx, node.x, node.y - 4, node.icon, node.color, isHovered);
+
+      // Draw label
+      ctx.font = '10px Inter, system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillStyle = isHovered ? 'rgba(255, 255, 255, 0.9)' : 'rgba(255, 255, 255, 0.5)';
+      ctx.fillText(node.label, node.x, node.y + radius + 8);
+    });
+  }
+
+  drawIcon(ctx, x, y, iconType, color, isHovered) {
+    const size = 16;
+    ctx.strokeStyle = isHovered ? color : 'rgba(255, 255, 255, 0.7)';
+    ctx.lineWidth = 1.5;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    switch (iconType) {
+      case 'laptop':
+        // Laptop screen
+        ctx.beginPath();
+        ctx.roundRect(x - size/2, y - size/2.5, size, size * 0.6, 2);
+        ctx.stroke();
+        // Laptop base
+        ctx.beginPath();
+        ctx.moveTo(x - size/1.6, y + size/4);
+        ctx.lineTo(x + size/1.6, y + size/4);
+        ctx.stroke();
+        break;
+
+      case 'desktop':
+        // Monitor
+        ctx.beginPath();
+        ctx.roundRect(x - size/2, y - size/2, size, size * 0.7, 2);
+        ctx.stroke();
+        // Stand
+        ctx.beginPath();
+        ctx.moveTo(x, y + size * 0.2);
+        ctx.lineTo(x, y + size * 0.4);
+        ctx.moveTo(x - size/4, y + size * 0.4);
+        ctx.lineTo(x + size/4, y + size * 0.4);
+        ctx.stroke();
+        break;
+
+      case 'phone':
+        // Phone body
+        ctx.beginPath();
+        ctx.roundRect(x - size/4, y - size/2, size/2, size, 3);
+        ctx.stroke();
+        // Home button / notch
+        ctx.beginPath();
+        ctx.arc(x, y + size/3, 2, 0, Math.PI * 2);
+        ctx.stroke();
+        break;
+
+      case 'tablet':
+        // Tablet body
+        ctx.beginPath();
+        ctx.roundRect(x - size/2.5, y - size/2, size * 0.8, size, 3);
+        ctx.stroke();
+        // Home button
+        ctx.beginPath();
+        ctx.arc(x, y + size/3, 2, 0, Math.PI * 2);
+        ctx.stroke();
+        break;
+
+      case 'server':
+        // Server rack
+        const slotHeight = size / 4;
+        for (let i = 0; i < 3; i++) {
+          ctx.beginPath();
+          ctx.roundRect(x - size/2, y - size/2 + i * slotHeight + i * 2, size, slotHeight, 1);
+          ctx.stroke();
+          // LED indicator
+          ctx.beginPath();
+          ctx.arc(x + size/3, y - size/2 + i * slotHeight + i * 2 + slotHeight/2, 1.5, 0, Math.PI * 2);
+          ctx.fillStyle = isHovered ? '#4ade80' : 'rgba(74, 222, 128, 0.5)';
+          ctx.fill();
+        }
+        break;
+    }
+  }
+
+  animate() {
+    this.updatePhysics();
+    this.spawnDataPacket();
+    this.updateDataPackets();
+    this.draw();
+    this.animationId = requestAnimationFrame(() => this.animate());
+  }
+
+  destroy() {
+    if (this.animationId) {
+      cancelAnimationFrame(this.animationId);
+    }
+  }
+}
+
+// Initialize network graph
+function initNetworkGraph() {
+  const canvas = document.getElementById('network-graph');
+  if (!canvas) return;
+
+  // Don't initialize on very small screens
+  if (window.innerWidth < 640) return;
+
+  new NetworkGraph(canvas);
+}
+
+// =============================================================================
 // Platform Detection
 // =============================================================================
 
@@ -244,6 +830,7 @@ function initSmoothScroll() {
 // =============================================================================
 
 document.addEventListener('DOMContentLoaded', () => {
+  initNetworkGraph();
   updateHeroButton();
   initMobileMenu();
   initNavbarScroll();

@@ -17,6 +17,31 @@ body {
 }
 
 /* =============================================================================
+   Network Graph
+   ============================================================================= */
+
+#network-graph-container {
+  z-index: 1;
+  mask-image: radial-gradient(ellipse 80% 70% at 50% 40%, black 30%, transparent 70%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 40%, black 30%, transparent 70%);
+}
+
+#network-graph {
+  cursor: grab;
+  touch-action: none;
+}
+
+#network-graph:active {
+  cursor: grabbing;
+}
+
+/* Ensure hero content is above the graph */
+#hero > div:not(#network-graph-container) {
+  position: relative;
+  z-index: 10;
+}
+
+/* =============================================================================
    Gradient Text Effect
    ============================================================================= */
 
