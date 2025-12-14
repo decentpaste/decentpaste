@@ -50,6 +50,7 @@ type StateListener<K extends keyof AppState> = (value: AppState[K]) => void;
 class Store {
   private state: AppState;
   private listeners: Map<keyof AppState, Set<StateListener<any>>> = new Map();
+  private toastTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
 
   constructor() {
     this.state = {
@@ -120,14 +121,34 @@ class Store {
     this.update('toasts', (toasts) => [...toasts, toast]);
 
     if (duration > 0) {
-      setTimeout(() => {
+      const timerId = setTimeout(() => {
         this.removeToast(id);
       }, duration);
+      this.toastTimers.set(id, timerId);
     }
   }
 
   removeToast(id: string): void {
+    // Clear any pending timer for this toast
+    const timerId = this.toastTimers.get(id);
+    if (timerId) {
+      clearTimeout(timerId);
+      this.toastTimers.delete(id);
+    }
     this.update('toasts', (toasts) => toasts.filter((t) => t.id !== id));
+  }
+
+  /**
+   * Clears all toasts and their associated timers.
+   * Useful for cleanup when the app unmounts.
+   */
+  clearAllToasts(): void {
+    // Clear all pending timers
+    for (const timerId of this.toastTimers.values()) {
+      clearTimeout(timerId);
+    }
+    this.toastTimers.clear();
+    this.set('toasts', []);
   }
 
   addClipboardEntry(entry: ClipboardEntry): void {

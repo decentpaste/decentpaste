@@ -2,8 +2,9 @@ import { store, type Toast, type View } from './state/store';
 import { eventManager } from './api/events';
 import * as commands from './api/commands';
 import { readText } from '@tauri-apps/plugin-clipboard-manager';
-import { icon } from './components/icons';
-import { $, formatTime, getStatusColor, getStatusText, truncate } from './utils/dom';
+import { icon, type IconName } from './components/icons';
+import { $, escapeHtml, formatTime, getStatusColor, getStatusText, truncate } from './utils/dom';
+import { getErrorMessage } from './utils/error';
 import type { ClipboardEntry, DiscoveredPeer, PairedPeer } from './api/types';
 
 class App {
@@ -87,7 +88,7 @@ class App {
             const sessionId = await commands.initiatePairing(peerId);
             store.update('activePairingSession', (s) => (s ? { ...s, session_id: sessionId } : null));
           } catch (error) {
-            store.addToast(`Failed to initiate pairing: ${error}`, 'error');
+            store.addToast(`Failed to initiate pairing: ${getErrorMessage(error)}`, 'error');
             store.set('showPairingModal', false);
             store.set('activePairingSession', null);
           }
@@ -105,7 +106,7 @@ class App {
             store.removePairedPeer(peerId);
             store.addToast('Device unpaired', 'success');
           } catch (error) {
-            store.addToast(`Failed to unpair: ${error}`, 'error');
+            store.addToast(`Failed to unpair: ${getErrorMessage(error)}`, 'error');
           }
         }
         return;
@@ -126,7 +127,7 @@ class App {
           store.set('discoveredPeers', peers);
           store.addToast('Refreshed peer list', 'info');
         } catch (error) {
-          store.addToast(`Failed to refresh: ${error}`, 'error');
+          store.addToast(`Failed to refresh: ${getErrorMessage(error)}`, 'error');
         }
         return;
       }
@@ -138,7 +139,7 @@ class App {
           store.set('clipboardHistory', []);
           store.addToast('History cleared', 'success');
         } catch (error) {
-          store.addToast(`Failed to clear history: ${error}`, 'error');
+          store.addToast(`Failed to clear history: ${getErrorMessage(error)}`, 'error');
         }
         return;
       }
@@ -153,9 +154,8 @@ class App {
           }
           await commands.shareClipboardContent(content);
           store.addToast('Clipboard shared with peers', 'success');
-        } catch (e) {
-          const error = e instanceof Error ? e.message : String(e);
-          store.addToast(`Failed to share: ${error}`, 'error');
+        } catch (error) {
+          store.addToast(`Failed to share: ${getErrorMessage(error)}`, 'error');
         }
         return;
       }
@@ -175,7 +175,7 @@ class App {
               store.set('pairingModalMode', 'confirm');
             }
           } catch (error) {
-            store.addToast(`Failed to accept pairing: ${error}`, 'error');
+            store.addToast(`Failed to accept pairing: ${getErrorMessage(error)}`, 'error');
             acceptBtn.disabled = false;
             acceptBtn.textContent = 'Accept';
           } finally {
@@ -193,7 +193,7 @@ class App {
           try {
             await commands.respondToPairing(session.session_id, false);
           } catch (error) {
-            store.addToast(`Failed to reject pairing: ${error}`, 'error');
+            store.addToast(`Failed to reject pairing: ${getErrorMessage(error)}`, 'error');
           } finally {
             store.set('showPairingModal', false);
             store.set('activePairingSession', null);
@@ -216,7 +216,7 @@ class App {
               confirmBtn.textContent = 'Confirm';
             }
           } catch (error) {
-            store.addToast(`Failed to confirm pairing: ${error}`, 'error');
+            store.addToast(`Failed to confirm pairing: ${getErrorMessage(error)}`, 'error');
             confirmBtn.disabled = false;
             confirmBtn.textContent = 'Confirm';
           }
@@ -249,7 +249,7 @@ class App {
           await commands.updateSettings(settings);
           store.set('settings', settings);
         } catch (error) {
-          store.addToast(`Failed to update settings: ${error}`, 'error');
+          store.addToast(`Failed to update settings: ${getErrorMessage(error)}`, 'error');
           (target as HTMLInputElement).checked = !checked; // Revert
         }
         return;
@@ -263,7 +263,7 @@ class App {
           await commands.updateSettings(settings);
           store.set('settings', settings);
         } catch (error) {
-          store.addToast(`Failed to update settings: ${error}`, 'error');
+          store.addToast(`Failed to update settings: ${getErrorMessage(error)}`, 'error');
           (target as HTMLInputElement).checked = !checked;
         }
         return;
@@ -278,7 +278,7 @@ class App {
           await commands.updateSettings(settings);
           store.set('settings', settings);
         } catch (error) {
-          store.addToast(`Failed to update settings: ${error}`, 'error');
+          store.addToast(`Failed to update settings: ${getErrorMessage(error)}`, 'error');
           (target as HTMLSelectElement).value = String(oldSettings.clipboard_history_limit);
         }
         return;
@@ -292,7 +292,7 @@ class App {
           await commands.updateSettings(settings);
           store.set('settings', settings);
         } catch (error) {
-          store.addToast(`Failed to update settings: ${error}`, 'error');
+          store.addToast(`Failed to update settings: ${getErrorMessage(error)}`, 'error');
           (target as HTMLInputElement).checked = !checked;
         }
         return;
@@ -312,7 +312,7 @@ class App {
               await commands.updateSettings(settings);
               store.set('settings', settings);
             } catch (error) {
-              store.addToast(`Failed to update device name: ${error}`, 'error');
+              store.addToast(`Failed to update device name: ${getErrorMessage(error)}`, 'error');
             }
           }
         }
@@ -526,7 +526,7 @@ class App {
     }
   }
 
-  private renderNavItem(view: View, iconName: keyof typeof import('./components/icons').icons, label: string): string {
+  private renderNavItem(view: View, iconName: IconName, label: string): string {
     const currentView = store.get('currentView');
     const isActive = currentView === view;
 
@@ -807,15 +807,17 @@ class App {
 
   private renderClipboardItem(item: ClipboardEntry): string {
     const isLocal = item.is_local;
+    // Escape HTML to prevent XSS attacks from malicious clipboard content
+    const safeContent = escapeHtml(truncate(item.content, 120));
     return `
       <div class="card p-3 group cursor-pointer" style="transition: all 0.2s ease;">
         <div class="flex items-start justify-between gap-3">
           <div class="flex-1 min-w-0">
-            <p class="text-sm text-white/90 break-words line-clamp-2 leading-relaxed">${truncate(item.content, 120)}</p>
+            <p class="text-sm text-white/90 break-words line-clamp-2 leading-relaxed">${safeContent}</p>
             <div class="flex items-center gap-2 mt-2">
               <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${isLocal ? 'bg-teal-500/10 text-teal-400' : 'bg-orange-500/10 text-orange-400'}">
                 ${isLocal ? icon('monitor', 10) : icon('download', 10)}
-                ${isLocal ? 'Local' : item.origin_device_name}
+                ${isLocal ? 'Local' : escapeHtml(item.origin_device_name)}
               </span>
               <span class="text-xs text-white/30">${formatTime(item.timestamp)}</span>
             </div>
@@ -833,6 +835,7 @@ class App {
   }
 
   private renderPairedPeer(peer: PairedPeer): string {
+    const safeName = escapeHtml(peer.device_name);
     return `
       <div class="card p-3 flex items-center justify-between">
         <div class="flex items-center gap-3">
@@ -840,7 +843,7 @@ class App {
             ${icon('monitor', 18)}
           </div>
           <div>
-            <p class="text-sm font-medium text-white">${peer.device_name}</p>
+            <p class="text-sm font-medium text-white">${safeName}</p>
             <p class="text-xs text-white/40">
               ${peer.last_seen ? `Last seen ${formatTime(peer.last_seen)}` : 'Paired'}
             </p>
@@ -858,6 +861,7 @@ class App {
   }
 
   private renderDiscoveredPeer(peer: DiscoveredPeer): string {
+    const safeName = peer.device_name ? escapeHtml(peer.device_name) : 'Unknown Device';
     return `
       <div class="card p-3 flex items-center justify-between">
         <div class="flex items-center gap-3">
@@ -865,7 +869,7 @@ class App {
             ${icon('smartphone', 18)}
           </div>
           <div>
-            <p class="text-sm font-medium text-white">${peer.device_name || 'Unknown Device'}</p>
+            <p class="text-sm font-medium text-white">${safeName}</p>
             <p class="text-xs text-white/40">Discovered ${formatTime(peer.discovered_at)}</p>
           </div>
         </div>
@@ -926,6 +930,9 @@ class App {
 
     if (!session) return '';
 
+    // Escape peer name to prevent XSS from malicious device names
+    const safePeerName = session.peer_name ? escapeHtml(session.peer_name) : null;
+
     let content = '';
 
     if (mode === 'respond') {
@@ -935,7 +942,7 @@ class App {
             ${icon('link', 28)}
           </div>
           <h3 class="text-lg font-semibold text-white mb-2 tracking-tight">Pairing Request</h3>
-          <p class="text-white/50 mb-6">${session.peer_name || 'A device'} wants to pair with you</p>
+          <p class="text-white/50 mb-6">${safePeerName || 'A device'} wants to pair with you</p>
           <div class="flex gap-3">
             <button id="btn-reject-pairing" class="btn-secondary flex-1" style="touch-action: manipulation">
               Reject
@@ -948,7 +955,10 @@ class App {
       `;
     } else if (mode === 'confirm' && session.pin) {
       const isInitiator = session.is_initiator;
-      const pinDigits = session.pin.split('').map((d) => `<span class="pin-digit">${d}</span>`).join('');
+      const pinDigits = session.pin
+        .split('')
+        .map((d) => `<span class="pin-digit">${d}</span>`)
+        .join('');
 
       const buttonArea = isInitiator
         ? `
@@ -985,10 +995,10 @@ class App {
       content = `
         <div class="text-center">
           <div class="mx-auto mb-4">
-            ${icon('loader', 48, 'text-teal-400')}
+            ${icon('loader', 48, 'text-teal-400 animate-spin')}
           </div>
           <h3 class="text-lg font-semibold text-white mb-2 tracking-tight">Pairing...</h3>
-          <p class="text-white/50 mb-6">Waiting for ${session.peer_name || 'device'} to respond</p>
+          <p class="text-white/50 mb-6">Waiting for ${safePeerName || 'device'} to respond</p>
           <button id="btn-cancel-pairing" class="btn-secondary" style="touch-action: manipulation">
             Cancel
           </button>

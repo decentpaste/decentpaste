@@ -1,54 +1,36 @@
 // DOM utility functions
 
+import type { NetworkStatus } from '../api/types';
+
+/**
+ * Shorthand for document.querySelector
+ */
 export function $(selector: string): HTMLElement | null {
   return document.querySelector(selector);
 }
 
+/**
+ * Shorthand for document.querySelectorAll
+ */
 export function $$(selector: string): NodeListOf<HTMLElement> {
   return document.querySelectorAll(selector);
 }
 
-export function createElement<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  props?: Partial<HTMLElementTagNameMap[K]> & { className?: string },
-  children?: (HTMLElement | string)[],
-): HTMLElementTagNameMap[K] {
-  const element = document.createElement(tag);
-
-  if (props) {
-    const { className, ...rest } = props;
-    if (className) {
-      element.className = className;
-    }
-    Object.assign(element, rest);
-  }
-
-  if (children) {
-    children.forEach((child) => {
-      if (typeof child === 'string') {
-        element.appendChild(document.createTextNode(child));
-      } else {
-        element.appendChild(child);
-      }
-    });
-  }
-
-  return element;
-}
-
-export function html(strings: TemplateStringsArray, ...values: any[]): string {
-  return strings.reduce((result, string, i) => {
-    const value = values[i] ?? '';
-    return result + string + (typeof value === 'string' ? escapeHtml(value) : value);
-  }, '');
-}
-
+/**
+ * Escapes HTML special characters to prevent XSS attacks.
+ * Uses the browser's built-in text encoding via textContent.
+ */
 export function escapeHtml(str: string): string {
   const div = document.createElement('div');
   div.textContent = str;
   return div.innerHTML;
 }
 
+/**
+ * Formats an ISO timestamp into a human-readable relative time.
+ * @param isoString - ISO 8601 timestamp string
+ * @returns Human-readable string like "Just now", "5m ago", "2h ago", or a date
+ */
 export function formatTime(isoString: string): string {
   const date = new Date(isoString);
   const now = new Date();
@@ -67,11 +49,17 @@ export function formatTime(isoString: string): string {
   }
 }
 
+/**
+ * Truncates a string to a maximum length, adding ellipsis if needed.
+ */
 export function truncate(str: string, maxLength: number): string {
   if (str.length <= maxLength) return str;
   return str.slice(0, maxLength) + '...';
 }
 
+/**
+ * Returns the CSS class for the network status indicator dot.
+ */
 export function getStatusColor(status: string): string {
   switch (status) {
     case 'Connected':
@@ -85,7 +73,11 @@ export function getStatusColor(status: string): string {
   }
 }
 
-export function getStatusText(status: any): string {
+/**
+ * Converts a NetworkStatus value to a human-readable string.
+ * Handles both simple string statuses and object-based error states.
+ */
+export function getStatusText(status: NetworkStatus): string {
   if (typeof status === 'string') {
     return status;
   }
