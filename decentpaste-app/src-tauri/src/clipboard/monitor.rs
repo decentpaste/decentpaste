@@ -81,7 +81,9 @@ impl ClipboardMonitor {
                                     };
 
                                     if tx.send(change).await.is_err() {
-                                        error!("Failed to send clipboard change - receiver dropped");
+                                        error!(
+                                            "Failed to send clipboard change - receiver dropped"
+                                        );
                                         break;
                                     }
                                 }

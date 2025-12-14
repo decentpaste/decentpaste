@@ -143,12 +143,9 @@ impl DecentPasteBehaviour {
         // Format: "decentpaste/<version>/<device_name>"
         // The device name is included so other peers can display a human-readable name
         let identify = identify::Behaviour::new(
-            identify::Config::new(PROTOCOL_NAME.to_string(), keypair.public())
-                .with_agent_version(format!(
-                    "decentpaste/{}/{}",
-                    env!("CARGO_PKG_VERSION"),
-                    device_name
-                )),
+            identify::Config::new(PROTOCOL_NAME.to_string(), keypair.public()).with_agent_version(
+                format!("decentpaste/{}/{}", env!("CARGO_PKG_VERSION"), device_name),
+            ),
         );
 
         Ok(Self {

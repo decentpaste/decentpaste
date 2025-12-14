@@ -94,18 +94,12 @@ mod tests {
         let bob = generate_device_identity("Bob");
 
         // Alice derives shared secret using her private key + Bob's public key
-        let alice_shared = derive_shared_secret(
-            alice.private_key.as_ref().unwrap(),
-            &bob.public_key,
-        )
-        .unwrap();
+        let alice_shared =
+            derive_shared_secret(alice.private_key.as_ref().unwrap(), &bob.public_key).unwrap();
 
         // Bob derives shared secret using his private key + Alice's public key
-        let bob_shared = derive_shared_secret(
-            bob.private_key.as_ref().unwrap(),
-            &alice.public_key,
-        )
-        .unwrap();
+        let bob_shared =
+            derive_shared_secret(bob.private_key.as_ref().unwrap(), &alice.public_key).unwrap();
 
         // Both should derive the same shared secret!
         assert_eq!(alice_shared, bob_shared);
@@ -118,17 +112,11 @@ mod tests {
         let bob = generate_device_identity("Bob");
         let charlie = generate_device_identity("Charlie");
 
-        let alice_bob = derive_shared_secret(
-            alice.private_key.as_ref().unwrap(),
-            &bob.public_key,
-        )
-        .unwrap();
+        let alice_bob =
+            derive_shared_secret(alice.private_key.as_ref().unwrap(), &bob.public_key).unwrap();
 
-        let alice_charlie = derive_shared_secret(
-            alice.private_key.as_ref().unwrap(),
-            &charlie.public_key,
-        )
-        .unwrap();
+        let alice_charlie =
+            derive_shared_secret(alice.private_key.as_ref().unwrap(), &charlie.public_key).unwrap();
 
         // Different peer pairs should have different shared secrets
         assert_ne!(alice_bob, alice_charlie);

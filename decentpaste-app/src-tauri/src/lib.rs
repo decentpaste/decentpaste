@@ -139,7 +139,14 @@ async fn initialize_app(
     // Start network manager
     let network_event_tx_clone = network_event_tx.clone();
     tokio::spawn(async move {
-        match NetworkManager::new(network_cmd_rx, network_event_tx_clone, libp2p_keypair, device_name).await {
+        match NetworkManager::new(
+            network_cmd_rx,
+            network_event_tx_clone,
+            libp2p_keypair,
+            device_name,
+        )
+        .await
+        {
             Ok(mut manager) => {
                 info!(
                     "Network manager started, peer ID: {}",
@@ -172,7 +179,12 @@ async fn initialize_app(
         let state = app_handle_clipboard.state::<AppState>();
 
         while let Some(change) = clipboard_rx.recv().await {
-            if change.is_local && sync_manager_clipboard.lock().await.should_broadcast(&change.content_hash, true) {
+            if change.is_local
+                && sync_manager_clipboard
+                    .lock()
+                    .await
+                    .should_broadcast(&change.content_hash, true)
+            {
                 // Get device info
                 let device_identity = state.device_identity.read().await;
                 if let Some(ref identity) = *device_identity {
@@ -209,7 +221,10 @@ async fn initialize_app(
                                 }
                             }
                             Err(e) => {
-                                error!("Failed to encrypt clipboard for peer {}: {}", peer.peer_id, e);
+                                error!(
+                                    "Failed to encrypt clipboard for peer {}: {}",
+                                    peer.peer_id, e
+                                );
                             }
                         }
                     }
@@ -266,7 +281,10 @@ async fn initialize_app(
                     let _ = app_handle_network.emit("peer-lost", peer_id);
                 }
 
-                NetworkEvent::PeerNameUpdated { peer_id, device_name } => {
+                NetworkEvent::PeerNameUpdated {
+                    peer_id,
+                    device_name,
+                } => {
                     // Update discovered peers
                     {
                         let mut peers = state.discovered_peers.write().await;
@@ -351,7 +369,7 @@ async fn initialize_app(
                     {
                         session.pin = Some(pin.clone());
                         session.peer_name = Some(peer_device_name.clone());
-                        session.peer_public_key = Some(peer_public_key);  // Store for ECDH
+                        session.peer_public_key = Some(peer_public_key); // Store for ECDH
                         session.state = security::PairingState::AwaitingPinConfirmation;
                     }
                     let _ = app_handle_network.emit(
@@ -404,15 +422,24 @@ async fn initialize_app(
                             let device_identity = state.device_identity.read().await;
                             if let Some(ref identity) = *device_identity {
                                 if let Some(ref our_private_key) = identity.private_key {
-                                    match security::derive_shared_secret(our_private_key, &peer_pubkey) {
+                                    match security::derive_shared_secret(
+                                        our_private_key,
+                                        &peer_pubkey,
+                                    ) {
                                         Ok(derived) => {
                                             // Verify it matches what initiator sent
                                             if derived != received_secret {
                                                 error!("ECDH verification failed: derived secret doesn't match received - possible MITM attack");
                                                 // Fail the pairing - this is a security issue
-                                                let mut sessions = state.pairing_sessions.write().await;
-                                                if let Some(session) = sessions.iter_mut().find(|s| s.session_id == session_id) {
-                                                    session.state = security::PairingState::Failed("Key verification failed".into());
+                                                let mut sessions =
+                                                    state.pairing_sessions.write().await;
+                                                if let Some(session) = sessions
+                                                    .iter_mut()
+                                                    .find(|s| s.session_id == session_id)
+                                                {
+                                                    session.state = security::PairingState::Failed(
+                                                        "Key verification failed".into(),
+                                                    );
                                                 }
                                                 let _ = app_handle_network.emit(
                                                     "pairing-failed",
@@ -539,7 +566,11 @@ async fn initialize_app(
                                     let hash = security::hash_content(&content);
                                     if hash == msg.content_hash {
                                         decrypted_successfully = true;
-                                        if sync_manager_network.lock().await.on_received(&msg.content_hash) {
+                                        if sync_manager_network
+                                            .lock()
+                                            .await
+                                            .on_received(&msg.content_hash)
+                                        {
                                             // Update local clipboard
                                             if let Err(e) =
                                                 clipboard::monitor::set_clipboard_content(

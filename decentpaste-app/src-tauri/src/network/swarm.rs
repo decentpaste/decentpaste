@@ -38,7 +38,7 @@ pub enum NetworkCommand {
         session_id: String,
         pin: String,
         device_name: String,
-        public_key: Vec<u8>,  // Our X25519 public key for ECDH
+        public_key: Vec<u8>, // Our X25519 public key for ECDH
     },
     /// Reject a pairing request
     RejectPairing {
@@ -634,10 +634,7 @@ impl NetworkManager {
             }
 
             SwarmEvent::OutgoingConnectionError { peer_id, error, .. } => {
-                warn!(
-                    "Outgoing connection error to {:?}: {}",
-                    peer_id, error
-                );
+                warn!("Outgoing connection error to {:?}: {}", peer_id, error);
 
                 // Schedule retry if we have the peer's address and haven't exceeded max retries
                 if let Some(peer_id) = peer_id {

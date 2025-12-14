@@ -18,7 +18,7 @@ pub struct PairingSession {
     pub session_id: String,
     pub peer_id: String,
     pub peer_name: Option<String>,
-    pub peer_public_key: Option<Vec<u8>>,  // Peer's X25519 public key for ECDH
+    pub peer_public_key: Option<Vec<u8>>, // Peer's X25519 public key for ECDH
     pub pin: Option<String>,
     pub state: PairingState,
     pub is_initiator: bool,

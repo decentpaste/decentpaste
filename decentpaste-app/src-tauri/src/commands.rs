@@ -1,14 +1,16 @@
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, State};
+use tauri::AppHandle;
+use tauri::Emitter;
+use tauri::State;
 use tokio::sync::mpsc;
 
 use crate::clipboard::{ClipboardEntry, SyncManager};
 use crate::error::{DecentPasteError, Result};
 use crate::network::{DiscoveredPeer, NetworkCommand, NetworkStatus};
 use crate::security::{generate_pin, PairingSession, PairingState};
-use tracing::debug;
 use crate::state::AppState;
 use crate::storage::{save_settings, AppSettings, PairedPeer};
+use tracing::debug;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeviceInfo {
@@ -217,7 +219,7 @@ pub async fn respond_to_pairing(
                         session_id: session_id.clone(),
                         pin: pin.clone(),
                         device_name: identity.device_name.clone(),
-                        public_key: identity.public_key.clone(),  // Our X25519 public key for ECDH
+                        public_key: identity.public_key.clone(), // Our X25519 public key for ECDH
                     })
                     .await
                     .is_err()
@@ -299,9 +301,13 @@ pub async fn confirm_pairing(
             .as_ref()
             .ok_or_else(|| DecentPasteError::Pairing("Private key not found".into()))?;
 
-        let shared_secret = crate::security::derive_shared_secret(our_private_key, &peer_public_key)?;
+        let shared_secret =
+            crate::security::derive_shared_secret(our_private_key, &peer_public_key)?;
 
-        tracing::debug!("Initiator derived shared secret via ECDH, sending confirm to peer {}", peer_id);
+        tracing::debug!(
+            "Initiator derived shared secret via ECDH, sending confirm to peer {}",
+            peer_id
+        );
 
         let tx = state.network_command_tx.read().await;
         if let Some(tx) = tx.as_ref() {
@@ -309,7 +315,7 @@ pub async fn confirm_pairing(
                 peer_id: peer_id.clone(),
                 session_id: session_id.clone(),
                 success: true,
-                shared_secret: Some(shared_secret),  // Send for verification (responder will also derive)
+                shared_secret: Some(shared_secret), // Send for verification (responder will also derive)
                 device_name: identity.device_name.clone(),
             })
             .await
@@ -463,7 +469,10 @@ pub async fn update_settings(state: State<'_, AppState>, settings: AppSettings) 
 
     // If device name changed, broadcast the new name to all peers
     if name_changed {
-        debug!("Device name changed from '{}' to '{}', broadcasting update", old_device_name, settings.device_name);
+        debug!(
+            "Device name changed from '{}' to '{}', broadcasting update",
+            old_device_name, settings.device_name
+        );
 
         // Also update the device identity
         {

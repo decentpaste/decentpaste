@@ -51,8 +51,8 @@ pub enum NetworkEvent {
     PairingPinReady {
         session_id: String,
         pin: String,
-        peer_device_name: String,    // Responder's device name (for initiator to display)
-        peer_public_key: Vec<u8>,    // Responder's X25519 public key for ECDH
+        peer_device_name: String, // Responder's device name (for initiator to display)
+        peer_public_key: Vec<u8>, // Responder's X25519 public key for ECDH
     },
     PairingComplete {
         session_id: String,
