@@ -89,6 +89,8 @@ pub struct NetworkManager {
     pending_responses: HashMap<PeerId, ResponseChannel<ReqPairingResponse>>,
     /// Tracks peers that need connection retries
     pending_retries: HashMap<PeerId, PeerRetryState>,
+    /// Current device name (updated when settings change)
+    device_name: String,
 }
 
 impl NetworkManager {
@@ -124,6 +126,7 @@ impl NetworkManager {
             connected_peers: HashMap::new(),
             pending_responses: HashMap::new(),
             pending_retries: HashMap::new(),
+            device_name,
         })
     }
 
@@ -595,6 +598,22 @@ impl NetworkManager {
                     .event_tx
                     .send(NetworkEvent::PeerConnected(connected))
                     .await;
+
+                // Announce our device name to the newly connected peer
+                // This ensures they have our current name even if they missed earlier announcements
+                // (e.g., they were offline when we changed our name)
+                let local_peer_id = self.swarm.local_peer_id().to_string();
+                let announce_msg = DeviceAnnounceMessage {
+                    peer_id: local_peer_id,
+                    device_name: self.device_name.clone(),
+                    timestamp: Utc::now(),
+                };
+                let protocol_msg = ProtocolMessage::DeviceAnnounce(announce_msg);
+                if let Err(e) = self.swarm.behaviour_mut().publish_clipboard(&protocol_msg) {
+                    // This can fail if gossipsub mesh isn't ready yet, which is fine
+                    // The peer will still get our name from identify (if not changed since startup)
+                    debug!("Failed to announce device name on connection: {}", e);
+                }
             }
 
             SwarmEvent::ConnectionClosed { peer_id, .. } => {
@@ -850,6 +869,9 @@ impl NetworkManager {
             }
 
             NetworkCommand::AnnounceDeviceName { device_name } => {
+                // Update our stored device name so we can announce it on new connections
+                self.device_name = device_name.clone();
+
                 // Broadcast device name to all peers via gossipsub
                 // Use our local peer_id so receiving peers can update their discovered list
                 let local_peer_id = self.swarm.local_peer_id().to_string();
