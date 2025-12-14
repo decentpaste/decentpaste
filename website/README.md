@@ -147,4 +147,4 @@ Modify the Tailwind config in `index.html`:
 
 ## License
 
-MIT License - see the main repository for details.
+Apache-2.0 license - see the main repository for details.
