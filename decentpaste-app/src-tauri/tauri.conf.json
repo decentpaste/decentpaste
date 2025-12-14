@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "identifier": "com.decentpaste.app",
   "build": {
-    "beforeDevCommand": "yarn run dev",
+    "beforeDevCommand": "lsof -i:1420 -sTCP:LISTEN -t >/dev/null || TAURI_DEV_HOST=$(ipconfig getifaddr en0) yarn dev",
     "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "yarn run build",
     "frontendDist": "../dist"
