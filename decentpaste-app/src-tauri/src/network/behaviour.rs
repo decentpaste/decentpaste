@@ -107,6 +107,7 @@ impl DecentPasteBehaviour {
     pub fn new(
         local_peer_id: libp2p::PeerId,
         keypair: &libp2p::identity::Keypair,
+        device_name: &str,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         // mDNS for local discovery
         let mdns = mdns::tokio::Behaviour::new(mdns::Config::default(), local_peer_id)?;
@@ -139,9 +140,15 @@ impl DecentPasteBehaviour {
         );
 
         // Identify for peer identification
+        // Format: "decentpaste/<version>/<device_name>"
+        // The device name is included so other peers can display a human-readable name
         let identify = identify::Behaviour::new(
             identify::Config::new(PROTOCOL_NAME.to_string(), keypair.public())
-                .with_agent_version(format!("decentpaste/{}", env!("CARGO_PKG_VERSION"))),
+                .with_agent_version(format!(
+                    "decentpaste/{}/{}",
+                    env!("CARGO_PKG_VERSION"),
+                    device_name
+                )),
         );
 
         Ok(Self {

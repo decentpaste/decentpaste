@@ -6,6 +6,7 @@ use crate::clipboard::{ClipboardEntry, SyncManager};
 use crate::error::{DecentPasteError, Result};
 use crate::network::{DiscoveredPeer, NetworkCommand, NetworkStatus};
 use crate::security::{generate_pin, PairingSession, PairingState};
+use tracing::debug;
 use crate::state::AppState;
 use crate::storage::{save_settings, AppSettings, PairedPeer};
 
@@ -87,6 +88,20 @@ pub async fn remove_paired_peer(state: State<'_, AppState>, peer_id: String) -> 
 
     // Save to storage
     crate::storage::save_paired_peers(&peers)?;
+
+    // Drop the lock before sending network command
+    drop(peers);
+
+    // Re-emit the peer as discovered if it's still on the network
+    // This allows the user to pair with the device again without restarting
+    let tx = state.network_command_tx.read().await;
+    if let Some(tx) = tx.as_ref() {
+        let _ = tx
+            .send(NetworkCommand::RefreshPeer {
+                peer_id: peer_id.clone(),
+            })
+            .await;
+    }
 
     Ok(())
 }

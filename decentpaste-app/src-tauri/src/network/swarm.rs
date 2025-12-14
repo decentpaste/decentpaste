@@ -59,6 +59,11 @@ pub enum NetworkCommand {
     GetPeers,
     /// Force reconnection to all discovered peers (used after app resume from background)
     ReconnectPeers,
+    /// Re-emit PeerDiscovered event for a specific peer (used after unpairing to make peer
+    /// appear in discovered list again)
+    RefreshPeer {
+        peer_id: String,
+    },
 }
 
 /// Tracks retry state for a peer connection
@@ -85,6 +90,7 @@ impl NetworkManager {
         command_rx: mpsc::Receiver<NetworkCommand>,
         event_tx: mpsc::Sender<NetworkEvent>,
         local_key: libp2p::identity::Keypair,
+        device_name: String,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let local_peer_id = PeerId::from(local_key.public());
         info!("Local peer ID: {}", local_peer_id);
@@ -98,7 +104,7 @@ impl NetworkManager {
                 yamux::Config::default,
             )?
             .with_behaviour(|_key| {
-                DecentPasteBehaviour::new(local_peer_id, &local_key)
+                DecentPasteBehaviour::new(local_peer_id, &local_key, &device_name)
                     .expect("Failed to create behaviour")
             })?
             .with_swarm_config(|cfg| cfg.with_idle_connection_timeout(Duration::from_secs(60)))
@@ -480,9 +486,39 @@ impl NetworkManager {
                 if let identify::Event::Received { peer_id, info, .. } = event {
                     debug!("Identified peer {}: {}", peer_id, info.agent_version);
 
-                    // Update device name from identify info
+                    // Parse device name from agent_version
+                    // Format: "decentpaste/<version>/<device_name>"
+                    let device_name = if info.agent_version.starts_with("decentpaste/") {
+                        // Split by '/' and take everything after the second '/'
+                        let parts: Vec<&str> = info.agent_version.splitn(3, '/').collect();
+                        if parts.len() >= 3 {
+                            Some(parts[2].to_string())
+                        } else {
+                            // Fallback to agent_version if format is unexpected
+                            Some(info.agent_version.clone())
+                        }
+                    } else {
+                        // Not a decentpaste peer, use agent_version as-is
+                        Some(info.agent_version.clone())
+                    };
+
+                    // Update device name from identify info and emit update event
                     if let Some(discovered) = self.discovered_peers.get_mut(&peer_id) {
-                        discovered.device_name = Some(info.agent_version);
+                        let old_name = discovered.device_name.clone();
+                        discovered.device_name = device_name;
+
+                        // Only emit update if the name actually changed
+                        if old_name != discovered.device_name {
+                            debug!(
+                                "Updated device name for peer {}: {:?} -> {:?}",
+                                peer_id, old_name, discovered.device_name
+                            );
+                            // Re-emit PeerDiscovered so frontend gets the updated name
+                            let _ = self
+                                .event_tx
+                                .send(NetworkEvent::PeerDiscovered(discovered.clone()))
+                                .await;
+                        }
                     }
                 }
             }
@@ -751,6 +787,22 @@ impl NetworkManager {
 
             NetworkCommand::StartListening | NetworkCommand::StopListening => {
                 // Already handled during initialization
+            }
+
+            NetworkCommand::RefreshPeer { peer_id } => {
+                // Re-emit PeerDiscovered event for a specific peer if it exists in our cache
+                // This is used after unpairing to make the peer appear in discovered list again
+                if let Ok(pid) = peer_id.parse::<PeerId>() {
+                    if let Some(peer) = self.discovered_peers.get(&pid) {
+                        debug!("Refreshing peer {} for re-discovery", peer_id);
+                        let _ = self
+                            .event_tx
+                            .send(NetworkEvent::PeerDiscovered(peer.clone()))
+                            .await;
+                    } else {
+                        debug!("Peer {} not in discovered cache, cannot refresh", peer_id);
+                    }
+                }
             }
         }
     }

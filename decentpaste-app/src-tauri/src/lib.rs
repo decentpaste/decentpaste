@@ -133,10 +133,13 @@ async fn initialize_app(
     let libp2p_keypair = get_or_create_libp2p_keypair()?;
     info!("Loaded libp2p keypair, peer ID will be consistent across restarts");
 
+    // Get device name for network identification
+    let device_name = identity.device_name.clone();
+
     // Start network manager
     let network_event_tx_clone = network_event_tx.clone();
     tokio::spawn(async move {
-        match NetworkManager::new(network_cmd_rx, network_event_tx_clone, libp2p_keypair).await {
+        match NetworkManager::new(network_cmd_rx, network_event_tx_clone, libp2p_keypair, device_name).await {
             Ok(mut manager) => {
                 info!(
                     "Network manager started, peer ID: {}",
