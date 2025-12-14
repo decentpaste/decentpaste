@@ -444,7 +444,7 @@ class App {
           <div class="orb orb-orange animate-float-delayed" style="width: 250px; height: 250px; bottom: 0; right: -10%;"></div>
 
           <div class="text-center relative z-10">
-            <div class="inline-block animate-spin mb-6">
+            <div class="inline-block mb-6">
               ${icon('loader', 48, 'text-teal-400')}
             </div>
             <p class="text-white/50 text-sm font-medium tracking-wide">Loading DecentPaste...</p>
@@ -984,7 +984,7 @@ class App {
     } else if (mode === 'initiate') {
       content = `
         <div class="text-center">
-          <div class="animate-spin mx-auto mb-4">
+          <div class="mx-auto mb-4">
             ${icon('loader', 48, 'text-teal-400')}
           </div>
           <h3 class="text-lg font-semibold text-white mb-2 tracking-tight">Pairing...</h3>

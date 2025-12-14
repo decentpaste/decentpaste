@@ -48,9 +48,22 @@ export const icons = {
 };
 
 export function icon(name: keyof typeof icons, size = 24, className = ''): string {
-  const svg = icons[name];
-  return svg
-    .replace('width="24"', `width="${size}"`)
-    .replace('height="24"', `height="${size}"`)
-    .replace('<svg', `<svg class="${className}"`);
+  let svg = icons[name];
+
+  // Update size
+  svg = svg.replace('width="24"', `width="${size}"`).replace('height="24"', `height="${size}"`);
+
+  // Handle class merging - check if SVG already has a class attribute
+  const existingClassMatch = svg.match(/class="([^"]*)"/);
+  if (existingClassMatch) {
+    // Merge existing class with new className
+    const existingClasses = existingClassMatch[1];
+    const mergedClasses = className ? `${existingClasses} ${className}` : existingClasses;
+    svg = svg.replace(`class="${existingClasses}"`, `class="${mergedClasses}"`);
+  } else if (className) {
+    // No existing class, add new one
+    svg = svg.replace('<svg', `<svg class="${className}"`);
+  }
+
+  return svg;
 }
