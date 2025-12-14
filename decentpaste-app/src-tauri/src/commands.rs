@@ -446,9 +446,46 @@ pub async fn get_settings(state: State<'_, AppState>) -> Result<AppSettings> {
 
 #[tauri::command]
 pub async fn update_settings(state: State<'_, AppState>, settings: AppSettings) -> Result<()> {
+    // Check if device name changed
+    let old_device_name = {
+        let current = state.settings.read().await;
+        current.device_name.clone()
+    };
+    let name_changed = old_device_name != settings.device_name;
+
     save_settings(&settings)?;
-    let mut current = state.settings.write().await;
-    *current = settings;
+
+    // Update state
+    {
+        let mut current = state.settings.write().await;
+        *current = settings.clone();
+    }
+
+    // If device name changed, broadcast the new name to all peers
+    if name_changed {
+        debug!("Device name changed from '{}' to '{}', broadcasting update", old_device_name, settings.device_name);
+
+        // Also update the device identity
+        {
+            let mut identity = state.device_identity.write().await;
+            if let Some(ref mut id) = *identity {
+                id.device_name = settings.device_name.clone();
+                // Save updated identity (ignore errors as settings already saved)
+                let _ = crate::storage::save_device_identity(id);
+            }
+        }
+
+        // Broadcast the name change to all peers
+        let tx = state.network_command_tx.read().await;
+        if let Some(tx) = tx.as_ref() {
+            let _ = tx
+                .send(NetworkCommand::AnnounceDeviceName {
+                    device_name: settings.device_name,
+                })
+                .await;
+        }
+    }
+
     Ok(())
 }
 

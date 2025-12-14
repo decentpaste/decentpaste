@@ -334,6 +334,10 @@ class App {
       store.removeDiscoveredPeer(peerId);
     });
 
+    eventManager.on('peerNameUpdated', (payload) => {
+      store.updatePeerName(payload.peerId, payload.deviceName);
+    });
+
     eventManager.on('clipboardReceived', (entry) => {
       store.addClipboardEntry(entry);
       store.addToast(`Clipboard received from ${entry.origin_device_name}`, 'success');

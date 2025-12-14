@@ -266,6 +266,46 @@ async fn initialize_app(
                     let _ = app_handle_network.emit("peer-lost", peer_id);
                 }
 
+                NetworkEvent::PeerNameUpdated { peer_id, device_name } => {
+                    // Update discovered peers
+                    {
+                        let mut peers = state.discovered_peers.write().await;
+                        if let Some(peer) = peers.iter_mut().find(|p| p.peer_id == peer_id) {
+                            peer.device_name = Some(device_name.clone());
+                        }
+                    }
+
+                    // Update paired peers and save if changed
+                    let updated_paired = {
+                        let mut peers = state.paired_peers.write().await;
+                        if let Some(peer) = peers.iter_mut().find(|p| p.peer_id == peer_id) {
+                            if peer.device_name != device_name {
+                                peer.device_name = device_name.clone();
+                                // Save updated paired peers
+                                let _ = storage::save_paired_peers(&peers);
+                                true
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        }
+                    };
+
+                    // Emit event for frontend to update
+                    let _ = app_handle_network.emit(
+                        "peer-name-updated",
+                        serde_json::json!({
+                            "peerId": peer_id,
+                            "deviceName": device_name,
+                        }),
+                    );
+
+                    if updated_paired {
+                        info!("Updated paired peer {} name to '{}'", peer_id, device_name);
+                    }
+                }
+
                 NetworkEvent::PeerConnected(peer) => {
                     let _ = app_handle_network.emit("peer-connected", peer);
                 }

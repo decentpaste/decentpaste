@@ -9,6 +9,7 @@ import type {
   PairingFailedPayload,
   PairingPinPayload,
   PairingRequestPayload,
+  PeerNameUpdatedPayload,
 } from './types';
 
 export type EventHandler<T> = (payload: T) => void;
@@ -19,6 +20,7 @@ interface EventListeners {
   peerLost: EventHandler<string>[];
   peerConnected: EventHandler<ConnectedPeer>[];
   peerDisconnected: EventHandler<string>[];
+  peerNameUpdated: EventHandler<PeerNameUpdatedPayload>[];
   pairingRequest: EventHandler<PairingRequestPayload>[];
   pairingPin: EventHandler<PairingPinPayload>[];
   pairingComplete: EventHandler<PairingCompletePayload>[];
@@ -36,6 +38,7 @@ class EventManager {
     peerLost: [],
     peerConnected: [],
     peerDisconnected: [],
+    peerNameUpdated: [],
     pairingRequest: [],
     pairingPin: [],
     pairingComplete: [],
@@ -64,6 +67,9 @@ class EventManager {
       }),
       listen<string>('peer-disconnected', (e) => {
         this.listeners.peerDisconnected.forEach((fn) => fn(e.payload));
+      }),
+      listen<PeerNameUpdatedPayload>('peer-name-updated', (e) => {
+        this.listeners.peerNameUpdated.forEach((fn) => fn(e.payload));
       }),
       listen<PairingRequestPayload>('pairing-request', (e) => {
         this.listeners.pairingRequest.forEach((fn) => fn(e.payload));

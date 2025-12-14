@@ -32,6 +32,11 @@ pub enum NetworkEvent {
     // Discovery events
     PeerDiscovered(DiscoveredPeer),
     PeerLost(String), // peer_id
+    /// A peer's device name was updated (via DeviceAnnounce message)
+    PeerNameUpdated {
+        peer_id: String,
+        device_name: String,
+    },
 
     // Connection events
     PeerConnected(ConnectedPeer),

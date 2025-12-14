@@ -191,6 +191,18 @@ class Store {
   removePairedPeer(peerId: string): void {
     this.update('pairedPeers', (peers) => peers.filter((p) => p.peer_id !== peerId));
   }
+
+  updatePeerName(peerId: string, deviceName: string): void {
+    // Update in discovered peers
+    this.update('discoveredPeers', (peers) =>
+      peers.map((p) => (p.peer_id === peerId ? { ...p, device_name: deviceName } : p)),
+    );
+
+    // Update in paired peers
+    this.update('pairedPeers', (peers) =>
+      peers.map((p) => (p.peer_id === peerId ? { ...p, device_name: deviceName } : p)),
+    );
+  }
 }
 
 export const store = new Store();

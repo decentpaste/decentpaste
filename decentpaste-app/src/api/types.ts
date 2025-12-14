@@ -96,3 +96,8 @@ export interface ClipboardBroadcastPayload {
   id: string;
   peerCount: number;
 }
+
+export interface PeerNameUpdatedPayload {
+  peerId: string;
+  deviceName: string;
+}

@@ -21,7 +21,7 @@ use super::behaviour::{
     PairingResponse as ReqPairingResponse,
 };
 use super::events::{ConnectedPeer, DiscoveredPeer, NetworkEvent, NetworkStatus};
-use super::protocol::{ClipboardMessage, PairingMessage, ProtocolMessage};
+use super::protocol::{ClipboardMessage, DeviceAnnounceMessage, PairingMessage, ProtocolMessage};
 
 #[derive(Debug)]
 pub enum NetworkCommand {
@@ -63,6 +63,12 @@ pub enum NetworkCommand {
     /// appear in discovered list again)
     RefreshPeer {
         peer_id: String,
+    },
+    /// Broadcast device name to all peers on the network.
+    /// Used when device name is changed in settings.
+    /// NetworkManager will use its own local peer_id in the announcement.
+    AnnounceDeviceName {
+        device_name: String,
     },
 }
 
@@ -275,6 +281,44 @@ impl NetworkManager {
                                 .event_tx
                                 .send(NetworkEvent::ClipboardReceived(clipboard_msg))
                                 .await;
+                        }
+                        Ok(ProtocolMessage::DeviceAnnounce(announce_msg)) => {
+                            // Update discovered peer's device name when we receive an announcement
+                            debug!(
+                                "Received device announce from {}: {}",
+                                announce_msg.peer_id, announce_msg.device_name
+                            );
+
+                            // Always emit PeerNameUpdated so lib.rs can update both discovered
+                            // and paired peers
+                            let _ = self
+                                .event_tx
+                                .send(NetworkEvent::PeerNameUpdated {
+                                    peer_id: announce_msg.peer_id.clone(),
+                                    device_name: announce_msg.device_name.clone(),
+                                })
+                                .await;
+
+                            // Also update our local discovered_peers cache
+                            if let Ok(pid) = announce_msg.peer_id.parse::<PeerId>() {
+                                if let Some(discovered) = self.discovered_peers.get_mut(&pid) {
+                                    let old_name = discovered.device_name.clone();
+                                    discovered.device_name = Some(announce_msg.device_name.clone());
+
+                                    // Only emit PeerDiscovered if the name actually changed
+                                    if old_name != discovered.device_name {
+                                        debug!(
+                                            "Updated device name for peer {}: {:?} -> {:?}",
+                                            announce_msg.peer_id, old_name, discovered.device_name
+                                        );
+                                        // Re-emit PeerDiscovered so frontend gets the updated name
+                                        let _ = self
+                                            .event_tx
+                                            .send(NetworkEvent::PeerDiscovered(discovered.clone()))
+                                            .await;
+                                    }
+                                }
+                            }
                         }
                         Ok(msg) => {
                             debug!("Received non-clipboard message via gossipsub: {:?}", msg);
@@ -801,6 +845,26 @@ impl NetworkManager {
                             .await;
                     } else {
                         debug!("Peer {} not in discovered cache, cannot refresh", peer_id);
+                    }
+                }
+            }
+
+            NetworkCommand::AnnounceDeviceName { device_name } => {
+                // Broadcast device name to all peers via gossipsub
+                // Use our local peer_id so receiving peers can update their discovered list
+                let local_peer_id = self.swarm.local_peer_id().to_string();
+                let announce_msg = DeviceAnnounceMessage {
+                    peer_id: local_peer_id,
+                    device_name,
+                    timestamp: Utc::now(),
+                };
+                let protocol_msg = ProtocolMessage::DeviceAnnounce(announce_msg);
+                match self.swarm.behaviour_mut().publish_clipboard(&protocol_msg) {
+                    Ok(_) => {
+                        debug!("Broadcast device name announcement");
+                    }
+                    Err(e) => {
+                        warn!("Failed to broadcast device name announcement: {}", e);
                     }
                 }
             }
