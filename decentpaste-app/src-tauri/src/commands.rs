@@ -1,10 +1,9 @@
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
-use tauri::Emitter;
 use tauri::State;
 use tokio::sync::mpsc;
 
-use crate::clipboard::{ClipboardEntry, SyncManager};
+use crate::clipboard::ClipboardEntry;
 use crate::error::{DecentPasteError, Result};
 use crate::network::{DiscoveredPeer, NetworkCommand, NetworkStatus};
 use crate::security::{generate_pin, PairingSession, PairingState};
