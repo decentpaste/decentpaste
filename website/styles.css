@@ -94,13 +94,18 @@ body {
   transform: translateY(0);
 }
 
-/* Staggered delays for children */
-.fade-in-up[style*="animation-delay: 0.1s"] { transition-delay: 0.1s; }
-.fade-in-up[style*="animation-delay: 0.15s"] { transition-delay: 0.15s; }
-.fade-in-up[style*="animation-delay: 0.2s"] { transition-delay: 0.2s; }
-.fade-in-up[style*="animation-delay: 0.3s"] { transition-delay: 0.3s; }
-.fade-in-up[style*="animation-delay: 0.4s"] { transition-delay: 0.4s; }
-.fade-in-up[style*="animation-delay: 0.5s"] { transition-delay: 0.5s; }
+/* Staggered delays for scroll animation only (opacity & transform) */
+.fade-in-up[style*="animation-delay: 0.1s"]:not(.visible) { transition-delay: 0.1s; }
+.fade-in-up[style*="animation-delay: 0.15s"]:not(.visible) { transition-delay: 0.15s; }
+.fade-in-up[style*="animation-delay: 0.2s"]:not(.visible) { transition-delay: 0.2s; }
+.fade-in-up[style*="animation-delay: 0.3s"]:not(.visible) { transition-delay: 0.3s; }
+.fade-in-up[style*="animation-delay: 0.4s"]:not(.visible) { transition-delay: 0.4s; }
+.fade-in-up[style*="animation-delay: 0.5s"]:not(.visible) { transition-delay: 0.5s; }
+
+/* Reset delay after animation completes so hover effects are instant */
+.fade-in-up.visible {
+  transition-delay: 0s !important;
+}
 
 /* =============================================================================
    Pulse Animation
