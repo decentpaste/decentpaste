@@ -8,7 +8,7 @@
       "Read(.run/**)",
       "Read(target/**)",
       "Read(decentpaste-app/node_modules/**)",
-      "Read(decentpaste-app/dist/**)",
+      "Read(decentpaste-app/dist/**)"
     ],
     "ask": []
   },
