@@ -88,6 +88,24 @@ decentpaste-app/
 - **Mobile background handling** - When app returns from background, it automatically reconnects to all discovered peers
   via visibility change listener
 
+## Device Name Broadcasting
+
+Device names are propagated to peers through multiple mechanisms:
+
+1. **Identify protocol** - On startup, device name is included in libp2p identify's `agent_version` field
+   (format: `decentpaste/<version>/<device_name>`)
+2. **DeviceAnnounce message** - When name changes in settings, a `DeviceAnnounce` gossipsub message is broadcast
+3. **On connection** - When a new peer connects, we automatically announce our device name to ensure they have the
+   current name (handles the case where they were offline when we changed it)
+
+## Unpair → Rediscovery
+
+When you unpair a device:
+1. The peer is removed from `paired_peers`
+2. A `RefreshPeer` command is sent to NetworkManager
+3. If the peer is still on the network, it's re-emitted as a discovered peer
+4. No app restart required to pair again
+
 ## Common Tasks
 
 ### Add a new Tauri command

@@ -187,6 +187,8 @@ Manages the libp2p swarm lifecycle:
 - **Connection resilience**: Automatically retries failed connections (3 attempts, 2s delay)
 - **Gossipsub optimization**: Adds peers to explicit peer list on connection for immediate mesh inclusion
 - **Mobile support**: Handles `ReconnectPeers` command for app resume from background
+- **Device name tracking**: Stores current device name and announces it on new connections
+- **Peer refresh**: Re-emits discovered peers after unpairing so they can be paired again
 
 #### `protocol.rs` - Message Types
 
@@ -194,11 +196,16 @@ Defines all protocol messages:
 
 ```rust
 pub enum ProtocolMessage {
-    Pairing(PairingMessage),    // Pairing flow messages
-    Clipboard(ClipboardMessage), // Encrypted clipboard content
-    Heartbeat(HeartbeatMessage), // Keep-alive
+    Pairing(PairingMessage),        // Pairing flow messages
+    Clipboard(ClipboardMessage),     // Encrypted clipboard content
+    Heartbeat(HeartbeatMessage),     // Keep-alive
+    DeviceAnnounce(DeviceAnnounceMessage), // Device name broadcasts
 }
 ```
+
+The `DeviceAnnounce` message is broadcast via gossipsub when:
+- Device name changes in settings
+- A new peer connects (to catch up peers that were offline)
 
 ### 2. Clipboard Layer (`src/clipboard/`)
 
@@ -278,26 +285,32 @@ Tauri commands exposed to frontend:
 | `get_network_status`               | Get current network status                                                |
 | `get_discovered_peers`             | List discovered devices (excludes already-paired devices)                 |
 | `get_paired_peers`                 | List paired devices                                                       |
+| `remove_paired_peer`               | Unpair a device (re-emits as discovered if still online)                  |
 | `initiate_pairing`                 | Start pairing with a peer                                                 |
-| `confirm_pairing`                  | Confirm PIN match                                                         |
+| `respond_to_pairing`               | Accept/reject incoming pairing request                                    |
+| `confirm_pairing`                  | Confirm PIN match after user verification                                 |
+| `cancel_pairing`                   | Cancel an active pairing session                                          |
 | `get_clipboard_history`            | Get clipboard history                                                     |
 | `set_clipboard`                    | Set clipboard content                                                     |
 | `share_clipboard_content`          | Manually share clipboard with peers (for mobile)                          |
+| `clear_clipboard_history`          | Clear all clipboard history                                               |
 | `reconnect_peers`                  | Force reconnection to all discovered peers (for mobile background resume) |
-| `get_settings` / `update_settings` | Manage app settings                                                       |
+| `get_settings` / `update_settings` | Manage app settings (broadcasts device name change)                       |
 | `get_device_info`                  | Get this device's info                                                    |
+| `get_pairing_sessions`             | Get active pairing sessions                                               |
 
 ### 6. Events (Emitted to Frontend)
 
-| Event                | Payload                           | Description           |
-|----------------------|-----------------------------------|-----------------------|
-| `network-status`     | `NetworkStatus`                   | Network state changed |
-| `peer-discovered`    | `DiscoveredPeer`                  | New peer found        |
-| `peer-lost`          | `string` (peer_id)                | Peer went offline     |
-| `clipboard-received` | `ClipboardEntry`                  | Clipboard from peer   |
-| `pairing-request`    | `{sessionId, peerId, deviceName}` | Incoming pairing      |
-| `pairing-pin`        | `{sessionId, pin}`                | PIN ready to display  |
-| `pairing-complete`   | `{sessionId, peerId, deviceName}` | Pairing succeeded     |
+| Event                | Payload                           | Description                                  |
+|----------------------|-----------------------------------|-------------------------------------------------|
+| `network-status`     | `NetworkStatus`                   | Network state changed                        |
+| `peer-discovered`    | `DiscoveredPeer`                  | New peer found                               |
+| `peer-lost`          | `string` (peer_id)                | Peer went offline                            |
+| `peer-name-updated`  | `{peerId, deviceName}`            | Peer's device name changed (via DeviceAnnounce) |
+| `clipboard-received` | `ClipboardEntry`                  | Clipboard from peer                          |
+| `pairing-request`    | `{sessionId, peerId, deviceName}` | Incoming pairing request                     |
+| `pairing-pin`        | `{sessionId, pin}`                | PIN ready to display                         |
+| `pairing-complete`   | `{sessionId, peerId, deviceName}` | Pairing succeeded                            |
 
 ---
 
@@ -412,6 +425,38 @@ a private key.
 - Content hash (SHA-256) is sent alongside for verification
 - **Per-peer encryption**: Messages are encrypted separately for each paired peer using their specific shared secret
 
+### Device Name Broadcasting
+
+Device names are synchronized across peers through multiple channels:
+
+**At Startup:**
+- Device name is included in libp2p identify protocol's `agent_version` field
+- Format: `decentpaste/<version>/<device_name>`
+- Peers parsing identify can extract the custom device name
+
+**On Settings Change:**
+- When user changes device name in Settings, `update_settings` broadcasts a `DeviceAnnounce` message
+- All connected peers receive it via gossipsub and update their peer lists (both discovered and paired)
+- Peers also save the updated name to persistent storage
+
+**On New Connection:**
+- When a new peer connects, NetworkManager automatically broadcasts a `DeviceAnnounce` message
+- This handles the case where:
+  - Device A changes name while Device B is offline
+  - Device B comes back online and connects
+  - Device B immediately receives Device A's current name
+- Ensures devices always have the latest name without requiring app restart
+
+### Unpair → Rediscovery
+
+When a paired device is unpaired:
+1. `remove_paired_peer` command removes it from `paired_peers` storage
+2. Sends `RefreshPeer` command to NetworkManager
+3. NetworkManager checks if the peer is still in its `discovered_peers` cache
+4. If found, re-emits a `PeerDiscovered` event
+5. Frontend updates and shows the device in the "Discovered Devices" section
+6. User can pair with the device again immediately without restart
+
 ---
 
 ## Configuration Files
@@ -471,6 +516,8 @@ yarn build
    content using the "Share" button. Receiving clipboard from desktop works automatically.
 4. **No persistence of clipboard history**: History is in-memory only.
 5. **Plaintext secret storage**: Shared secrets are stored in `peers.json` without OS keychain integration.
+6. **Device name in identify**: The identify protocol includes device name in `agent_version` field, which is
+   cosmetic (for human readability) but not ideal. Custom TXT records in mDNS would be better but more complex.
 
 ---
 
