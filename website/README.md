@@ -84,6 +84,10 @@ website/
 ├── script.js           # Platform detection, dark mode, interactions
 ├── assets/
 │   ├── logo.png        # App icon (512x512)
+│   ├── logo_light.svg  # SVG logo for light mode
+│   ├── logo_dark.svg   # SVG logo for dark mode
+│   ├── logo_white.svg  # White SVG logo variant
+│   ├── logo_black.svg  # Black SVG logo variant
 │   ├── favicon.ico     # Browser favicon
 │   ├── favicon-32x32.png
 │   └── apple-touch-icon.png

@@ -1,11 +1,5 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "build": {
-    "beforeDevCommand": "lsof -i:1420 -sTCP:LISTEN -t >/dev/null || TAURI_DEV_HOST=$(ipconfig getifaddr en0) yarn dev",
-    "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "yarn run build",
-    "frontendDist": "../dist"
-  },
   "bundle": {
     "iOS": {
       "frameworks": ["SystemConfiguration.framework"]
