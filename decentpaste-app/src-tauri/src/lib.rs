@@ -5,6 +5,7 @@ mod network;
 mod security;
 mod state;
 mod storage;
+mod tray;
 
 use chrono::Utc;
 use tauri::{AppHandle, Emitter, Manager};
@@ -34,9 +35,32 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(AppState::new())
         .setup(|app| {
             let app_handle = app.handle().clone();
+
+            // Setup system tray and window close interception (desktop only)
+            #[cfg(not(any(target_os = "android", target_os = "ios")))]
+            {
+                if let Err(e) = tray::setup_tray(&app_handle) {
+                    error!("Failed to setup system tray: {}", e);
+                }
+
+                // Intercept window close to hide to tray instead of quitting
+                if let Some(window) = app.get_webview_window("main") {
+                    let app_handle_for_close = app_handle.clone();
+                    window.on_window_event(move |event| {
+                        if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                            api.prevent_close();
+                            if let Some(w) = app_handle_for_close.get_webview_window("main") {
+                                let _ = w.hide();
+                                let _ = app_handle_for_close.emit("app-minimized-to-tray", ());
+                            }
+                        }
+                    });
+                }
+            }
 
             // Initialize app state
             tauri::async_runtime::spawn(async move {

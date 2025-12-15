@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "identifier": "com.decentpaste.app",
   "build": {
-    "beforeDevCommand": "bun run dev",
+    "beforeDevCommand": "yarn run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "bun run build",
+    "beforeBuildCommand": "yarn run build",
     "frontendDist": "../dist"
   },
   "app": {

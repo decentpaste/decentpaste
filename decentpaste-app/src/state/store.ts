@@ -43,6 +43,9 @@ export interface AppState {
 
   // Loading states
   isLoading: boolean;
+
+  // Window visibility (for tray notifications)
+  isWindowVisible: boolean;
 }
 
 type StateListener<K extends keyof AppState> = (value: AppState[K]) => void;
@@ -73,6 +76,7 @@ class Store {
       },
       deviceInfo: null,
       isLoading: true,
+      isWindowVisible: true,
     };
   }
 

@@ -1,6 +1,7 @@
 import './styles.css';
 import { initApp } from './app';
 import { reconnectPeers } from './api/commands';
+import { store } from './state/store';
 
 document.addEventListener('DOMContentLoaded', async () => {
   const root = document.getElementById('app');
@@ -12,6 +13,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // When app returns from background, reconnect to peers
   document.addEventListener('visibilitychange', async () => {
     if (document.visibilityState === 'visible') {
+      store.set('isWindowVisible', true);
       console.log('App became visible, reconnecting to peers...');
       try {
         await reconnectPeers();

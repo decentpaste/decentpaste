@@ -26,6 +26,7 @@ interface EventListeners {
   clipboardSent: EventHandler<ClipboardEntry>[];
   clipboardBroadcast: EventHandler<ClipboardBroadcastPayload>[];
   networkError: EventHandler<string>[];
+  appMinimizedToTray: EventHandler<void>[];
 }
 
 class EventManager {
@@ -42,6 +43,7 @@ class EventManager {
     clipboardSent: [],
     clipboardBroadcast: [],
     networkError: [],
+    appMinimizedToTray: [],
   };
 
   private unlistenFns: UnlistenFn[] = [];
@@ -83,6 +85,9 @@ class EventManager {
       }),
       listen<string>('network-error', (e) => {
         this.listeners.networkError.forEach((fn) => fn(e.payload));
+      }),
+      listen('app-minimized-to-tray', () => {
+        this.listeners.appMinimizedToTray.forEach((fn) => fn());
       }),
     ]);
   }

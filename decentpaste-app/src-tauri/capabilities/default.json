@@ -8,9 +8,15 @@
     "core:event:default",
     "core:event:allow-emit",
     "core:event:allow-listen",
+    "core:window:default",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-set-focus",
+    "core:window:allow-is-visible",
     "opener:default",
     "clipboard-manager:allow-read-text",
     "clipboard-manager:allow-write-text",
-    "clipboard-manager:allow-clear"
+    "clipboard-manager:allow-clear",
+    "notification:default"
   ]
 }

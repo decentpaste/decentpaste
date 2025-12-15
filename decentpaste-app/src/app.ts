@@ -5,6 +5,7 @@ import { readText } from '@tauri-apps/plugin-clipboard-manager';
 import { icon, type IconName } from './components/icons';
 import { $, escapeHtml, formatTime, truncate } from './utils/dom';
 import { getErrorMessage } from './utils/error';
+import { notifyClipboardReceived, notifyMinimizedToTray } from './utils/notifications';
 import type { ClipboardEntry, DiscoveredPeer, PairedPeer } from './api/types';
 import logoDark from './assets/logo_dark.svg';
 
@@ -340,7 +341,14 @@ class App {
 
     eventManager.on('clipboardReceived', (entry) => {
       store.addClipboardEntry(entry);
-      store.addToast(`Clipboard received from ${entry.origin_device_name}`, 'success');
+
+      // Use native notification when window is hidden (minimized to tray)
+      // Otherwise use in-app toast
+      if (!store.get('isWindowVisible')) {
+        notifyClipboardReceived(entry.origin_device_name);
+      } else {
+        store.addToast(`Clipboard received from ${entry.origin_device_name}`, 'success');
+      }
     });
 
     eventManager.on('clipboardSent', (entry) => {
@@ -393,6 +401,17 @@ class App {
 
     eventManager.on('networkError', (error) => {
       store.addToast(`Network error: ${error}`, 'error');
+    });
+
+    // Handle app minimized to tray (desktop only)
+    eventManager.on('appMinimizedToTray', () => {
+      store.set('isWindowVisible', false);
+
+      // Show first-time native OS notification
+      if (!localStorage.getItem('hasShownTrayNotification')) {
+        notifyMinimizedToTray();
+        localStorage.setItem('hasShownTrayNotification', 'true');
+      }
     });
   }
 

@@ -14,6 +14,7 @@
   "dependencies": {
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-clipboard-manager": "^2",
+    "@tauri-apps/plugin-notification": "^2.3.3",
     "@tauri-apps/plugin-opener": "^2",
     "lucide": "^0.555.0"
   },
@@ -22,9 +23,9 @@
     "@tauri-apps/cli": "^2",
     "autoprefixer": "^10.4.22",
     "postcss": "^8.5.6",
+    "prettier": "^3.7.4",
     "tailwindcss": "^4.1.17",
     "typescript": "~5.6.2",
-    "vite": "^6.0.3",
-    "prettier": "^3.7.4"
+    "vite": "^6.0.3"
   }
 }
