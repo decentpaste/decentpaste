@@ -24,16 +24,12 @@ export async function ensureNotificationPermission(): Promise<boolean> {
 
   try {
     permissionGranted = await isPermissionGranted();
-    console.log('[Notification] Initial permission check:', permissionGranted);
 
     if (!permissionGranted) {
-      console.log('[Notification] Requesting permission...');
       const permission = await requestPermission();
-      console.log('[Notification] Permission response:', permission);
       permissionGranted = permission === 'granted';
     }
-  } catch (e) {
-    console.error('[Notification] Failed to check permission:', e);
+  } catch {
     permissionGranted = false;
   }
 
@@ -46,17 +42,13 @@ export async function ensureNotificationPermission(): Promise<boolean> {
  */
 export async function showNotification(title: string, body: string): Promise<void> {
   const hasPermission = await ensureNotificationPermission();
-  console.log('[Notification] Permission granted:', hasPermission);
 
   if (hasPermission) {
     try {
-      console.log('[Notification] Sending:', { title, body });
       sendNotification({ title, body });
-    } catch (e) {
-      console.error('[Notification] Failed to send:', e);
+    } catch {
+      // Silently fail - notification is not critical
     }
-  } else {
-    console.warn('[Notification] Permission not granted, skipping notification');
   }
 }
 
