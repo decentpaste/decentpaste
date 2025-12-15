@@ -376,15 +376,23 @@ body {
   letter-spacing: 0.03em;
 }
 
-.download-format-btn.download-format-disabled {
+.download-format-btn.download-format-disabled,
+.download-format-btn.download-format-unavailable {
   cursor: not-allowed;
   opacity: 0.5;
+  pointer-events: none;
 }
 
-.download-format-btn.download-format-disabled:hover {
+.download-format-btn.download-format-disabled:hover,
+.download-format-btn.download-format-unavailable:hover {
   background: rgba(255, 255, 255, 0.03);
   border-color: rgba(255, 255, 255, 0.08);
   transform: none;
+}
+
+/* Show "Coming Soon" text for unavailable formats */
+.download-format-btn.download-format-unavailable .format-desc::after {
+  content: ' · Coming Soon';
 }
 
 .download-format-btn.download-format-secondary {

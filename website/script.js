@@ -694,20 +694,22 @@ const formatToPattern = {
 /**
  * Fetch latest release from GitHub API and update download links
  * GitHub API supports CORS, unlike raw file downloads
+ * Uses localStorage caching to avoid rate limits (60 req/hour unauthenticated)
  */
 async function populateDownloadLinks() {
   const API_URL = 'https://api.github.com/repos/decentpaste/decentpaste/releases/latest';
+  const CACHE_KEY = 'decentpaste_release_cache';
+  const CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
-  try {
-    const response = await fetch(API_URL);
-    if (!response.ok) throw new Error('Failed to fetch release');
-
-    const release = await response.json();
+  /**
+   * Update UI with release data
+   */
+  function applyReleaseData(release) {
     const assets = release.assets || [];
 
     // Update version display
     if (release.tag_name) {
-      const versionEl = document.querySelector('#downloads .text-white\\/40');
+      const versionEl = document.getElementById('downloads-version');
       if (versionEl) {
         versionEl.textContent = `${release.tag_name} · Apache-2.0 License`;
       }
@@ -728,8 +730,45 @@ async function populateDownloadLinks() {
       const format = btn.getAttribute('data-format');
       if (urlMap[format]) {
         btn.href = urlMap[format];
+        btn.classList.remove('download-format-unavailable');
+      } else {
+        // Mark as unavailable if no matching asset found
+        btn.classList.add('download-format-unavailable');
       }
     });
+  }
+
+  // Try to use cached data first
+  try {
+    const cached = localStorage.getItem(CACHE_KEY);
+    if (cached) {
+      const { data, timestamp } = JSON.parse(cached);
+      if (Date.now() - timestamp < CACHE_TTL) {
+        applyReleaseData(data);
+        return;
+      }
+    }
+  } catch (e) {
+    // localStorage might be unavailable or corrupted
+  }
+
+  // Fetch fresh data from GitHub API
+  try {
+    const response = await fetch(API_URL);
+    if (!response.ok) throw new Error('Failed to fetch release');
+
+    const release = await response.json();
+    applyReleaseData(release);
+
+    // Cache the result
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify({
+        data: release,
+        timestamp: Date.now()
+      }));
+    } catch (e) {
+      // localStorage might be full or unavailable
+    }
 
   } catch (error) {
     console.warn('Could not fetch release info:', error.message);
