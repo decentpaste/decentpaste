@@ -257,6 +257,156 @@ body {
 }
 
 /* =============================================================================
+   Expanded Download Cards with Multiple Formats
+   ============================================================================= */
+
+.download-card-expanded {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.5rem;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 1rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: visible;
+}
+
+.download-card-expanded:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.download-card-expanded.highlighted {
+  border-color: #14b8a6;
+  background: rgba(20, 184, 166, 0.05);
+}
+
+.download-card-expanded.highlighted::before {
+  content: 'Your Platform';
+  position: absolute;
+  top: -0.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.25rem 0.75rem;
+  background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
+  color: white;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-radius: 50px;
+  white-space: nowrap;
+  z-index: 10;
+}
+
+.download-card-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.download-formats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+}
+
+/* Single-item formats should span full width */
+.download-formats-1 {
+  grid-template-columns: 1fr;
+}
+
+.download-formats-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+@media (max-width: 640px) {
+  .download-formats-3 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .download-formats-3 .download-format-btn:last-child {
+    grid-column: span 2;
+  }
+}
+
+.download-format-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.75rem 0.5rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.75rem;
+  text-decoration: none;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  color: white;
+  text-align: center;
+}
+
+.download-format-btn:hover {
+  background: rgba(20, 184, 166, 0.1);
+  border-color: rgba(20, 184, 166, 0.3);
+  transform: translateY(-2px);
+}
+
+.download-format-btn:hover svg {
+  color: #14b8a6;
+}
+
+.download-format-btn svg {
+  color: rgba(255, 255, 255, 0.5);
+  transition: color 0.2s;
+}
+
+.download-format-btn .format-name {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: white;
+}
+
+.download-format-btn .format-desc {
+  font-size: 0.6875rem;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.download-format-btn.download-format-disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.download-format-btn.download-format-disabled:hover {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.08);
+  transform: none;
+}
+
+.download-format-btn.download-format-secondary {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.download-format-btn.download-format-secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+/* Highlight recommended format within card */
+.download-card-expanded.highlighted .download-format-btn:first-child {
+  background: rgba(20, 184, 166, 0.15);
+  border-color: rgba(20, 184, 166, 0.4);
+}
+
+.download-card-expanded.highlighted .download-format-btn:first-child svg {
+  color: #14b8a6;
+}
+
+/* =============================================================================
    FAQ Accordion
    ============================================================================= */
 

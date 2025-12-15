@@ -615,41 +615,8 @@ function initNetworkGraph() {
 }
 
 // =============================================================================
-// Platform Detection
+// Platform Detection (for highlighting user's platform card)
 // =============================================================================
-
-const platformConfig = {
-  windows: {
-    name: 'Windows',
-    icon: `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/></svg>`,
-    downloadUrl: 'https://github.com/decentpaste/decentpaste/releases/latest/download/DecentPaste_x64-setup.exe',
-  },
-  macos: {
-    name: 'macOS',
-    icon: `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>`,
-    downloadUrl: 'https://github.com/decentpaste/decentpaste/releases/latest/download/DecentPaste_x64.dmg',
-  },
-  linux: {
-    name: 'Linux',
-    icon: `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12.504 0c-.155 0-.315.008-.48.021-4.226.333-3.105 4.807-3.17 6.298-.076 1.092-.3 1.953-1.05 3.02-.885 1.051-2.127 2.75-2.716 4.521-.278.832-.41 1.684-.287 2.489a.424.424 0 00-.11.135c-.26.268-.45.6-.663.839-.199.199-.485.267-.797.4-.313.136-.658.269-.864.68-.09.189-.136.394-.132.602 0 .199.027.4.055.536.058.399.116.728.04.97-.249.68-.28 1.145-.106 1.484.174.334.535.47.94.601.81.2 1.91.135 2.774.6.926.466 1.866.67 2.616.47.526-.116.97-.464 1.208-.946.587-.003 1.23-.269 2.26-.334.699-.058 1.574.267 2.577.2.025.134.063.198.114.333l.003.003c.391.778 1.113 1.132 1.884 1.071.771-.06 1.592-.536 2.257-1.306.631-.765 1.683-1.084 2.378-1.503.348-.199.629-.469.649-.853.023-.4-.2-.811-.714-1.376v-.097l-.003-.003c-.17-.2-.25-.535-.338-.926-.085-.401-.182-.786-.492-1.046h-.003c-.059-.054-.123-.067-.188-.135a.357.357 0 00-.19-.064c.431-1.278.264-2.55-.173-3.694-.533-1.41-1.465-2.638-2.175-3.483-.796-1.005-1.576-1.957-1.56-3.368.026-2.152.236-6.133-3.544-6.139z"/></svg>`,
-    downloadUrl: 'https://github.com/decentpaste/decentpaste/releases/latest/download/DecentPaste_amd64.AppImage',
-  },
-  android: {
-    name: 'Android',
-    icon: `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-.9997s.4483-.9993.9993-.9993c.5511 0 .9993.4483.9993.9993.0001.5511-.4482.9997-.9993.9997m-11.046 0c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9993.4483.9993.9993 0 .5511-.4483.9997-.9993.9997m11.4045-6.02l1.9973-3.4592a.416.416 0 00-.1521-.5676.416.416 0 00-.5676.1521l-2.0223 3.503C15.5902 8.2439 13.8533 7.8508 12 7.8508s-3.5902.3931-5.1367 1.0989L4.841 5.4467a.4161.4161 0 00-.5677-.1521.4157.4157 0 00-.1521.5676l1.9973 3.4592C2.6889 11.1867.3432 14.6589 0 18.761h24c-.3435-4.1021-2.6892-7.5743-6.1185-9.4396"/></svg>`,
-    downloadUrl: 'https://github.com/decentpaste/decentpaste/releases/latest/download/DecentPaste.apk',
-  },
-  ios: {
-    name: 'iOS',
-    icon: `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>`,
-    downloadUrl: '#downloads',
-  },
-  unknown: {
-    name: 'Your Platform',
-    icon: `<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>`,
-    downloadUrl: '#downloads',
-  },
-};
 
 /**
  * Detect the user's operating system
@@ -686,30 +653,87 @@ function detectPlatform() {
     return 'linux';
   }
 
-  return 'unknown';
+  return null;
 }
 
 /**
- * Update the hero download button based on detected platform
+ * Highlight the download card for the user's platform
  */
-function updateHeroButton() {
+function highlightPlatformCard() {
   const platform = detectPlatform();
-  const config = platformConfig[platform];
+  if (!platform) return;
 
-  const btn = document.getElementById('primary-download');
-  const iconEl = document.getElementById('platform-icon');
-  const nameEl = document.getElementById('platform-name');
+  const downloadCard = document.getElementById(`download-${platform}`);
+  if (downloadCard) {
+    downloadCard.classList.add('highlighted');
+  }
+}
 
-  if (btn && config && iconEl && nameEl) {
-    iconEl.innerHTML = config.icon;
-    nameEl.textContent = config.name;
-    btn.href = config.downloadUrl;
+// =============================================================================
+// Dynamic Download Links (from GitHub Releases API)
+// =============================================================================
 
-    // Highlight the matching download card
-    const downloadCard = document.getElementById(`download-${platform}`);
-    if (downloadCard) {
-      downloadCard.classList.add('highlighted');
+/**
+ * Maps data-format attributes to asset filename patterns
+ */
+const formatToPattern = {
+  // Windows
+  'exe': /\.exe$/i,
+  'msi': /\.msi$/i,
+  // macOS
+  'dmg-arm': /aarch64\.dmg$/i,
+  'dmg-intel': /x64\.dmg$/i,
+  // Linux
+  'appimage': /\.AppImage$/i,
+  'deb': /\.deb$/i,
+  'rpm': /\.rpm$/i,
+  // Android
+  'apk': /\.apk$/i,
+};
+
+/**
+ * Fetch latest release from GitHub API and update download links
+ * GitHub API supports CORS, unlike raw file downloads
+ */
+async function populateDownloadLinks() {
+  const API_URL = 'https://api.github.com/repos/decentpaste/decentpaste/releases/latest';
+
+  try {
+    const response = await fetch(API_URL);
+    if (!response.ok) throw new Error('Failed to fetch release');
+
+    const release = await response.json();
+    const assets = release.assets || [];
+
+    // Update version display
+    if (release.tag_name) {
+      const versionEl = document.querySelector('#downloads .text-white\\/40');
+      if (versionEl) {
+        versionEl.textContent = `${release.tag_name} · Apache-2.0 License`;
+      }
     }
+
+    // Build a map of format -> download URL
+    const urlMap = {};
+    for (const asset of assets) {
+      for (const [format, pattern] of Object.entries(formatToPattern)) {
+        if (pattern.test(asset.name) && !urlMap[format]) {
+          urlMap[format] = asset.browser_download_url;
+        }
+      }
+    }
+
+    // Update download buttons
+    document.querySelectorAll('.download-format-btn[data-format]').forEach(btn => {
+      const format = btn.getAttribute('data-format');
+      if (urlMap[format]) {
+        btn.href = urlMap[format];
+      }
+    });
+
+  } catch (error) {
+    console.warn('Could not fetch release info:', error.message);
+    // Buttons keep their fallback href (GitHub releases page)
   }
 }
 
@@ -856,7 +880,8 @@ function initSmoothScroll() {
 
 document.addEventListener('DOMContentLoaded', () => {
   initNetworkGraph();
-  updateHeroButton();
+  highlightPlatformCard();
+  populateDownloadLinks();
   initMobileMenu();
   initNavbarScroll();
   initScrollAnimations();
