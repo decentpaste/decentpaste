@@ -2,6 +2,7 @@ import './styles.css';
 import { initApp } from './app';
 import { reconnectPeers } from './api/commands';
 import { store } from './state/store';
+import { checkForUpdates } from './api/updater';
 
 document.addEventListener('DOMContentLoaded', async () => {
   const root = document.getElementById('app');
@@ -23,4 +24,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     }
   });
+
+  // Check for updates silently on startup (with delay to not block initialization)
+  setTimeout(() => {
+    checkForUpdates().catch((e) => {
+      console.error('Failed to check for updates on startup:', e);
+    });
+  }, 3000);
 });

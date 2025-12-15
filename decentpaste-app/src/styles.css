@@ -688,6 +688,18 @@ select:focus-visible {
   background: rgba(20, 184, 166, 0.15);
 }
 
+/* Update notification badge */
+.update-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 8px;
+  height: 8px;
+  background: #fb923c;
+  border-radius: 50%;
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
 /* =============================================================================
    Utility classes
    ============================================================================= */

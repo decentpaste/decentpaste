@@ -6,6 +6,7 @@ import { icon, type IconName } from './components/icons';
 import { $, escapeHtml, formatTime, truncate } from './utils/dom';
 import { getErrorMessage } from './utils/error';
 import { notifyClipboardReceived, notifyMinimizedToTray } from './utils/notifications';
+import { checkForUpdates, downloadAndInstallUpdate, formatBytes, getDownloadPercentage } from './api/updater';
 import type { ClipboardEntry, DiscoveredPeer, PairedPeer } from './api/types';
 import logoDark from './assets/logo_dark.svg';
 
@@ -158,6 +159,17 @@ class App {
         } catch (error) {
           store.addToast(`Failed to share: ${getErrorMessage(error)}`, 'error');
         }
+        return;
+      }
+
+      // Update buttons
+      if (target.closest('#btn-check-update')) {
+        checkForUpdates();
+        return;
+      }
+
+      if (target.closest('#btn-download-update')) {
+        downloadAndInstallUpdate();
         return;
       }
 
@@ -454,6 +466,11 @@ class App {
     store.subscribe('pairingModalMode', () => this.renderPairingModal());
     store.subscribe('activePairingSession', () => this.renderPairingModal());
     store.subscribe('isLoading', () => this.render());
+    store.subscribe('updateStatus', () => {
+      this.renderUpdateBadge();
+      this.renderUpdateSection();
+    });
+    store.subscribe('updateProgress', () => this.renderUpdateSection());
   }
 
   private render(): void {
@@ -527,13 +544,18 @@ class App {
   private renderNavItem(view: View, iconName: IconName, label: string): string {
     const currentView = store.get('currentView');
     const isActive = currentView === view;
+    const updateStatus = store.get('updateStatus');
+    const showBadge = view === 'settings' && updateStatus === 'available';
 
     return `
       <button
         data-nav="${view}"
         class="nav-item ${isActive ? 'nav-item-active' : ''}"
       >
-        ${icon(iconName, 20)}
+        <div class="relative">
+          ${icon(iconName, 20)}
+          ${view === 'settings' ? `<span id="nav-settings-badge" class="${showBadge ? 'update-badge' : 'hidden'}"></span>` : ''}
+        </div>
         <span>${label}</span>
       </button>
     `;
@@ -774,6 +796,19 @@ class App {
                 class="checkbox"
               />
             </label>
+          </div>
+        </div>
+
+        <!-- Updates -->
+        <div class="mb-6">
+          <div class="flex items-center gap-2 mb-3">
+            <div class="icon-container-blue" style="width: 1.5rem; height: 1.5rem; border-radius: 0.5rem;">
+              ${icon('download', 12)}
+            </div>
+            <h2 class="text-sm font-semibold text-white/80 tracking-tight">Updates</h2>
+          </div>
+          <div id="update-section" class="card overflow-hidden">
+            ${this.renderUpdateContent()}
           </div>
         </div>
 
@@ -1060,6 +1095,152 @@ class App {
             ? recentItems.map((item) => this.renderClipboardItem(item)).join('')
             : this.renderEmptyState('No clipboard items yet', 'Copy something to get started');
       }
+    }
+  }
+
+  private renderUpdateContent(): string {
+    const status = store.get('updateStatus');
+    const updateInfo = store.get('updateInfo');
+    const progress = store.get('updateProgress');
+    const error = store.get('updateError');
+
+    switch (status) {
+      case 'idle':
+        return `
+          <div class="flex items-center justify-between p-4">
+            <span class="text-sm text-white/70">Check for updates</span>
+            <button id="btn-check-update" class="btn-primary text-xs px-4 py-1.5">
+              ${icon('refreshCw', 14)}
+              <span>Check</span>
+            </button>
+          </div>
+        `;
+
+      case 'checking':
+        return `
+          <div class="flex items-center justify-between p-4">
+            <span class="text-sm text-white/70">Checking for updates...</span>
+            <div class="text-teal-400">
+              ${icon('loader', 18, 'animate-spin')}
+            </div>
+          </div>
+        `;
+
+      case 'up-to-date':
+        return `
+          <div class="p-4">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                ${icon('check', 16, 'text-green-400')}
+                <span class="text-sm text-white/70">You're up to date!</span>
+              </div>
+              <button id="btn-check-update" class="text-xs text-teal-400 hover:text-teal-300 font-medium transition-colors">
+                Check again
+              </button>
+            </div>
+            <p class="text-xs text-white/40 mt-1">Current version: v0.1.0</p>
+          </div>
+        `;
+
+      case 'available':
+        return `
+          <div class="p-4">
+            <div class="flex items-center gap-2 mb-3">
+              <div class="w-2 h-2 rounded-full bg-orange-400 animate-pulse"></div>
+              <span class="text-sm font-medium text-white">Update available!</span>
+            </div>
+            <div class="mb-3">
+              <p class="text-sm text-white/70">Version ${updateInfo?.version || 'unknown'} is ready</p>
+              ${updateInfo?.body ? `<p class="text-xs text-white/40 mt-1 line-clamp-2">${escapeHtml(updateInfo.body)}</p>` : ''}
+            </div>
+            <button id="btn-download-update" class="btn-primary w-full">
+              ${icon('download', 16)}
+              <span>Download & Install</span>
+            </button>
+          </div>
+        `;
+
+      case 'downloading':
+        const percentage = getDownloadPercentage();
+        const downloadedStr = progress ? formatBytes(progress.downloaded) : '0 B';
+        const totalStr = progress?.total ? formatBytes(progress.total) : 'unknown';
+        return `
+          <div class="p-4">
+            <div class="flex items-center gap-2 mb-3">
+              ${icon('download', 16, 'text-teal-400')}
+              <span class="text-sm text-white/70">Downloading update...</span>
+            </div>
+            <div class="w-full bg-white/10 rounded-full h-2 mb-2">
+              <div class="bg-teal-400 h-2 rounded-full transition-all duration-300" style="width: ${percentage}%"></div>
+            </div>
+            <p class="text-xs text-white/40">${downloadedStr} / ${totalStr} (${percentage}%)</p>
+          </div>
+        `;
+
+      case 'ready':
+        return `
+          <div class="p-4">
+            <div class="flex items-center gap-2 mb-3">
+              ${icon('check', 16, 'text-green-400')}
+              <span class="text-sm text-white/70">Update ready to install</span>
+            </div>
+            <p class="text-xs text-white/40">The app will restart to complete the update.</p>
+          </div>
+        `;
+
+      case 'installing':
+        return `
+          <div class="flex items-center justify-between p-4">
+            <span class="text-sm text-white/70">Installing update...</span>
+            <div class="text-teal-400">
+              ${icon('loader', 18, 'animate-spin')}
+            </div>
+          </div>
+        `;
+
+      case 'error':
+        return `
+          <div class="p-4">
+            <div class="flex items-center gap-2 mb-2">
+              ${icon('x', 16, 'text-red-400')}
+              <span class="text-sm text-white/70">Update check failed</span>
+            </div>
+            <p class="text-xs text-red-400/70 mb-3">${error ? escapeHtml(error) : 'Unknown error'}</p>
+            <button id="btn-check-update" class="btn-secondary text-xs px-4 py-1.5">
+              ${icon('refreshCw', 14)}
+              <span>Retry</span>
+            </button>
+          </div>
+        `;
+
+      default:
+        return `
+          <div class="flex items-center justify-between p-4">
+            <span class="text-sm text-white/70">Check for updates</span>
+            <button id="btn-check-update" class="btn-primary text-xs px-4 py-1.5">
+              ${icon('refreshCw', 14)}
+              <span>Check</span>
+            </button>
+          </div>
+        `;
+    }
+  }
+
+  private renderUpdateSection(): void {
+    const view = store.get('currentView');
+    if (view === 'settings') {
+      const container = $('#update-section');
+      if (container) {
+        container.innerHTML = this.renderUpdateContent();
+      }
+    }
+  }
+
+  private renderUpdateBadge(): void {
+    const status = store.get('updateStatus');
+    const badge = $('#nav-settings-badge');
+    if (badge) {
+      badge.className = status === 'available' ? 'update-badge' : 'hidden';
     }
   }
 }

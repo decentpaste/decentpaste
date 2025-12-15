@@ -101,3 +101,25 @@ export interface PeerNameUpdatedPayload {
   peerId: string;
   deviceName: string;
 }
+
+// Update types
+export interface UpdateInfo {
+  version: string;
+  date: string | null;
+  body: string | null;
+}
+
+export interface UpdateProgress {
+  downloaded: number;
+  total: number | null;
+}
+
+export type UpdateStatus =
+  | 'idle'
+  | 'checking'
+  | 'available'
+  | 'downloading'
+  | 'ready'
+  | 'installing'
+  | 'up-to-date'
+  | 'error';

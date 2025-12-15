@@ -6,6 +6,9 @@ import type {
   NetworkStatus,
   PairedPeer,
   PairingSession,
+  UpdateInfo,
+  UpdateProgress,
+  UpdateStatus,
 } from '../api/types';
 
 export type View = 'dashboard' | 'peers' | 'history' | 'settings';
@@ -47,6 +50,12 @@ export interface AppState {
   // Window state
   isWindowVisible: boolean;
   isMinimizedToTray: boolean; // True only when explicitly minimized to system tray
+
+  // Update state
+  updateStatus: UpdateStatus;
+  updateInfo: UpdateInfo | null;
+  updateProgress: UpdateProgress | null;
+  updateError: string | null;
 }
 
 type StateListener<K extends keyof AppState> = (value: AppState[K]) => void;
@@ -79,6 +88,10 @@ class Store {
       isLoading: true,
       isWindowVisible: true,
       isMinimizedToTray: false,
+      updateStatus: 'idle',
+      updateInfo: null,
+      updateProgress: null,
+      updateError: null,
     };
   }
 
