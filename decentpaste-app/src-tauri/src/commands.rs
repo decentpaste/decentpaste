@@ -83,25 +83,52 @@ pub async fn get_paired_peers(state: State<'_, AppState>) -> Result<Vec<PairedPe
 }
 
 #[tauri::command]
-pub async fn remove_paired_peer(state: State<'_, AppState>, peer_id: String) -> Result<()> {
-    let mut peers = state.paired_peers.write().await;
-    peers.retain(|p| p.peer_id != peer_id);
+pub async fn remove_paired_peer(
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+    peer_id: String,
+) -> Result<()> {
+    use crate::network::DiscoveredPeer;
+    use chrono::Utc;
+    use tauri::Emitter;
 
-    // Save to storage
-    crate::storage::save_paired_peers(&peers)?;
+    // Get the peer info before removing (we'll use it to re-emit as discovered)
+    let peer_info = {
+        let peers = state.paired_peers.read().await;
+        peers
+            .iter()
+            .find(|p| p.peer_id == peer_id)
+            .map(|p| (p.peer_id.clone(), p.device_name.clone()))
+    };
 
-    // Drop the lock before sending network command
-    drop(peers);
+    // Remove from paired list
+    {
+        let mut peers = state.paired_peers.write().await;
+        peers.retain(|p| p.peer_id != peer_id);
+        crate::storage::save_paired_peers(&peers)?;
+    }
 
-    // Re-emit the peer as discovered if it's still on the network
-    // This allows the user to pair with the device again without restarting
-    let tx = state.network_command_tx.read().await;
-    if let Some(tx) = tx.as_ref() {
-        let _ = tx
-            .send(NetworkCommand::RefreshPeer {
-                peer_id: peer_id.clone(),
-            })
-            .await;
+    // Emit directly using the info we have from the paired peer
+    // This ensures the peer appears in discovered list with correct device name
+    if let Some((pid, device_name)) = peer_info {
+        let discovered = DiscoveredPeer {
+            peer_id: pid.clone(),
+            device_name: Some(device_name),
+            addresses: vec![], // We don't have addresses, but that's okay for display
+            discovered_at: Utc::now(),
+            is_paired: false,
+        };
+
+        // Add to discovered peers state
+        {
+            let mut peers = state.discovered_peers.write().await;
+            if !peers.iter().any(|p| p.peer_id == pid) {
+                peers.push(discovered.clone());
+            }
+        }
+
+        // Emit to frontend
+        let _ = app_handle.emit("peer-discovered", discovered);
     }
 
     Ok(())

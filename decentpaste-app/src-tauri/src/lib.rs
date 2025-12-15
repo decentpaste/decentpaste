@@ -268,7 +268,11 @@ async fn initialize_app(
 
                     if !is_paired {
                         let mut peers = state.discovered_peers.write().await;
-                        if !peers.iter().any(|p| p.peer_id == peer.peer_id) {
+                        // Update existing peer or add new one
+                        if let Some(existing) = peers.iter_mut().find(|p| p.peer_id == peer.peer_id) {
+                            // Update with new info (e.g., device name from identify)
+                            *existing = peer.clone();
+                        } else {
                             peers.push(peer.clone());
                         }
                         let _ = app_handle_network.emit("peer-discovered", peer);

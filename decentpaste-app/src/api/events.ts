@@ -2,7 +2,6 @@ import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import type {
   ClipboardBroadcastPayload,
   ClipboardEntry,
-  ConnectedPeer,
   DiscoveredPeer,
   NetworkStatus,
   PairingCompletePayload,
@@ -18,8 +17,6 @@ interface EventListeners {
   networkStatus: EventHandler<NetworkStatus>[];
   peerDiscovered: EventHandler<DiscoveredPeer>[];
   peerLost: EventHandler<string>[];
-  peerConnected: EventHandler<ConnectedPeer>[];
-  peerDisconnected: EventHandler<string>[];
   peerNameUpdated: EventHandler<PeerNameUpdatedPayload>[];
   pairingRequest: EventHandler<PairingRequestPayload>[];
   pairingPin: EventHandler<PairingPinPayload>[];
@@ -36,8 +33,6 @@ class EventManager {
     networkStatus: [],
     peerDiscovered: [],
     peerLost: [],
-    peerConnected: [],
-    peerDisconnected: [],
     peerNameUpdated: [],
     pairingRequest: [],
     pairingPin: [],
@@ -61,12 +56,6 @@ class EventManager {
       }),
       listen<string>('peer-lost', (e) => {
         this.listeners.peerLost.forEach((fn) => fn(e.payload));
-      }),
-      listen<ConnectedPeer>('peer-connected', (e) => {
-        this.listeners.peerConnected.forEach((fn) => fn(e.payload));
-      }),
-      listen<string>('peer-disconnected', (e) => {
-        this.listeners.peerDisconnected.forEach((fn) => fn(e.payload));
       }),
       listen<PeerNameUpdatedPayload>('peer-name-updated', (e) => {
         this.listeners.peerNameUpdated.forEach((fn) => fn(e.payload));

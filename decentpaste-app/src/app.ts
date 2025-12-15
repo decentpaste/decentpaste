@@ -3,9 +3,10 @@ import { eventManager } from './api/events';
 import * as commands from './api/commands';
 import { readText } from '@tauri-apps/plugin-clipboard-manager';
 import { icon, type IconName } from './components/icons';
-import { $, escapeHtml, formatTime, getStatusColor, getStatusText, truncate } from './utils/dom';
+import { $, escapeHtml, formatTime, truncate } from './utils/dom';
 import { getErrorMessage } from './utils/error';
 import type { ClipboardEntry, DiscoveredPeer, PairedPeer } from './api/types';
+import logoDark from './assets/logo_dark.svg';
 
 class App {
   private root: HTMLElement;
@@ -425,7 +426,6 @@ class App {
 
   private setupStateSubscriptions(): void {
     store.subscribe('currentView', () => this.render());
-    store.subscribe('networkStatus', () => this.updateStatusIndicator());
     store.subscribe('discoveredPeers', () => this.renderPeersList());
     store.subscribe('pairedPeers', () => this.renderPeersList());
     store.subscribe('clipboardHistory', () => this.renderClipboardHistory());
@@ -464,19 +464,14 @@ class App {
         <div class="orb orb-orange animate-float-delayed" style="width: 300px; height: 300px; bottom: 10%; right: -15%;"></div>
 
         <!-- Header -->
-        <header class="relative z-10 px-4 py-3 pt-safe-top border-b" style="background: rgba(17, 17, 19, 0.8); backdrop-filter: blur(12px); border-color: rgba(255, 255, 255, 0.06);">
-          <div class="flex items-center justify-between">
+        <header class="relative z-10 px-4 py-1 pt-safe-top border-b" style="background: rgba(17, 17, 19, 0.8); backdrop-filter: blur(12px); border-color: rgba(255, 255, 255, 0.06);">
+          <div class="flex items-center">
             <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-xl flex items-center justify-center glow-teal" style="background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);">
-                ${icon('clipboard', 20, 'text-white')}
-              </div>
+              <img src="${logoDark}" alt="DecentPaste Logo" class="w-12 h-12" />
               <div>
                 <h1 class="font-semibold text-white text-sm tracking-tight">DecentPaste</h1>
                 <p class="text-xs text-white/40">${state.deviceInfo?.device_name || 'Loading...'}</p>
               </div>
-            </div>
-            <div id="status-indicator">
-              ${this.renderStatusIndicator()}
             </div>
           </div>
         </header>
@@ -507,26 +502,6 @@ class App {
         </div>
       </div>
     `;
-  }
-
-  private renderStatusIndicator(): string {
-    const status = store.get('networkStatus');
-    const statusText = getStatusText(status);
-    const statusClass = getStatusColor(statusText);
-
-    return `
-      <div class="flex items-center gap-2 px-3 py-1.5 rounded-full" style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.08);">
-        <div class="status-dot ${statusClass}"></div>
-        <span class="text-xs text-white/60 font-medium">${statusText}</span>
-      </div>
-    `;
-  }
-
-  private updateStatusIndicator(): void {
-    const indicator = $('#status-indicator');
-    if (indicator) {
-      indicator.innerHTML = this.renderStatusIndicator();
-    }
   }
 
   private renderNavItem(view: View, iconName: IconName, label: string): string {
@@ -843,12 +818,7 @@ class App {
           <div class="icon-container-green">
             ${icon('monitor', 18)}
           </div>
-          <div>
-            <p class="text-sm font-medium text-white">${safeName}</p>
-            <p class="text-xs text-white/40">
-              ${peer.last_seen ? `Last seen ${formatTime(peer.last_seen)}` : 'Paired'}
-            </p>
-          </div>
+          <p class="text-sm font-medium text-white">${safeName}</p>
         </div>
         <button
           data-unpair="${peer.peer_id}"
