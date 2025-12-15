@@ -6,7 +6,6 @@
   "license": "Apache-2.0",
   "scripts": {
     "dev": "vite",
-    "dev:mobile": "node scripts/dev-server.js",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",

@@ -120,14 +120,13 @@ class App {
         return;
       }
 
-      // Refresh peers button
+      // Refresh peers button - triggers reconnection to discovered peers
       if (target.closest('#btn-refresh-peers')) {
         try {
-          const peers = await commands.getDiscoveredPeers();
-          store.set('discoveredPeers', peers);
-          store.addToast('Refreshed peer list', 'info');
+          await commands.reconnectPeers();
+          store.addToast('Reconnecting to peers...', 'info');
         } catch (error) {
-          store.addToast(`Failed to refresh: ${getErrorMessage(error)}`, 'error');
+          store.addToast(`Failed to reconnect: ${getErrorMessage(error)}`, 'error');
         }
         return;
       }
@@ -569,58 +568,53 @@ class App {
     const recentItems = state.clipboardHistory.slice(0, 3);
 
     return `
-      <div class="p-4 h-full overflow-y-auto">
-        <!-- Stats Grid -->
-        <div class="grid grid-cols-2 gap-3 mb-6">
-          <div class="card p-4">
-            <div class="flex items-center gap-3">
-              <div class="icon-container-green">
-                ${icon('users', 18)}
+      <div class="flex flex-col h-full">
+        <!-- Sticky Top Section -->
+        <div class="flex-shrink-0 p-4 pb-0">
+          <!-- Stats Grid -->
+          <div class="grid grid-cols-2 gap-3 mb-6">
+            <div class="card p-4">
+              <div class="flex items-center gap-3">
+                <div class="icon-container-green">
+                  ${icon('users', 18)}
+                </div>
+                <div>
+                  <p class="text-2xl font-bold text-white tracking-tight">${pairedCount}</p>
+                  <p class="text-xs text-white/40">Paired Devices</p>
+                </div>
               </div>
-              <div>
-                <p class="text-2xl font-bold text-white tracking-tight">${pairedCount}</p>
-                <p class="text-xs text-white/40">Paired Devices</p>
+            </div>
+            <div class="card p-4">
+              <div class="flex items-center gap-3">
+                <div class="icon-container-teal">
+                  ${icon('clipboard', 18)}
+                </div>
+                <div>
+                  <p id="clipboard-count" class="text-2xl font-bold text-white tracking-tight">${historyCount}</p>
+                  <p class="text-xs text-white/40">Clipboard Items</p>
+                </div>
               </div>
             </div>
           </div>
-          <div class="card p-4">
-            <div class="flex items-center gap-3">
-              <div class="icon-container-teal">
-                ${icon('clipboard', 18)}
-              </div>
-              <div>
-                <p class="text-2xl font-bold text-white tracking-tight">${historyCount}</p>
-                <p class="text-xs text-white/40">Clipboard Items</p>
-              </div>
-            </div>
-          </div>
-        </div>
 
-        <!-- Quick Actions -->
-        <div class="mb-6">
-          <h2 class="text-sm font-semibold text-white/80 mb-3 tracking-tight">Quick Actions</h2>
-          <button id="btn-share-clipboard" class="btn-primary w-full mb-3">
-            ${icon('share', 18)}
-            <span>Share Clipboard</span>
-          </button>
-          <div class="flex gap-3">
-            <button id="btn-refresh-peers" class="btn-secondary flex-1">
-              ${icon('refreshCw', 16)}
-              <span>Refresh</span>
-            </button>
-            <button id="btn-clear-history" class="btn-secondary flex-1">
-              ${icon('trash', 16)}
-              <span>Clear</span>
+          <!-- Quick Actions -->
+          <div class="mb-6">
+            <h2 class="text-sm font-semibold text-white/80 mb-3 tracking-tight">Quick Actions</h2>
+            <button id="btn-share-clipboard" class="btn-primary w-full">
+              ${icon('share', 18)}
+              <span>Share Clipboard</span>
             </button>
           </div>
-        </div>
 
-        <!-- Recent Clipboard -->
-        <div>
+          <!-- Recent Clipboard Header -->
           <div class="flex items-center justify-between mb-3">
             <h2 class="text-sm font-semibold text-white/80 tracking-tight">Recent Clipboard</h2>
             <button data-nav="history" class="text-xs text-teal-400 hover:text-teal-300 font-medium transition-colors">View all</button>
           </div>
+        </div>
+
+        <!-- Scrollable Recent Clipboard Items -->
+        <div class="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
           <div id="recent-clipboard" class="space-y-2">
             ${recentItems.length > 0 ? recentItems.map((item) => this.renderClipboardItem(item)).join('') : this.renderEmptyState('No clipboard items yet', 'Copy something to get started')}
           </div>
@@ -657,7 +651,10 @@ class App {
               ${icon('wifi', 12)}
             </div>
             <h2 class="text-sm font-semibold text-white/80 tracking-tight">Discovered Devices</h2>
-            <span class="text-xs text-white/30 ml-auto">${discoveredPeers.length}</span>
+            <span class="text-xs text-white/30 ml-auto mr-2">${discoveredPeers.length}</span>
+            <button id="btn-refresh-peers" class="p-1.5 rounded-lg text-white/40 hover:text-teal-400 hover:bg-teal-500/10 transition-all" title="Refresh">
+              ${icon('refreshCw', 14)}
+            </button>
           </div>
           <div id="discovered-peers" class="space-y-2">
             ${discoveredPeers.length > 0 ? discoveredPeers.map((peer) => this.renderDiscoveredPeer(peer)).join('') : this.renderEmptyState('No devices found', 'Searching on local network...')}
@@ -1056,9 +1053,18 @@ class App {
             : this.renderEmptyState('No clipboard history', 'Your copied items will appear here');
       }
     } else if (view === 'dashboard') {
+      const history = store.get('clipboardHistory');
+
+      // Update the clipboard count in stats
+      const countEl = $('#clipboard-count');
+      if (countEl) {
+        countEl.textContent = String(history.length);
+      }
+
+      // Update the recent clipboard items
       const container = $('#recent-clipboard');
       if (container) {
-        const recentItems = store.get('clipboardHistory').slice(0, 3);
+        const recentItems = history.slice(0, 3);
         container.innerHTML =
           recentItems.length > 0
             ? recentItems.map((item) => this.renderClipboardItem(item)).join('')
