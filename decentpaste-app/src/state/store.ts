@@ -44,8 +44,9 @@ export interface AppState {
   // Loading states
   isLoading: boolean;
 
-  // Window visibility (for tray notifications)
+  // Window state
   isWindowVisible: boolean;
+  isMinimizedToTray: boolean; // True only when explicitly minimized to system tray
 }
 
 type StateListener<K extends keyof AppState> = (value: AppState[K]) => void;
@@ -77,6 +78,7 @@ class Store {
       deviceInfo: null,
       isLoading: true,
       isWindowVisible: true,
+      isMinimizedToTray: false,
     };
   }
 

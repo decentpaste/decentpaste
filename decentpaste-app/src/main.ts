@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.addEventListener('visibilitychange', async () => {
     if (document.visibilityState === 'visible') {
       store.set('isWindowVisible', true);
+      store.set('isMinimizedToTray', false); // Window is now visible, no longer in tray
       console.log('App became visible, reconnecting to peers...');
       try {
         await reconnectPeers();

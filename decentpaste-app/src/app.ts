@@ -342,9 +342,9 @@ class App {
     eventManager.on('clipboardReceived', (entry) => {
       store.addClipboardEntry(entry);
 
-      // Use native notification when window is hidden (minimized to tray)
-      // Otherwise use in-app toast
-      if (!store.get('isWindowVisible')) {
+      // Use native notification ONLY when minimized to system tray
+      // Otherwise use in-app toast (or skip if window just not focused)
+      if (store.get('isMinimizedToTray')) {
         notifyClipboardReceived(entry.origin_device_name);
       } else {
         store.addToast(`Clipboard received from ${entry.origin_device_name}`, 'success');
@@ -406,6 +406,7 @@ class App {
     // Handle app minimized to tray (desktop only)
     eventManager.on('appMinimizedToTray', () => {
       store.set('isWindowVisible', false);
+      store.set('isMinimizedToTray', true);
 
       // Show first-time native OS notification
       if (!localStorage.getItem('hasShownTrayNotification')) {
