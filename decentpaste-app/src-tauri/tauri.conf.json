@@ -34,7 +34,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEM4N0E3REE2MzY5QkQyRUEKUldUcTBwczJwbjE2eUxMMU1Ca2dkbzBJd2sxWWdJOUdWNjZrVFZhdUpyWjllSUxFKzF6aS9weHAK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IENCMURBOEU4RDY1MUY2REMKUldUYzlsSFc2S2dkeTlzTmljb2xVcHRyandkRHFzaVhJYm5SQ0xWcFRGdGJUd20yS2xOeW92bXYK",
       "endpoints": [
         "https://github.com/decentpaste/decentpaste/releases/latest/download/latest.json"
       ],
