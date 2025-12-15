@@ -5,11 +5,7 @@
  * that work even when the app window is hidden (minimized to tray)
  */
 
-import {
-  isPermissionGranted,
-  requestPermission,
-  sendNotification,
-} from '@tauri-apps/plugin-notification';
+import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
 
 let permissionGranted: boolean | null = null;
 
@@ -63,8 +59,5 @@ export async function notifyClipboardReceived(deviceName: string): Promise<void>
  * Show notification when app minimizes to tray (first time only)
  */
 export async function notifyMinimizedToTray(): Promise<void> {
-  await showNotification(
-    'DecentPaste',
-    'App is still running in the system tray. Click the tray icon to show.'
-  );
+  await showNotification('DecentPaste', 'App is still running in the system tray. Click the tray icon to show.');
 }

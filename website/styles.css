@@ -66,7 +66,8 @@ body {
 }
 
 @keyframes gradient-shift {
-  0%, 100% {
+  0%,
+  100% {
     background-position: 0% center;
   }
   50% {
@@ -108,7 +109,7 @@ body {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(135deg, rgba(255,255,255,0.2) 0%, transparent 50%);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, transparent 50%);
   opacity: 0;
   transition: opacity 0.3s;
 }
@@ -469,8 +470,9 @@ body {
 .faq-answer {
   max-height: 0;
   overflow: hidden;
-  transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-              padding 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    padding 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .faq-item.active .faq-answer {
@@ -489,7 +491,8 @@ body {
    ============================================================================= */
 
 @keyframes scroll-indicator {
-  0%, 100% {
+  0%,
+  100% {
     transform: translateY(0);
     opacity: 1;
   }
@@ -508,7 +511,8 @@ body {
    ============================================================================= */
 
 @keyframes float {
-  0%, 100% {
+  0%,
+  100% {
     transform: translate(0, 0) scale(1);
   }
   33% {
@@ -535,8 +539,9 @@ body {
 .fade-in-up {
   opacity: 0;
   transform: translateY(30px);
-  transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1),
-              transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+  transition:
+    opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .fade-in-up.visible {
@@ -545,12 +550,29 @@ body {
 }
 
 /* Staggered delays */
-.fade-in-up[style*="animation-delay: 0.1s"]:not(.visible) { transition-delay: 0.1s; }
-.fade-in-up[style*="animation-delay: 0.15s"]:not(.visible) { transition-delay: 0.15s; }
-.fade-in-up[style*="animation-delay: 0.2s"]:not(.visible) { transition-delay: 0.2s; }
-.fade-in-up[style*="animation-delay: 0.3s"]:not(.visible) { transition-delay: 0.3s; }
-.fade-in-up[style*="animation-delay: 0.4s"]:not(.visible) { transition-delay: 0.4s; }
-.fade-in-up[style*="animation-delay: 0.5s"]:not(.visible) { transition-delay: 0.5s; }
+.fade-in-up[style*='animation-delay: 0.1s']:not(.visible) {
+  transition-delay: 0.1s;
+}
+
+.fade-in-up[style*='animation-delay: 0.15s']:not(.visible) {
+  transition-delay: 0.15s;
+}
+
+.fade-in-up[style*='animation-delay: 0.2s']:not(.visible) {
+  transition-delay: 0.2s;
+}
+
+.fade-in-up[style*='animation-delay: 0.3s']:not(.visible) {
+  transition-delay: 0.3s;
+}
+
+.fade-in-up[style*='animation-delay: 0.4s']:not(.visible) {
+  transition-delay: 0.4s;
+}
+
+.fade-in-up[style*='animation-delay: 0.5s']:not(.visible) {
+  transition-delay: 0.5s;
+}
 
 /* Reset delay after animation */
 .fade-in-up.visible {

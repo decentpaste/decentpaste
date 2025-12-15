@@ -47,6 +47,7 @@ This is a static site - just upload the files to any static hosting provider:
 4. Your site will be live at `https://username.github.io/repo/`
 
 Or use a separate branch:
+
 ```bash
 # Create gh-pages branch with website contents
 git subtree push --prefix website origin gh-pages
@@ -72,6 +73,7 @@ git subtree push --prefix website origin gh-pages
 ### Custom Domain
 
 After deploying, configure your DNS:
+
 - Add an `A` record pointing to your host's IP
 - Or add a `CNAME` record pointing to your host's domain
 

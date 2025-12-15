@@ -66,7 +66,7 @@ class NetworkGraph {
     const wasTablet = oldWidth && oldWidth >= 640 && oldWidth < 1024;
     const isTablet = this.width >= 640 && this.width < 1024;
 
-    if (oldWidth && ((wasMobile !== isMobile) || (wasTablet !== isTablet))) {
+    if (oldWidth && (wasMobile !== isMobile || wasTablet !== isTablet)) {
       // Recreate graph for new breakpoint
       this.nodes = [];
       this.edges = [];
@@ -76,7 +76,7 @@ class NetworkGraph {
     } else if (this.nodes.length > 0) {
       // Just reposition existing nodes within bounds
       const margin = isMobile ? 40 : 60;
-      this.nodes.forEach(node => {
+      this.nodes.forEach((node) => {
         node.x = Math.max(margin, Math.min(this.width - margin, node.x));
         node.y = Math.max(margin, Math.min(this.height - margin, node.y));
         node.targetX = node.x;
@@ -85,8 +85,8 @@ class NetworkGraph {
     }
 
     // Update physics for screen size
-    this.physics.springLength = isMobile ? 100 : (isTablet ? 140 : 180);
-    this.physics.repulsion = isMobile ? 4000 : (isTablet ? 6000 : 8000);
+    this.physics.springLength = isMobile ? 100 : isTablet ? 140 : 180;
+    this.physics.repulsion = isMobile ? 4000 : isTablet ? 6000 : 8000;
   }
 
   createNodes() {
@@ -97,9 +97,9 @@ class NetworkGraph {
     const isTablet = this.width >= 640 && this.width < 1024;
 
     // Responsive settings
-    const nodeRadius = isMobile ? 24 : (isTablet ? 28 : 32);
+    const nodeRadius = isMobile ? 24 : isTablet ? 28 : 32;
     const baseRadius = Math.min(this.width * 0.35, this.height * 0.35);
-    const numNodes = isMobile ? 6 : (isTablet ? 7 : 8); // More nodes!
+    const numNodes = isMobile ? 6 : isTablet ? 7 : 8; // More nodes!
 
     // Create node pool with duplicates allowed
     const nodePool = [];
@@ -335,7 +335,7 @@ class NetworkGraph {
     }
 
     // Spring forces along edges
-    this.edges.forEach(edge => {
+    this.edges.forEach((edge) => {
       const dx = edge.target.x - edge.source.x;
       const dy = edge.target.y - edge.source.y;
       const dist = Math.sqrt(dx * dx + dy * dy) || 1;
@@ -356,7 +356,7 @@ class NetworkGraph {
 
     // Update positions
     const margin = this.width < 640 ? 40 : 60;
-    this.nodes.forEach(node => {
+    this.nodes.forEach((node) => {
       if (node.isDragging) return;
 
       // Apply friction
@@ -398,7 +398,7 @@ class NetworkGraph {
   }
 
   updateDataPackets() {
-    this.dataPackets = this.dataPackets.filter(packet => {
+    this.dataPackets = this.dataPackets.filter((packet) => {
       packet.progress += packet.speed;
       if (packet.progress >= 1) {
         // Trigger glow on receiving node
@@ -410,7 +410,7 @@ class NetworkGraph {
     });
 
     // Decay glow
-    this.nodes.forEach(node => {
+    this.nodes.forEach((node) => {
       node.glowIntensity *= 0.95;
     });
   }
@@ -423,7 +423,7 @@ class NetworkGraph {
     ctx.clearRect(0, 0, this.width, this.height);
 
     // Draw edges
-    this.edges.forEach(edge => {
+    this.edges.forEach((edge) => {
       const pulse = Math.sin(time * 2 + edge.pulseOffset) * 0.5 + 0.5;
       const opacity = edge.active ? 0.3 + pulse * 0.15 : 0.15;
 
@@ -446,7 +446,7 @@ class NetworkGraph {
     });
 
     // Draw data packets
-    this.dataPackets.forEach(packet => {
+    this.dataPackets.forEach((packet) => {
       const edge = packet.edge;
       const t = packet.reverse ? 1 - packet.progress : packet.progress;
       const x = edge.source.x + (edge.target.x - edge.source.x) * t;
@@ -470,7 +470,7 @@ class NetworkGraph {
     });
 
     // Draw nodes
-    this.nodes.forEach(node => {
+    this.nodes.forEach((node) => {
       const isHovered = node === this.hoveredNode || node === this.draggedNode;
       const pulse = Math.sin(time * 1.5 + node.pulsePhase) * 0.5 + 0.5;
       const scale = isHovered ? 1.15 : 1 + pulse * 0.03;
@@ -494,7 +494,7 @@ class NetworkGraph {
         0,
         node.x,
         node.y,
-        radius
+        radius,
       );
       bgGradient.addColorStop(0, 'rgba(45, 45, 50, 0.98)');
       bgGradient.addColorStop(1, 'rgba(30, 30, 35, 0.98)');
@@ -507,9 +507,7 @@ class NetworkGraph {
       // Border
       ctx.beginPath();
       ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
-      ctx.strokeStyle = isHovered
-        ? node.color
-        : `rgba(255, 255, 255, ${0.15 + pulse * 0.1})`;
+      ctx.strokeStyle = isHovered ? node.color : `rgba(255, 255, 255, ${0.15 + pulse * 0.1})`;
       ctx.lineWidth = isHovered ? 2.5 : 1.5;
       ctx.stroke();
 
@@ -544,48 +542,48 @@ class NetworkGraph {
       case 'laptop':
         // Laptop screen
         ctx.beginPath();
-        ctx.roundRect(x - size/2, y - size/2.5, size, size * 0.6, 2);
+        ctx.roundRect(x - size / 2, y - size / 2.5, size, size * 0.6, 2);
         ctx.stroke();
         // Laptop base
         ctx.beginPath();
-        ctx.moveTo(x - size/1.6, y + size/4);
-        ctx.lineTo(x + size/1.6, y + size/4);
+        ctx.moveTo(x - size / 1.6, y + size / 4);
+        ctx.lineTo(x + size / 1.6, y + size / 4);
         ctx.stroke();
         break;
 
       case 'desktop':
         // Monitor
         ctx.beginPath();
-        ctx.roundRect(x - size/2, y - size/2, size, size * 0.7, 2);
+        ctx.roundRect(x - size / 2, y - size / 2, size, size * 0.7, 2);
         ctx.stroke();
         // Stand
         ctx.beginPath();
         ctx.moveTo(x, y + size * 0.2);
         ctx.lineTo(x, y + size * 0.4);
-        ctx.moveTo(x - size/4, y + size * 0.4);
-        ctx.lineTo(x + size/4, y + size * 0.4);
+        ctx.moveTo(x - size / 4, y + size * 0.4);
+        ctx.lineTo(x + size / 4, y + size * 0.4);
         ctx.stroke();
         break;
 
       case 'phone':
         // Phone body
         ctx.beginPath();
-        ctx.roundRect(x - size/4, y - size/2, size/2, size, 3);
+        ctx.roundRect(x - size / 4, y - size / 2, size / 2, size, 3);
         ctx.stroke();
         // Home button / notch
         ctx.beginPath();
-        ctx.arc(x, y + size/3, 2, 0, Math.PI * 2);
+        ctx.arc(x, y + size / 3, 2, 0, Math.PI * 2);
         ctx.stroke();
         break;
 
       case 'tablet':
         // Tablet body
         ctx.beginPath();
-        ctx.roundRect(x - size/2.5, y - size/2, size * 0.8, size, 3);
+        ctx.roundRect(x - size / 2.5, y - size / 2, size * 0.8, size, 3);
         ctx.stroke();
         // Home button
         ctx.beginPath();
-        ctx.arc(x, y + size/3, 2, 0, Math.PI * 2);
+        ctx.arc(x, y + size / 3, 2, 0, Math.PI * 2);
         ctx.stroke();
         break;
     }
@@ -626,10 +624,7 @@ function detectPlatform() {
   const platform = navigator.platform?.toLowerCase() || '';
 
   // iOS detection (must come before macOS - iPad can report as Mac)
-  if (
-    /ipad|iphone|ipod/.test(userAgent) ||
-    (platform === 'macintel' && navigator.maxTouchPoints > 1)
-  ) {
+  if (/ipad|iphone|ipod/.test(userAgent) || (platform === 'macintel' && navigator.maxTouchPoints > 1)) {
     return 'ios';
   }
 
@@ -670,108 +665,43 @@ function highlightPlatformCard() {
 }
 
 // =============================================================================
-// Dynamic Download Links (from GitHub Releases API)
+// Dynamic Download Links (from static downloads.json generated by CI)
 // =============================================================================
 
 /**
- * Maps data-format attributes to asset filename patterns
- */
-const formatToPattern = {
-  // Windows
-  'exe': /\.exe$/i,
-  'msi': /\.msi$/i,
-  // macOS
-  'dmg-arm': /aarch64\.dmg$/i,
-  'dmg-intel': /x64\.dmg$/i,
-  // Linux
-  'appimage': /\.AppImage$/i,
-  'deb': /\.deb$/i,
-  'rpm': /\.rpm$/i,
-  // Android
-  'apk': /\.apk$/i,
-};
-
-/**
- * Fetch latest release from GitHub API and update download links
- * GitHub API supports CORS, unlike raw file downloads
- * Uses localStorage caching to avoid rate limits (60 req/hour unauthenticated)
+ * Fetch download URLs from downloads.json (generated by GitHub Actions on release)
+ * This avoids GitHub API rate limits entirely - just a simple static file fetch
  */
 async function populateDownloadLinks() {
-  const API_URL = 'https://api.github.com/repos/decentpaste/decentpaste/releases/latest';
-  const CACHE_KEY = 'decentpaste_release_cache';
-  const CACHE_TTL = 60 * 60 * 1000; // 1 hour
+  try {
+    const response = await fetch('downloads.json');
+    if (!response.ok) throw new Error('downloads.json not found');
 
-  /**
-   * Update UI with release data
-   */
-  function applyReleaseData(release) {
-    const assets = release.assets || [];
+    const data = await response.json();
 
     // Update version display
-    if (release.tag_name) {
+    if (data.tag) {
       const versionEl = document.getElementById('downloads-version');
       if (versionEl) {
-        versionEl.textContent = `${release.tag_name} · Apache-2.0 License`;
-      }
-    }
-
-    // Build a map of format -> download URL
-    const urlMap = {};
-    for (const asset of assets) {
-      for (const [format, pattern] of Object.entries(formatToPattern)) {
-        if (pattern.test(asset.name) && !urlMap[format]) {
-          urlMap[format] = asset.browser_download_url;
-        }
+        versionEl.textContent = `${data.tag} · Apache-2.0 License`;
       }
     }
 
     // Update download buttons
-    document.querySelectorAll('.download-format-btn[data-format]').forEach(btn => {
+    document.querySelectorAll('.download-format-btn[data-format]').forEach((btn) => {
       const format = btn.getAttribute('data-format');
-      if (urlMap[format]) {
-        btn.href = urlMap[format];
+      const url = data.assets?.[format];
+
+      if (url) {
+        btn.href = url;
         btn.classList.remove('download-format-unavailable');
       } else {
-        // Mark as unavailable if no matching asset found
+        // Mark as unavailable if no URL for this format
         btn.classList.add('download-format-unavailable');
       }
     });
-  }
-
-  // Try to use cached data first
-  try {
-    const cached = localStorage.getItem(CACHE_KEY);
-    if (cached) {
-      const { data, timestamp } = JSON.parse(cached);
-      if (Date.now() - timestamp < CACHE_TTL) {
-        applyReleaseData(data);
-        return;
-      }
-    }
-  } catch (e) {
-    // localStorage might be unavailable or corrupted
-  }
-
-  // Fetch fresh data from GitHub API
-  try {
-    const response = await fetch(API_URL);
-    if (!response.ok) throw new Error('Failed to fetch release');
-
-    const release = await response.json();
-    applyReleaseData(release);
-
-    // Cache the result
-    try {
-      localStorage.setItem(CACHE_KEY, JSON.stringify({
-        data: release,
-        timestamp: Date.now()
-      }));
-    } catch (e) {
-      // localStorage might be full or unavailable
-    }
-
   } catch (error) {
-    console.warn('Could not fetch release info:', error.message);
+    console.warn('Could not load downloads.json:', error.message);
     // Buttons keep their fallback href (GitHub releases page)
   }
 }

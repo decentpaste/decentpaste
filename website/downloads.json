@@ -1,0 +1,13 @@
+{
+  "version": "0.1.0",
+  "tag": "v0.1.0",
+  "assets": {
+    "exe": "https://github.com/decentpaste/decentpaste/releases/download/v0.1.0/DecentPaste_0.1.0_x64-setup.exe",
+    "msi": "https://github.com/decentpaste/decentpaste/releases/download/v0.1.0/DecentPaste_0.1.0_x64_en-US.msi",
+    "appimage": "https://github.com/decentpaste/decentpaste/releases/download/v0.1.0/DecentPaste_0.1.0_amd64.AppImage",
+    "deb": "https://github.com/decentpaste/decentpaste/releases/download/v0.1.0/DecentPaste_0.1.0_amd64.deb",
+    "rpm": "https://github.com/decentpaste/decentpaste/releases/download/v0.1.0/DecentPaste-0.1.0-1.x86_64.rpm",
+    "dmg-arm": "https://github.com/decentpaste/decentpaste/releases/download/v0.1.0/DecentPaste_0.1.0_aarch64.dmg",
+    "dmg-intel": "https://github.com/decentpaste/decentpaste/releases/download/v0.1.0/DecentPaste_0.1.0_x64.dmg"
+  }
+}
