@@ -27,6 +27,7 @@ decentpaste-app/
 │   ├── app.ts              # Main UI (Dashboard, Peers, History, Settings)
 │   ├── api/commands.ts     # Tauri command wrappers
 │   ├── api/events.ts       # Event listeners
+│   ├── api/updater.ts      # Auto-update logic
 │   └── state/store.ts      # Reactive state
 └── src-tauri/src/          # Backend (Rust)
     ├── lib.rs              # App initialization
@@ -53,6 +54,7 @@ decentpaste-app/
 | `src-tauri/src/network/swarm.rs` | libp2p network manager                        |
 | `src/app.ts`                     | All frontend UI in one file                   |
 | `src/api/types.ts`               | TypeScript interfaces                         |
+| `src/api/updater.ts`             | Auto-update check and install logic           |
 
 ## How Clipboard Sync Works
 
@@ -105,6 +107,34 @@ When you unpair a device:
 2. A `RefreshPeer` command is sent to NetworkManager
 3. If the peer is still on the network, it's re-emitted as a discovered peer
 4. No app restart required to pair again
+
+## Auto-Updates (Desktop Only)
+
+DecentPaste uses Tauri's updater plugin with GitHub Releases as the distribution backend.
+
+### How it works:
+1. App checks for updates every **60 seconds** (fetches `latest.json` from GitHub Releases)
+2. If update available → orange badge on Settings nav + "Update available!" card
+3. User clicks "Download & Install" → progress bar shows download
+4. Download complete → app restarts and applies update
+
+### Key files:
+- `src/api/updater.ts` - Frontend update logic (check, download, install)
+- `src-tauri/tauri.conf.json` - Updater config (pubkey, endpoints)
+- `.github/workflows/release.yml` - CI/CD for building signed releases
+
+### Release process:
+```bash
+# Bump version in tauri.conf.json and package.json
+git tag v0.2.0
+git push origin main --tags
+# GitHub Action builds, signs, and publishes to Releases
+```
+
+### Security:
+- All artifacts are signed with a private key (stored in GitHub Secrets)
+- App verifies signature using embedded public key before installing
+- HTTPS enforced in production
 
 ## Common Tasks
 

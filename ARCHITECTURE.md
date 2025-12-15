@@ -16,6 +16,7 @@ macOS, Linux, Android, iOS).
 - **Secure clipboard sync** with AES-256-GCM encryption
 - **PIN-based device pairing** for security
 - **Automatic clipboard synchronization** when devices are paired
+- **Auto-updates** via GitHub Releases (desktop only)
 
 ### Technology Stack
 
@@ -34,6 +35,9 @@ decentpaste/
 ├── Cargo.toml                    # Workspace root
 ├── Cargo.lock
 ├── ARCHITECTURE.md               # This file
+├── .github/
+│   └── workflows/
+│       └── release.yml           # CI/CD for building releases
 └── decentpaste-app/              # Main Tauri application
     ├── package.json              # Frontend dependencies
     ├── tsconfig.json
@@ -47,7 +51,8 @@ decentpaste/
     │   ├── api/
     │   │   ├── types.ts          # TypeScript interfaces
     │   │   ├── commands.ts       # Tauri command wrappers
-    │   │   └── events.ts         # Event listener management
+    │   │   ├── events.ts         # Event listener management
+    │   │   └── updater.ts        # Auto-update logic
     │   ├── state/
     │   │   └── store.ts          # Reactive state store
     │   ├── components/
@@ -457,6 +462,41 @@ When a paired device is unpaired:
 5. Frontend updates and shows the device in the "Discovered Devices" section
 6. User can pair with the device again immediately without restart
 
+### Auto-Updates
+
+DecentPaste supports automatic updates on desktop platforms using Tauri's updater plugin with GitHub Releases.
+
+**Update Flow:**
+1. App checks `latest.json` from GitHub Releases every 60 seconds
+2. If new version available, orange badge appears on Settings nav
+3. User sees "Update available!" card with version info and release notes
+4. User clicks "Download & Install" → progress bar shows download progress
+5. Download completes → app restarts automatically to apply update
+
+**Architecture:**
+- `src/api/updater.ts` - Frontend update logic (check, download, install, progress tracking)
+- `src-tauri/tauri.conf.json` - Updater configuration (public key, endpoints)
+- `.github/workflows/release.yml` - CI/CD workflow for building signed releases
+
+**Security:**
+- All release artifacts are cryptographically signed with a private key
+- App verifies signatures using embedded public key before installing
+- HTTPS enforced in production mode
+- Private key stored as GitHub Secret, never committed to repo
+
+**Release Process:**
+```bash
+# 1. Bump version in tauri.conf.json and package.json
+# 2. Create and push git tag
+git tag v0.2.0
+git push origin main --tags
+# 3. GitHub Action automatically:
+#    - Builds for Windows, macOS (Intel + ARM), Linux
+#    - Signs all artifacts
+#    - Generates latest.json
+#    - Publishes to GitHub Releases
+```
+
 ---
 
 ## Configuration Files
@@ -466,6 +506,7 @@ When a paired device is unpaired:
 - App metadata (name, version, identifier)
 - Window configuration (size, title)
 - Build commands
+- Updater configuration (public key, endpoints, install mode)
 
 ### `src-tauri/capabilities/default.json`
 
@@ -550,6 +591,8 @@ yarn build
 - `tauri` v2 - Application framework
 - `libp2p` v0.56 - P2P networking
 - `tauri-plugin-clipboard-manager` v2 - Cross-platform clipboard (including mobile)
+- `tauri-plugin-updater` v2 - Auto-updates for desktop
+- `tauri-plugin-process` v2 - App restart after update
 - `aes-gcm` v0.10 - AES-256-GCM encryption
 - `x25519-dalek` v2 - X25519 ECDH key exchange
 - `tokio` v1 - Async runtime
@@ -558,5 +601,7 @@ yarn build
 
 - `@tauri-apps/api` v2 - Tauri JavaScript API
 - `@tauri-apps/plugin-clipboard-manager` v2 - Clipboard access for mobile
+- `@tauri-apps/plugin-updater` v2 - Auto-update UI
+- `@tauri-apps/plugin-process` v2 - App restart
 - `tailwindcss` v4 - CSS framework
 - `lucide` - Icons (inline SVGs)

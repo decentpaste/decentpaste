@@ -25,10 +25,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // Check for updates silently on startup (with delay to not block initialization)
-  setTimeout(() => {
+  // Periodic update check every minute (all platforms)
+  const checkUpdatesQuietly = () => {
     checkForUpdates().catch((e) => {
-      console.error('Failed to check for updates on startup:', e);
+      // Silently fail if offline - user can manually check in Settings
+      console.debug('Update check failed (offline?):', e);
     });
-  }, 3000);
+  };
+
+  // Initial check after 10 seconds (let app fully initialize)
+  setTimeout(checkUpdatesQuietly, 10000);
+
+  // Then check every minute
+  setInterval(checkUpdatesQuietly, 60000);
 });
