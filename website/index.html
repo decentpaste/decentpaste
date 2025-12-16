@@ -8,25 +8,41 @@
       name="description"
       content="Seamlessly share your clipboard between Windows, Mac, Linux, Android, and iOS. End-to-end encrypted, decentralized, and completely private."
     />
+    <meta
+      name="keywords"
+      content="clipboard sync, universal clipboard, cross-platform clipboard, clipboard sharing, P2P clipboard, encrypted clipboard, Windows Mac clipboard, clipboard manager, AirDrop clipboard, local network sync"
+    />
+    <meta name="author" content="DecentPaste" />
+    <meta name="robots" content="index, follow" />
+    <meta name="theme-color" content="#0a0a0b" />
+
+    <!-- Canonical URL -->
+    <link rel="canonical" href="https://decentpaste.app/" />
 
     <!-- Open Graph -->
-    <meta property="og:title" content="DecentPaste - Universal Clipboard" />
+    <meta property="og:title" content="DecentPaste - Universal Clipboard for Every Device" />
     <meta
       property="og:description"
-      content="Share your clipboard across all devices. No cloud. End-to-end encrypted."
+      content="Seamlessly share your clipboard between Windows, Mac, Linux, Android, and iOS. End-to-end encrypted, decentralized, and completely private."
     />
     <meta property="og:image" content="https://decentpaste.app/assets/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="DecentPaste - Universal Clipboard for Every Device" />
     <meta property="og:url" content="https://decentpaste.app" />
     <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="DecentPaste" />
+    <meta property="og:locale" content="en_US" />
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="DecentPaste - Universal Clipboard" />
+    <meta name="twitter:title" content="DecentPaste - Universal Clipboard for Every Device" />
     <meta
       name="twitter:description"
-      content="Share your clipboard across all devices. No cloud. End-to-end encrypted."
+      content="Seamlessly share your clipboard between Windows, Mac, Linux, Android, and iOS. End-to-end encrypted, decentralized, and completely private."
     />
     <meta name="twitter:image" content="https://decentpaste.app/assets/og-image.png" />
+    <meta name="twitter:image:alt" content="DecentPaste - Universal Clipboard for Every Device" />
 
     <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="assets/logo_dark.svg" />
@@ -90,8 +106,112 @@
 
     <!-- Custom Styles -->
     <link rel="stylesheet" href="styles.css" />
+
+    <!-- Structured Data (JSON-LD) -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "DecentPaste",
+        "description": "Seamlessly share your clipboard between Windows, Mac, Linux, Android, and iOS. End-to-end encrypted, decentralized, and completely private.",
+        "url": "https://decentpaste.app",
+        "applicationCategory": "UtilitiesApplication",
+        "operatingSystem": "Windows, macOS, Linux, Android, iOS",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "author": {
+          "@type": "Organization",
+          "name": "DecentPaste",
+          "url": "https://github.com/decentpaste"
+        },
+        "license": "https://opensource.org/licenses/Apache-2.0",
+        "softwareVersion": "Latest",
+        "downloadUrl": "https://github.com/decentpaste/decentpaste/releases/latest",
+        "screenshot": "https://decentpaste.app/assets/og-image.png",
+        "featureList": [
+          "Cross-platform clipboard sync",
+          "End-to-end encryption (AES-256-GCM)",
+          "Peer-to-peer networking",
+          "No cloud servers required",
+          "Local network discovery (mDNS)",
+          "Secure device pairing (X25519 ECDH)",
+          "Open source (Apache-2.0)"
+        ],
+        "keywords": "clipboard sync, universal clipboard, cross-platform, P2P, encrypted, privacy"
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "DecentPaste",
+        "url": "https://decentpaste.app",
+        "description": "Universal clipboard sharing for every device - end-to-end encrypted and decentralized",
+        "potentialAction": {
+          "@type": "SearchAction",
+          "target": "https://decentpaste.app/#downloads",
+          "query-input": "required name=search_term_string"
+        }
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "How does DecentPaste work without a cloud server?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "DecentPaste uses libp2p for peer-to-peer networking. Devices discover each other on your local network using mDNS (multicast DNS). Once paired, they communicate directly without any intermediary server. Your clipboard data stays on your network."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Is my clipboard data really secure?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes! All clipboard content is encrypted with AES-256-GCM before transmission. The encryption keys are derived using X25519 ECDH key exchange during pairing - the shared secret is mathematically derived on both devices and never transmitted over the network."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Does it work when I'm not on my home network?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Currently, DecentPaste only works when devices are on the same local network. This is by design for privacy - your data never leaves your network. We may add an optional encrypted relay in the future for cross-network sync."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What types of content can I sync?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Currently, DecentPaste supports text content only. Image and file syncing are on our roadmap. For now, you can copy text, URLs, code snippets, and any other text-based content."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Is DecentPaste really free?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes, 100% free and open source under the Apache-2.0 license. No premium tiers, no subscriptions, no ads. Since there's no cloud infrastructure, there are no ongoing costs to pass on to users."
+            }
+          }
+        ]
+      }
+    </script>
   </head>
   <body class="font-sans antialiased bg-[#0a0a0b] text-white overflow-x-hidden">
+    <!-- Skip to main content link for accessibility -->
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:bg-teal-600 focus:text-white focus:px-4 focus:py-2 focus:rounded-lg">
+      Skip to main content
+    </a>
+
     <!-- Gradient Background Orbs -->
     <div class="fixed inset-0 -z-10 overflow-hidden">
       <div
@@ -106,15 +226,17 @@
     </div>
 
     <!-- Navigation -->
-    <nav id="navbar" class="fixed top-0 w-full z-50 transition-all duration-500">
+    <nav id="navbar" class="fixed top-0 w-full z-50 transition-all duration-500" role="navigation" aria-label="Main navigation">
       <div class="max-w-6xl mx-auto px-6 lg:px-8">
         <div class="flex justify-between h-20 items-center">
           <!-- Logo -->
-          <a href="#" class="flex items-center gap-3 group">
+          <a href="#" class="flex items-center gap-3 group" aria-label="DecentPaste home">
             <img
               src="assets/logo_dark.svg"
-              alt="DecentPaste"
+              alt="DecentPaste logo"
               class="h-12 w-12 transition-transform duration-300 group-hover:scale-110"
+              width="48"
+              height="48"
             />
             <span class="font-bold text-xl tracking-tight">DecentPaste</span>
           </a>
@@ -142,7 +264,7 @@
             <a
               href="https://github.com/decentpaste/decentpaste"
               target="_blank"
-              rel="noopener"
+              rel="noopener noreferrer"
               class="text-white/60 hover:text-white transition-colors duration-300 text-sm font-medium flex items-center gap-1.5"
             >
               <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
@@ -158,7 +280,9 @@
           <button
             id="mobile-menu-btn"
             class="md:hidden p-2 rounded-xl hover:bg-white/10 transition-colors"
-            aria-label="Open menu"
+            aria-label="Toggle navigation menu"
+            aria-expanded="false"
+            aria-controls="mobile-menu"
           >
             <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path id="menu-icon-open" stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
@@ -190,7 +314,7 @@
           <a
             href="https://github.com/decentpaste/decentpaste"
             target="_blank"
-            rel="noopener"
+            rel="noopener noreferrer"
             class="block py-2 text-white/60 hover:text-white transition-colors font-medium"
             >GitHub</a
           >
@@ -198,8 +322,10 @@
       </div>
     </nav>
 
-    <!-- Hero Section -->
-    <section id="hero" class="relative min-h-screen flex items-center justify-center pt-20">
+    <!-- Main Content -->
+    <main id="main-content" role="main">
+      <!-- Hero Section -->
+      <section id="hero" class="relative min-h-screen flex items-center justify-center pt-20" aria-label="Hero">
       <!-- Interactive P2P Network Graph -->
       <div
         id="network-graph-container"
@@ -262,7 +388,7 @@
           <a
             href="https://github.com/decentpaste/decentpaste/releases"
             target="_blank"
-            rel="noopener"
+            rel="noopener noreferrer"
             class="cta-button cta-secondary"
           >
             <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -320,12 +446,13 @@
     </section>
 
     <!-- Features Section -->
-    <section id="features" class="py-32 relative">
+    <section id="features" class="py-32 relative" aria-labelledby="features-heading">
       <div class="max-w-6xl mx-auto px-6 lg:px-8">
         <!-- Section Header -->
         <div class="text-center mb-20">
           <p class="text-teal-400 text-sm font-semibold tracking-widest uppercase mb-4 fade-in-up">Features</p>
           <h2
+            id="features-heading"
             class="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tighter mb-6 fade-in-up"
             style="animation-delay: 0.1s"
           >
@@ -477,12 +604,13 @@
     </section>
 
     <!-- How It Works Section -->
-    <section id="how-it-works" class="py-32 relative">
+    <section id="how-it-works" class="py-32 relative" aria-labelledby="how-it-works-heading">
       <div class="max-w-6xl mx-auto px-6 lg:px-8">
         <!-- Section Header -->
         <div class="text-center mb-20">
           <p class="text-teal-400 text-sm font-semibold tracking-widest uppercase mb-4 fade-in-up">How It Works</p>
           <h2
+            id="how-it-works-heading"
             class="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tighter mb-6 fade-in-up"
             style="animation-delay: 0.1s"
           >
@@ -592,12 +720,13 @@
     </section>
 
     <!-- Downloads Section -->
-    <section id="downloads" class="py-32 relative">
+    <section id="downloads" class="py-32 relative" aria-labelledby="downloads-heading">
       <div class="max-w-6xl mx-auto px-6 lg:px-8">
         <!-- Section Header -->
         <div class="text-center mb-20">
           <p class="text-teal-400 text-sm font-semibold tracking-widest uppercase mb-4 fade-in-up">Downloads</p>
           <h2
+            id="downloads-heading"
             class="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tighter mb-6 fade-in-up"
             style="animation-delay: 0.1s"
           >
@@ -855,7 +984,7 @@
               <a
                 href="https://github.com/decentpaste/decentpaste/releases"
                 target="_blank"
-                rel="noopener"
+                rel="noopener noreferrer"
                 class="download-format-btn download-format-secondary"
               >
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -875,12 +1004,12 @@
     </section>
 
     <!-- FAQ Section -->
-    <section id="faq" class="py-32 relative">
+    <section id="faq" class="py-32 relative" aria-labelledby="faq-heading">
       <div class="max-w-3xl mx-auto px-6 lg:px-8">
         <!-- Section Header -->
         <div class="text-center mb-16">
           <p class="text-teal-400 text-sm font-semibold tracking-widest uppercase mb-4 fade-in-up">FAQ</p>
-          <h2 class="text-4xl md:text-5xl font-bold tracking-tighter mb-6 fade-in-up" style="animation-delay: 0.1s">
+          <h2 id="faq-heading" class="text-4xl md:text-5xl font-bold tracking-tighter mb-6 fade-in-up" style="animation-delay: 0.1s">
             Questions?<br /><span class="text-white/50">We've got answers.</span>
           </h2>
         </div>
@@ -1004,7 +1133,7 @@
     </section>
 
     <!-- CTA Section -->
-    <section class="py-32 relative">
+    <section class="py-32 relative" aria-label="Call to action">
       <div class="max-w-4xl mx-auto px-6 lg:px-8 text-center">
         <h2 class="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tighter mb-6 fade-in-up">
           Ready to <span class="gradient-text">sync</span>?
@@ -1026,7 +1155,7 @@
           <a
             href="https://github.com/decentpaste/decentpaste"
             target="_blank"
-            rel="noopener"
+            rel="noopener noreferrer"
             class="cta-button cta-secondary"
           >
             <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
@@ -1039,14 +1168,15 @@
         </div>
       </div>
     </section>
+    </main>
 
     <!-- Footer -->
-    <footer class="py-12 border-t border-white/10">
+    <footer class="py-12 border-t border-white/10" role="contentinfo">
       <div class="max-w-6xl mx-auto px-6 lg:px-8">
         <div class="flex flex-col md:flex-row justify-between items-center gap-6">
           <!-- Logo -->
           <div class="flex items-center gap-3">
-            <img src="assets/logo_dark.svg" alt="DecentPaste" class="h-10 w-10" />
+            <img src="assets/logo_dark.svg" alt="DecentPaste logo" class="h-10 w-10" width="40" height="40" />
             <span class="font-semibold">DecentPaste</span>
           </div>
 
@@ -1055,28 +1185,28 @@
             <a
               href="https://github.com/decentpaste/decentpaste"
               target="_blank"
-              rel="noopener"
+              rel="noopener noreferrer"
               class="hover:text-white transition-colors"
               >GitHub</a
             >
             <a
               href="https://github.com/decentpaste/decentpaste#readme"
               target="_blank"
-              rel="noopener"
+              rel="noopener noreferrer"
               class="hover:text-white transition-colors"
               >Documentation</a
             >
             <a
               href="https://github.com/decentpaste/decentpaste/issues"
               target="_blank"
-              rel="noopener"
+              rel="noopener noreferrer"
               class="hover:text-white transition-colors"
               >Report Issue</a
             >
             <a
               href="https://github.com/decentpaste/decentpaste/blob/main/LICENSE"
               target="_blank"
-              rel="noopener"
+              rel="noopener noreferrer"
               class="hover:text-white transition-colors"
               >Apache-2.0 License</a
             >
