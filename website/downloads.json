@@ -8,6 +8,7 @@
     "deb": "https://github.com/decentpaste/decentpaste/releases/download/v0.1.0/DecentPaste_0.1.0_amd64.deb",
     "rpm": "https://github.com/decentpaste/decentpaste/releases/download/v0.1.0/DecentPaste-0.1.0-1.x86_64.rpm",
     "dmg-arm": "https://github.com/decentpaste/decentpaste/releases/download/v0.1.0/DecentPaste_0.1.0_aarch64.dmg",
-    "dmg-intel": "https://github.com/decentpaste/decentpaste/releases/download/v0.1.0/DecentPaste_0.1.0_x64.dmg"
+    "dmg-intel": "https://github.com/decentpaste/decentpaste/releases/download/v0.1.0/DecentPaste_0.1.0_x64.dmg",
+    "apk": "https://github.com/decentpaste/decentpaste/releases/download/v0.1.0/DecentPaste_0.1.0.apk"
   }
 }
