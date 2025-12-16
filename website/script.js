@@ -844,6 +844,75 @@ function initSmoothScroll() {
 }
 
 // =============================================================================
+// Download Analytics
+// =============================================================================
+
+/**
+ * Track download button clicks with Amplitude
+ * Sends custom events with platform, format, and version details
+ */
+function initDownloadTracking() {
+  // Map format codes to platform names for cleaner analytics
+  const formatToPlatform = {
+    exe: 'Windows',
+    msi: 'Windows',
+    'dmg-arm': 'macOS',
+    'dmg-intel': 'macOS',
+    appimage: 'Linux',
+    deb: 'Linux',
+    rpm: 'Linux',
+    apk: 'Android',
+  };
+
+  // Format display names
+  const formatNames = {
+    exe: 'EXE Installer',
+    msi: 'MSI Installer',
+    'dmg-arm': 'DMG (Apple Silicon)',
+    'dmg-intel': 'DMG (Intel)',
+    appimage: 'AppImage',
+    deb: 'DEB Package',
+    rpm: 'RPM Package',
+    apk: 'APK',
+  };
+
+  document.querySelectorAll('.download-format-btn[data-format]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const format = btn.getAttribute('data-format');
+      const platform = formatToPlatform[format] || 'Unknown';
+      const formatName = formatNames[format] || format;
+
+      // Get version from the page if available
+      const versionEl = document.getElementById('downloads-version');
+      const versionText = versionEl?.textContent || '';
+      const versionMatch = versionText.match(/v[\d.]+/);
+      const version = versionMatch ? versionMatch[0] : 'unknown';
+
+      // Track with Amplitude if available
+      if (window.amplitude) {
+        window.amplitude.track('Download Clicked', {
+          platform: platform,
+          format: format,
+          format_name: formatName,
+          version: version,
+        });
+      }
+    });
+  });
+
+  // Also track clicks on the main CTA download buttons
+  document.querySelectorAll('a[href="#downloads"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (window.amplitude) {
+        window.amplitude.track('Download CTA Clicked', {
+          location: btn.closest('section')?.id || 'unknown',
+        });
+      }
+    });
+  });
+}
+
+// =============================================================================
 // Initialization
 // =============================================================================
 
@@ -855,4 +924,5 @@ document.addEventListener('DOMContentLoaded', () => {
   initNavbarScroll();
   initScrollAnimations();
   initSmoothScroll();
+  initDownloadTracking();
 });
