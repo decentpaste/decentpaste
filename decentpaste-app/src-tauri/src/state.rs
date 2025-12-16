@@ -6,6 +6,13 @@ use crate::network::{DiscoveredPeer, NetworkCommand, NetworkStatus};
 use crate::security::PairingSession;
 use crate::storage::{AppSettings, DeviceIdentity, PairedPeer};
 
+/// Clipboard content received while app was in background (Android)
+#[derive(Debug, Clone)]
+pub struct PendingClipboard {
+    pub content: String,
+    pub from_device: String,
+}
+
 pub struct AppState {
     pub device_identity: Arc<RwLock<Option<DeviceIdentity>>>,
     pub settings: Arc<RwLock<AppSettings>>,
@@ -16,6 +23,11 @@ pub struct AppState {
     pub pairing_sessions: Arc<RwLock<Vec<PairingSession>>>,
     pub network_command_tx: Arc<RwLock<Option<mpsc::Sender<NetworkCommand>>>>,
     pub last_clipboard_hash: Arc<RwLock<Option<String>>>,
+    /// Clipboard content received while app was in background (Android only)
+    /// This is processed when app resumes to foreground
+    pub pending_clipboard: Arc<RwLock<Option<PendingClipboard>>>,
+    /// Whether the app is currently in foreground (tracked for mobile)
+    pub is_foreground: Arc<RwLock<bool>>,
 }
 
 impl AppState {
@@ -30,6 +42,8 @@ impl AppState {
             pairing_sessions: Arc::new(RwLock::new(Vec::new())),
             network_command_tx: Arc::new(RwLock::new(None)),
             last_clipboard_hash: Arc::new(RwLock::new(None)),
+            pending_clipboard: Arc::new(RwLock::new(None)),
+            is_foreground: Arc::new(RwLock::new(true)), // Assume foreground at start
         }
     }
 

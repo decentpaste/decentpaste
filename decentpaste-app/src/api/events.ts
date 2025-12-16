@@ -11,6 +11,12 @@ import type {
   PeerNameUpdatedPayload,
 } from './types';
 
+/** Payload for clipboard synced while app was in background (Android) */
+export interface ClipboardSyncedFromBackgroundPayload {
+  content: string;
+  fromDevice: string;
+}
+
 export type EventHandler<T> = (payload: T) => void;
 
 interface EventListeners {
@@ -25,6 +31,7 @@ interface EventListeners {
   clipboardReceived: EventHandler<ClipboardEntry>[];
   clipboardSent: EventHandler<ClipboardEntry>[];
   clipboardBroadcast: EventHandler<ClipboardBroadcastPayload>[];
+  clipboardSyncedFromBackground: EventHandler<ClipboardSyncedFromBackgroundPayload>[];
   networkError: EventHandler<string>[];
   appMinimizedToTray: EventHandler<void>[];
 }
@@ -42,6 +49,7 @@ class EventManager {
     clipboardReceived: [],
     clipboardSent: [],
     clipboardBroadcast: [],
+    clipboardSyncedFromBackground: [],
     networkError: [],
     appMinimizedToTray: [],
   };
@@ -82,6 +90,9 @@ class EventManager {
       }),
       listen<ClipboardBroadcastPayload>('clipboard-broadcast', (e) => {
         this.listeners.clipboardBroadcast.forEach((fn) => fn(e.payload));
+      }),
+      listen<ClipboardSyncedFromBackgroundPayload>('clipboard-synced-from-background', (e) => {
+        this.listeners.clipboardSyncedFromBackground.forEach((fn) => fn(e.payload));
       }),
       listen<string>('network-error', (e) => {
         this.listeners.networkError.forEach((fn) => fn(e.payload));

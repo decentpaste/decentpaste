@@ -201,12 +201,48 @@ All UI is in `src/app.ts`. Key methods:
 5. **Why shared secret per pair?** Each device pair has unique encryption key
 6. **Why X25519 ECDH?** Industry-standard key exchange - shared secret derived, never transmitted
 
+## Android Background Sync
+
+DecentPaste uses a **Foreground Service** to stay alive when the app is in background on Android.
+
+### How it works:
+1. **Foreground Service** (`ClipboardSyncService.kt`) starts when app launches
+2. Shows persistent notification: "Syncing clipboard in background"
+3. Keeps libp2p network connections alive via wake lock
+4. When clipboard received in background → shows notification with content preview
+5. User taps notification or opens app → clipboard is copied automatically
+
+### Key files:
+- `src-tauri/gen/android/app/src/main/java/com/decentpaste/application/ClipboardSyncService.kt`
+- `src-tauri/gen/android/app/src/main/java/com/decentpaste/application/MainActivity.kt`
+- `src-tauri/gen/android/app/src/main/AndroidManifest.xml` (permissions & service registration)
+- `src-tauri/src/lib.rs` (Rust-side background detection and pending clipboard handling)
+- `src-tauri/src/state.rs` (`PendingClipboard` struct and `is_foreground` tracking)
+
+### Android Permissions Added:
+- `FOREGROUND_SERVICE` - Required for foreground services
+- `FOREGROUND_SERVICE_DATA_SYNC` - Service type for data synchronization
+- `POST_NOTIFICATIONS` - Show notifications (Android 13+)
+- `WAKE_LOCK` - Prevent CPU sleep during sync
+
+### Clipboard Background Limitation:
+**Android 10+ blocks clipboard access in background.** When clipboard arrives while app is backgrounded:
+1. Content is queued in `AppState.pending_clipboard`
+2. Notification is shown via `tauri-plugin-notification`
+3. When app resumes (`RunEvent::Resumed`), pending clipboard is copied
+4. Frontend receives `clipboard-synced-from-background` event
+
+### Events:
+- `clipboard-synced-from-background` - Emitted when pending clipboard is copied on resume
+  - Payload: `{ content: string, fromDevice: string }`
+
 ## Current Limitations
 
 - **Text only** - No image/file support yet
 - **Local network only** - mDNS doesn't work across networks
 - **In-memory history** - Not persisted to disk
-- **Mobile clipboard** - Auto-monitoring disabled on Android/iOS; use "Share Clipboard" button on Dashboard
+- **Mobile clipboard (outgoing)** - Auto-monitoring disabled on Android/iOS; use "Share Clipboard" button
+- **Mobile clipboard (incoming)** - Can receive in background via foreground service, but actual copy happens on resume due to Android 10+ restrictions
 - **Plaintext storage** - Shared secrets stored in JSON without OS keychain integration
 
 ## Testing
