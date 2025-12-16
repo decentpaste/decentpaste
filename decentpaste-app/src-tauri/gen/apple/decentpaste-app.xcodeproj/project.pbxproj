@@ -24,6 +24,7 @@
 
 /* Begin PBXFileReference section */
 		07E2D11B4F24FF993859938C /* mod.rs */ = {isa = PBXFileReference; path = mod.rs; sourceTree = "<group>"; };
+		11821692930D149FC3D8AE2E /* tray.rs */ = {isa = PBXFileReference; path = tray.rs; sourceTree = "<group>"; };
 		2293A3279BDD6DE41EB6FF08 /* decentpaste-app_iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "decentpaste-app_iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		23702B157D56416ABF3B0ED7 /* libapp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libapp.a; sourceTree = "<group>"; };
 		2EAF5943D5981F47FCCFB187 /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
@@ -159,6 +160,7 @@
 				714279E881D82580BE05D43B /* lib.rs */,
 				46698915114DABAD96443544 /* main.rs */,
 				C3545C7688133A7AB857CD1A /* state.rs */,
+				11821692930D149FC3D8AE2E /* tray.rs */,
 				DF3EF38AD1897FD42579CEAC /* clipboard */,
 				B917936FEE71FF8B28661BF7 /* network */,
 				4E5833151E2F214541D2130F /* security */,
@@ -345,8 +347,8 @@
 				);
 				"LIBRARY_SEARCH_PATHS[arch=arm64]" = "$(inherited) $(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME) $(TOOLCHAIN_DIR)/usr/lib/swift-5.0/$(PLATFORM_NAME)";
 				"LIBRARY_SEARCH_PATHS[arch=x86_64]" = "$(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME) $(TOOLCHAIN_DIR)/usr/lib/swift-5.0/$(PLATFORM_NAME)";
-				PRODUCT_BUNDLE_IDENTIFIER = com.decentpaste.app;
-				PRODUCT_NAME = "DecentPaste";
+				PRODUCT_BUNDLE_IDENTIFIER = com.decentpaste.application;
+				PRODUCT_NAME = DecentPaste;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VALID_ARCHS = arm64;
@@ -495,8 +497,8 @@
 				);
 				"LIBRARY_SEARCH_PATHS[arch=arm64]" = "$(inherited) $(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME) $(TOOLCHAIN_DIR)/usr/lib/swift-5.0/$(PLATFORM_NAME)";
 				"LIBRARY_SEARCH_PATHS[arch=x86_64]" = "$(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME) $(TOOLCHAIN_DIR)/usr/lib/swift-5.0/$(PLATFORM_NAME)";
-				PRODUCT_BUNDLE_IDENTIFIER = com.decentpaste.app;
-				PRODUCT_NAME = "DecentPaste";
+				PRODUCT_BUNDLE_IDENTIFIER = com.decentpaste.application;
+				PRODUCT_NAME = DecentPaste;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VALID_ARCHS = arm64;

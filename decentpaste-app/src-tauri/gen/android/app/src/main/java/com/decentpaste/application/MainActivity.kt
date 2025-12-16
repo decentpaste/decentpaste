@@ -1,4 +1,4 @@
-package com.decentpaste.app
+package com.decentpaste.application
 
 import android.os.Bundle
 import androidx.activity.enableEdgeToEdge
