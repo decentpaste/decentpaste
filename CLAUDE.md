@@ -229,8 +229,14 @@ DecentPaste uses a **Foreground Service** to stay alive when the app is in backg
 **Android 10+ blocks clipboard access in background.** When clipboard arrives while app is backgrounded:
 1. Content is queued in `AppState.pending_clipboard`
 2. Notification is shown via `tauri-plugin-notification`
-3. When app resumes (`RunEvent::Resumed`), pending clipboard is copied
-4. Frontend receives `clipboard-synced-from-background` event
+3. When app becomes visible, frontend calls `processPendingClipboard()` command
+4. Rust copies the pending content to clipboard and returns it
+5. Frontend shows toast: "Clipboard synced from {device}"
+
+### Commands:
+- `process_pending_clipboard` - Called by frontend when app becomes visible
+  - Returns: `{ content: string, from_device: string }` or `null`
+  - Copies pending clipboard and clears the queue
 
 ### Events:
 - `clipboard-synced-from-background` - Emitted when pending clipboard is copied on resume
