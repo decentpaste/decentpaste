@@ -1,16 +1,20 @@
 package com.decentpaste.application
 
+import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
 import android.util.Log
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 
 /**
  * Main activity for DecentPaste.
@@ -43,6 +47,13 @@ class MainActivity : TauriActivity() {
 
     private var serviceBound = false
 
+    // Permission launcher for Android 13+ notification permission
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        Log.d(TAG, "Notification permission granted: $isGranted")
+    }
+
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             Log.d(TAG, "Service connected")
@@ -63,11 +74,31 @@ class MainActivity : TauriActivity() {
         super.onCreate(savedInstanceState)
         Log.d(TAG, "MainActivity onCreate")
 
+        // Request notification permission on Android 13+
+        requestNotificationPermission()
+
         // Start and bind to foreground service
         startClipboardSyncService()
 
         // Handle clipboard content from notification tap
         handleClipboardIntent(intent)
+    }
+
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            when {
+                ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) == PackageManager.PERMISSION_GRANTED -> {
+                    Log.d(TAG, "Notification permission already granted")
+                }
+                else -> {
+                    Log.d(TAG, "Requesting notification permission")
+                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
+            }
+        }
     }
 
     override fun onNewIntent(intent: Intent) {

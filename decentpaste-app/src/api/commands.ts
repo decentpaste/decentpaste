@@ -30,6 +30,21 @@ export async function reconnectPeers(): Promise<void> {
   return invoke('reconnect_peers');
 }
 
+/** Response from processPendingClipboard */
+export interface PendingClipboardResponse {
+  content: string;
+  from_device: string;
+}
+
+/**
+ * Process any pending clipboard content received while app was in background.
+ * Call this when the app becomes visible on mobile.
+ * Returns the pending clipboard if any was waiting, null otherwise.
+ */
+export async function processPendingClipboard(): Promise<PendingClipboardResponse | null> {
+  return invoke('process_pending_clipboard');
+}
+
 // Peer management
 export async function getDiscoveredPeers(): Promise<DiscoveredPeer[]> {
   return invoke('get_discovered_peers');

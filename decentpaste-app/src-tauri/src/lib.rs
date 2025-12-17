@@ -78,6 +78,7 @@ pub fn run() {
             commands::start_network,
             commands::stop_network,
             commands::reconnect_peers,
+            commands::process_pending_clipboard,
             commands::get_discovered_peers,
             commands::get_paired_peers,
             commands::remove_paired_peer,
@@ -100,7 +101,7 @@ pub fn run() {
             // Handle app lifecycle events (especially for mobile)
             match event {
                 tauri::RunEvent::Resumed => {
-                    info!("App resumed from background");
+                    info!("App resumed from background (RunEvent::Resumed)");
                     let state = app_handle.state::<AppState>();
                     let app_handle_clone = app_handle.clone();
 
@@ -110,10 +111,13 @@ pub fn run() {
                     let pending_clipboard = state.pending_clipboard.clone();
 
                     tauri::async_runtime::spawn(async move {
+                        info!("Resume async task started");
+
                         // Set foreground state
                         {
                             let mut fg = is_foreground.write().await;
                             *fg = true;
+                            info!("Foreground state set to true");
                         }
 
                         // Reconnect to peers
@@ -127,8 +131,11 @@ pub fn run() {
                         // Process pending clipboard (Android background sync)
                         #[cfg(target_os = "android")]
                         {
+                            info!("Checking for pending clipboard...");
                             let pending = {
                                 let mut p = pending_clipboard.write().await;
+                                let has_pending = p.is_some();
+                                info!("Pending clipboard present: {}", has_pending);
                                 p.take()
                             };
                             if let Some(pending) = pending {
@@ -153,7 +160,15 @@ pub fn run() {
                                         }),
                                     );
                                 }
+                            } else {
+                                info!("No pending clipboard to process");
                             }
+                        }
+
+                        #[cfg(not(target_os = "android"))]
+                        {
+                            let _ = pending_clipboard; // Suppress unused warning
+                            let _ = app_handle_clone;
                         }
                     });
                 }
