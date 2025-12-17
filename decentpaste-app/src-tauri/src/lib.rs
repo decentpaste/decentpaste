@@ -128,8 +128,8 @@ pub fn run() {
                             }
                         }
 
-                        // Process pending clipboard (Android background sync)
-                        #[cfg(target_os = "android")]
+                        // Process pending clipboard (mobile background sync)
+                        #[cfg(any(target_os = "android", target_os = "ios"))]
                         {
                             info!("Checking for pending clipboard...");
                             let pending = {
@@ -165,7 +165,7 @@ pub fn run() {
                             }
                         }
 
-                        #[cfg(not(target_os = "android"))]
+                        #[cfg(not(any(target_os = "android", target_os = "ios")))]
                         {
                             let _ = pending_clipboard; // Suppress unused warning
                             let _ = app_handle_clone;
@@ -173,7 +173,7 @@ pub fn run() {
                     });
                 }
 
-                #[cfg(target_os = "android")]
+                #[cfg(any(target_os = "android", target_os = "ios"))]
                 tauri::RunEvent::WindowEvent {
                     event: tauri::WindowEvent::Focused(false),
                     ..
@@ -456,6 +456,32 @@ async fn initialize_app(
                     sessions.retain(|s| !s.is_expired());
                     sessions.push(session);
 
+                    // Show notification for pairing request when app is backgrounded (mobile)
+                    // This is essential - pairing has a timeout and requires user action
+                    #[cfg(any(target_os = "android", target_os = "ios"))]
+                    {
+                        let is_foreground = *state.is_foreground.read().await;
+                        if !is_foreground {
+                            use tauri_plugin_notification::NotificationExt;
+                            info!(
+                                "App in background, showing notification for pairing request from {}",
+                                request.device_name
+                            );
+                            if let Err(e) = app_handle_network
+                                .notification()
+                                .builder()
+                                .title("Pairing Request")
+                                .body(&format!(
+                                    "{} wants to pair with this device",
+                                    request.device_name
+                                ))
+                                .show()
+                            {
+                                error!("Failed to show pairing notification: {}", e);
+                            }
+                        }
+                    }
+
                     let _ = app_handle_network.emit(
                         "pairing-request",
                         serde_json::json!({
@@ -679,11 +705,11 @@ async fn initialize_app(
                                             .await
                                             .on_received(&msg.content_hash)
                                         {
-                                            // Check if we should queue for background (Android only)
-                                            #[cfg(target_os = "android")]
+                                            // Check if we should queue for background (mobile only)
+                                            #[cfg(any(target_os = "android", target_os = "ios"))]
                                             let is_foreground =
                                                 *state.is_foreground.read().await;
-                                            #[cfg(not(target_os = "android"))]
+                                            #[cfg(not(any(target_os = "android", target_os = "ios")))]
                                             let is_foreground = true;
 
                                             if is_foreground {
@@ -697,15 +723,16 @@ async fn initialize_app(
                                                     error!("Failed to set clipboard: {}", e);
                                                 }
                                             } else {
-                                                // Android background: queue clipboard and show notification
-                                                #[cfg(target_os = "android")]
+                                                // Mobile background: queue clipboard silently (no notification)
+                                                // Clipboard will be copied when app resumes
+                                                #[cfg(any(target_os = "android", target_os = "ios"))]
                                                 {
                                                     info!(
-                                                        "App in background, queuing clipboard from {}",
+                                                        "App in background, queuing clipboard from {} (silent)",
                                                         msg.origin_device_name
                                                     );
 
-                                                    // Store pending clipboard
+                                                    // Store pending clipboard - will be processed on resume
                                                     {
                                                         let mut pending =
                                                             state.pending_clipboard.write().await;
@@ -715,30 +742,6 @@ async fn initialize_app(
                                                                 .origin_device_name
                                                                 .clone(),
                                                         });
-                                                    }
-
-                                                    // Show notification using Tauri notification plugin
-                                                    use tauri_plugin_notification::NotificationExt;
-                                                    let preview = if content.len() > 100 {
-                                                        format!("{}...", &content[..100])
-                                                    } else {
-                                                        content.clone()
-                                                    };
-
-                                                    if let Err(e) = app_handle_network
-                                                        .notification()
-                                                        .builder()
-                                                        .title(&format!(
-                                                            "Clipboard from {}",
-                                                            msg.origin_device_name
-                                                        ))
-                                                        .body(&preview)
-                                                        .show()
-                                                    {
-                                                        error!(
-                                                            "Failed to show notification: {}",
-                                                            e
-                                                        );
                                                     }
                                                 }
                                             }

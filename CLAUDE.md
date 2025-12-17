@@ -201,37 +201,49 @@ All UI is in `src/app.ts`. Key methods:
 5. **Why shared secret per pair?** Each device pair has unique encryption key
 6. **Why X25519 ECDH?** Industry-standard key exchange - shared secret derived, never transmitted
 
-## Android Background Sync
+## Mobile Background Sync (Android & iOS)
 
-DecentPaste uses a **Foreground Service** to stay alive when the app is in background on Android.
+Both Android and iOS handle background clipboard sync similarly, but with platform-specific mechanisms.
 
-### How it works:
-1. **Foreground Service** (`ClipboardSyncService.kt`) starts when app launches
-2. Shows persistent notification: "Syncing clipboard in background"
-3. Keeps libp2p network connections alive via wake lock
-4. When clipboard received in background → shows notification with content preview
-5. User taps notification or opens app → clipboard is copied automatically
+### How it works (both platforms):
+1. When clipboard received in background → **silently queued** (no notification spam)
+2. When app opens → clipboard is automatically copied
+3. **Pairing requests** show notifications (essential - has timeout, requires user action)
+
+### Platform Differences:
+
+| Aspect | Android | iOS |
+|--------|---------|-----|
+| Background execution | Foreground Service keeps app alive indefinitely | App suspended after ~30 seconds |
+| Network in background | Stays connected via wake lock | Connections drop when suspended |
+| Notification | Persistent "Syncing clipboard" notification | No persistent notification |
+
+### Android-Specific:
+- **Foreground Service** (`ClipboardSyncService.kt`) starts when app launches
+- Shows persistent notification: "Syncing clipboard in background"
+- Keeps libp2p network connections alive via wake lock
+- Permissions: `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_DATA_SYNC`, `POST_NOTIFICATIONS`, `WAKE_LOCK`
+
+### iOS-Specific:
+- No foreground service (iOS doesn't allow Android-style persistent background execution)
+- Network connections drop when app is suspended
+- When app resumes, automatically reconnects to peers
+- Background clipboard queuing works if clipboard arrives before app suspension
 
 ### Key files:
-- `src-tauri/gen/android/app/src/main/java/com/decentpaste/application/ClipboardSyncService.kt`
-- `src-tauri/gen/android/app/src/main/java/com/decentpaste/application/MainActivity.kt`
-- `src-tauri/gen/android/app/src/main/AndroidManifest.xml` (permissions & service registration)
-- `src-tauri/src/lib.rs` (Rust-side background detection and pending clipboard handling)
-- `src-tauri/src/state.rs` (`PendingClipboard` struct and `is_foreground` tracking)
+- `src-tauri/src/lib.rs` - Rust-side background detection and pending clipboard handling
+- `src-tauri/src/state.rs` - `PendingClipboard` struct and `is_foreground` tracking
+- Android: `src-tauri/gen/android/app/src/main/java/com/decentpaste/application/ClipboardSyncService.kt`
+- iOS: Uses standard Tauri lifecycle events (no native Swift code needed)
 
-### Android Permissions Added:
-- `FOREGROUND_SERVICE` - Required for foreground services
-- `FOREGROUND_SERVICE_DATA_SYNC` - Service type for data synchronization
-- `POST_NOTIFICATIONS` - Show notifications (Android 13+)
-- `WAKE_LOCK` - Prevent CPU sleep during sync
+### Clipboard Background Limitation (both platforms):
+Mobile OSes block clipboard access in background. When clipboard arrives while app is backgrounded:
+1. Content is silently queued in `AppState.pending_clipboard` (no notification)
+2. When app becomes visible, frontend calls `processPendingClipboard()` command
+3. Rust copies the pending content to clipboard and returns it
+4. Frontend shows toast: "Clipboard synced from {device}"
 
-### Clipboard Background Limitation:
-**Android 10+ blocks clipboard access in background.** When clipboard arrives while app is backgrounded:
-1. Content is queued in `AppState.pending_clipboard`
-2. Notification is shown via `tauri-plugin-notification`
-3. When app becomes visible, frontend calls `processPendingClipboard()` command
-4. Rust copies the pending content to clipboard and returns it
-5. Frontend shows toast: "Clipboard synced from {device}"
+**Pairing requests** are the exception - they DO show notifications because they require immediate user action and have a 5-minute timeout.
 
 ### Commands:
 - `process_pending_clipboard` - Called by frontend when app becomes visible
@@ -248,7 +260,7 @@ DecentPaste uses a **Foreground Service** to stay alive when the app is in backg
 - **Local network only** - mDNS doesn't work across networks
 - **In-memory history** - Not persisted to disk
 - **Mobile clipboard (outgoing)** - Auto-monitoring disabled on Android/iOS; use "Share Clipboard" button
-- **Mobile clipboard (incoming)** - Can receive in background via foreground service, but actual copy happens on resume due to Android 10+ restrictions
+- **Mobile clipboard (incoming)** - Can receive in background (Android: via foreground service; iOS: limited ~30s window), actual copy happens on resume due to OS restrictions
 - **Plaintext storage** - Shared secrets stored in JSON without OS keychain integration
 
 ## Testing
