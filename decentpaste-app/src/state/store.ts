@@ -68,6 +68,9 @@ export interface AppState {
   onboardingStep: OnboardingStep;
   onboardingDeviceName: string;
   onboardingAuthMethod: AuthMethod;
+
+  // Reset confirmation state
+  showResetConfirmation: boolean;
 }
 
 type StateListener<K extends keyof AppState> = (value: AppState[K]) => void;
@@ -112,6 +115,8 @@ class Store {
       onboardingStep: null,
       onboardingDeviceName: '',
       onboardingAuthMethod: 'pin',
+      // Reset confirmation state
+      showResetConfirmation: false,
     };
   }
 
