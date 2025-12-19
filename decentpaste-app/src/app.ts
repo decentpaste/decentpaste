@@ -297,10 +297,10 @@ class App {
         return;
       }
 
-      // Clear on exit toggle
+      // Keep history toggle (inverted: "clear on exit" checkbox = !keep_history)
       if (target.id === 'clear-on-exit-toggle') {
         const checked = (target as HTMLInputElement).checked;
-        const settings = { ...store.get('settings'), clear_history_on_exit: checked };
+        const settings = { ...store.get('settings'), keep_history: !checked };
         try {
           await commands.updateSettings(settings);
           store.set('settings', settings);
@@ -797,7 +797,7 @@ class App {
               <input
                 type="checkbox"
                 id="clear-on-exit-toggle"
-                ${settings.clear_history_on_exit ? 'checked' : ''}
+                ${!settings.keep_history ? 'checked' : ''}
                 class="checkbox"
               />
             </label>

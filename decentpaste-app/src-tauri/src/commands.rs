@@ -642,6 +642,7 @@ pub async fn get_vault_status(state: State<'_, AppState>) -> Result<VaultStatus>
 ///
 /// This creates an encrypted Stronghold vault protected by the user's PIN.
 /// The PIN is transformed via Argon2id into an encryption key.
+/// After setup, network services are started automatically.
 ///
 /// # Arguments
 /// * `device_name` - The user's chosen device name
@@ -706,13 +707,20 @@ pub async fn setup_vault(
     // Emit vault status change
     let _ = app_handle.emit("vault-status", VaultStatus::Unlocked);
 
+    // Start network and clipboard services now that vault is unlocked
+    if let Err(e) = crate::start_network_services(app_handle.clone()).await {
+        tracing::error!("Failed to start network services: {}", e);
+        // Don't fail the vault setup - services can be started later
+    }
+
     info!("Vault setup completed successfully");
     Ok(())
 }
 
 /// Unlock an existing vault with the user's PIN.
 ///
-/// On success, loads all encrypted data from the vault into app state.
+/// On success, loads all encrypted data from the vault into app state
+/// and starts network/clipboard services.
 #[tauri::command]
 pub async fn unlock_vault(
     app_handle: AppHandle,
@@ -755,6 +763,12 @@ pub async fn unlock_vault(
 
     // Emit vault status change
     let _ = app_handle.emit("vault-status", VaultStatus::Unlocked);
+
+    // Start network and clipboard services now that vault is unlocked
+    if let Err(e) = crate::start_network_services(app_handle.clone()).await {
+        tracing::error!("Failed to start network services: {}", e);
+        // Don't fail the unlock - services can be started later
+    }
 
     info!("Vault unlocked successfully");
     Ok(())
