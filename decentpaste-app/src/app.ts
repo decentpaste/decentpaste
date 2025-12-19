@@ -532,10 +532,10 @@ class App {
         return;
       }
 
-      // Keep history toggle (inverted: "clear on exit" checkbox = !keep_history)
-      if (target.id === 'clear-on-exit-toggle') {
+      // Keep history toggle (direct: checked = keep_history)
+      if (target.id === 'keep-history-toggle') {
         const checked = (target as HTMLInputElement).checked;
-        const settings = { ...store.get('settings'), keep_history: !checked };
+        const settings = { ...store.get('settings'), keep_history: checked };
         try {
           await commands.updateSettings(settings);
           store.set('settings', settings);
@@ -1047,11 +1047,14 @@ class App {
             </div>
             <div class="divider"></div>
             <label class="flex items-center justify-between p-4 cursor-pointer hover:bg-white/[0.02] transition-colors">
-              <span class="text-sm text-white/70">Clear history on exit</span>
+              <div>
+                <span class="text-sm text-white/70 block">Keep clipboard history</span>
+                <span class="text-xs text-white/40">Save history in encrypted vault</span>
+              </div>
               <input
                 type="checkbox"
-                id="clear-on-exit-toggle"
-                ${!settings.keep_history ? 'checked' : ''}
+                id="keep-history-toggle"
+                ${settings.keep_history ? 'checked' : ''}
                 class="checkbox"
               />
             </label>
