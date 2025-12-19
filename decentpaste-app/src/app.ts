@@ -173,6 +173,22 @@ class App {
         return;
       }
 
+      // Lock vault button (header)
+      const lockVaultBtn = target.closest('#btn-lock-vault') as HTMLButtonElement | null;
+      if (lockVaultBtn) {
+        lockVaultBtn.disabled = true;
+        lockVaultBtn.innerHTML = icon('loader', 20, 'animate-spin');
+        try {
+          await commands.lockVault();
+          // vaultStatus will be updated via event, triggering re-render to lock screen
+        } catch (error) {
+          store.addToast(`Failed to lock vault: ${getErrorMessage(error)}`, 'error');
+          lockVaultBtn.disabled = false;
+          lockVaultBtn.innerHTML = icon('lock', 20);
+        }
+        return;
+      }
+
       // Pairing modal buttons
       const acceptBtn = target.closest('#btn-accept-pairing') as HTMLButtonElement | null;
       if (acceptBtn) {
@@ -741,7 +757,7 @@ class App {
 
         <!-- Header -->
         <header class="relative z-10 px-4 py-1 pt-safe-top border-b" style="background: rgba(17, 17, 19, 0.8); backdrop-filter: blur(12px); border-color: rgba(255, 255, 255, 0.06);">
-          <div class="flex items-center">
+          <div class="flex items-center justify-between">
             <div class="flex items-center gap-3">
               <img src="${logoDark}" alt="DecentPaste Logo" class="w-12 h-12" />
               <div>
@@ -749,6 +765,10 @@ class App {
                 <p class="text-xs text-white/40">${state.deviceInfo?.device_name || 'Loading...'}</p>
               </div>
             </div>
+            <!-- Lock Button -->
+            <button id="btn-lock-vault" class="p-2 rounded-xl text-white/50 hover:text-teal-400 hover:bg-teal-500/10 transition-all" title="Lock vault">
+              ${icon('lock', 20)}
+            </button>
           </div>
         </header>
 
