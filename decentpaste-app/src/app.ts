@@ -24,8 +24,30 @@ class App {
     await eventManager.setup();
     this.setupEventHandlers();
 
-    // Load initial data
-    await this.loadInitialData();
+    // Check vault status first - determines what data to load
+    try {
+      const [vaultStatus, biometricAvailable] = await Promise.all([
+        commands.getVaultStatus(),
+        commands.checkBiometricAvailable(),
+      ]);
+
+      store.set('vaultStatus', vaultStatus);
+      store.set('biometricAvailable', biometricAvailable);
+
+      // Only load full app data if vault is unlocked
+      if (vaultStatus === 'Unlocked') {
+        await this.loadInitialData();
+      } else {
+        // For NotSetup/Locked states, just mark loading as complete
+        // Data will be loaded after unlock/setup via loadDataAfterUnlock()
+        store.set('isLoading', false);
+      }
+    } catch (error) {
+      console.error('Failed to check vault status:', error);
+      // Fallback: assume not setup if we can't check
+      store.set('vaultStatus', 'NotSetup');
+      store.set('isLoading', false);
+    }
 
     // Render UI
     this.render();
