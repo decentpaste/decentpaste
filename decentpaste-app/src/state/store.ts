@@ -1,5 +1,6 @@
 import type {
   AppSettings,
+  AuthMethod,
   ClipboardEntry,
   DeviceInfo,
   DiscoveredPeer,
@@ -9,9 +10,11 @@ import type {
   UpdateInfo,
   UpdateProgress,
   UpdateStatus,
+  VaultStatus,
 } from '../api/types';
 
 export type View = 'dashboard' | 'peers' | 'history' | 'settings';
+export type OnboardingStep = 'device-name' | 'auth-method' | 'pin-setup' | null;
 
 export interface Toast {
   id: string;
@@ -56,6 +59,15 @@ export interface AppState {
   updateInfo: UpdateInfo | null;
   updateProgress: UpdateProgress | null;
   updateError: string | null;
+
+  // Vault state
+  vaultStatus: VaultStatus;
+  biometricAvailable: boolean;
+
+  // Onboarding state
+  onboardingStep: OnboardingStep;
+  onboardingDeviceName: string;
+  onboardingAuthMethod: AuthMethod;
 }
 
 type StateListener<K extends keyof AppState> = (value: AppState[K]) => void;
@@ -93,6 +105,13 @@ class Store {
       updateInfo: null,
       updateProgress: null,
       updateError: null,
+      // Vault state
+      vaultStatus: 'NotSetup',
+      biometricAvailable: false,
+      // Onboarding state
+      onboardingStep: null,
+      onboardingDeviceName: '',
+      onboardingAuthMethod: 'pin',
     };
   }
 
