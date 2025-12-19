@@ -6,6 +6,7 @@ mod security;
 mod state;
 mod storage;
 mod tray;
+mod vault;
 
 use chrono::Utc;
 use tauri::{AppHandle, Emitter, Manager};
