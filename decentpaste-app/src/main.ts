@@ -1,6 +1,6 @@
 import './styles.css';
 import { initApp } from './app';
-import { reconnectPeers, processPendingClipboard } from './api/commands';
+import { reconnectPeers, processPendingClipboard, flushVault } from './api/commands';
 import { store } from './state/store';
 import { checkForUpdates } from './api/updater';
 
@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Handle app visibility changes (especially important for mobile)
   // When app returns from background, reconnect to peers and process pending clipboard
+  // When app goes to background, flush vault to persist data
   document.addEventListener('visibilitychange', async () => {
     if (document.visibilityState === 'visible') {
       store.set('isWindowVisible', true);
@@ -28,6 +29,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
       } catch (e) {
         console.error('Failed to reconnect peers:', e);
+      }
+    } else if (document.visibilityState === 'hidden') {
+      // App going to background - flush vault to persist data
+      const vaultStatus = store.get('vaultStatus');
+      if (vaultStatus === 'Unlocked') {
+        console.log('App going to background, flushing vault...');
+        try {
+          await flushVault();
+          console.log('Vault flushed successfully');
+        } catch (e) {
+          console.error('Failed to flush vault:', e);
+        }
       }
     }
   });
