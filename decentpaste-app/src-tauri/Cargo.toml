@@ -20,6 +20,8 @@ tauri-plugin-opener = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
+tauri-plugin-stronghold = "2"
+tauri-plugin-biometric = "2"
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
@@ -46,6 +48,7 @@ tauri-plugin-clipboard-manager = "2"
 
 # Cryptography
 aes-gcm = "0.10"
+argon2 = "0.5"
 rand = "0.8"
 sha2 = "0.10"
 hex = "0.4"
