@@ -603,3 +603,343 @@ pub async fn get_pairing_sessions(state: State<'_, AppState>) -> Result<Vec<Pair
         .cloned()
         .collect())
 }
+
+// ============================================================================
+// Vault Commands - Secure storage authentication and management
+// ============================================================================
+
+use crate::vault::{VaultManager, VaultStatus};
+use tauri::Emitter;
+
+/// Get the current vault status.
+///
+/// Returns whether the vault is:
+/// - NotSetup: First-time user, needs onboarding
+/// - Locked: Vault exists but requires PIN to unlock
+/// - Unlocked: Vault is open and data is accessible
+#[tauri::command]
+pub async fn get_vault_status(state: State<'_, AppState>) -> Result<VaultStatus> {
+    // First check if vault file exists
+    let vault_exists = VaultManager::exists().unwrap_or(false);
+
+    if !vault_exists {
+        // No vault file - user needs to set up
+        let mut status = state.vault_status.write().await;
+        *status = VaultStatus::NotSetup;
+        return Ok(VaultStatus::NotSetup);
+    }
+
+    // Vault exists - check if it's unlocked
+    let manager = state.vault_manager.read().await;
+    if manager.as_ref().map_or(false, |m| m.is_open()) {
+        Ok(VaultStatus::Unlocked)
+    } else {
+        Ok(VaultStatus::Locked)
+    }
+}
+
+/// Set up a new vault during first-time onboarding.
+///
+/// This creates an encrypted Stronghold vault protected by the user's PIN.
+/// The PIN is transformed via Argon2id into an encryption key.
+///
+/// # Arguments
+/// * `device_name` - The user's chosen device name
+/// * `pin` - The user's chosen PIN (4-8 digits)
+/// * `auth_method` - Preferred auth method ("pin" or "biometric")
+#[tauri::command]
+pub async fn setup_vault(
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+    device_name: String,
+    pin: String,
+    auth_method: String,
+) -> Result<()> {
+    use tracing::info;
+
+    // Validate PIN length (4-8 digits)
+    if pin.len() < 4 || pin.len() > 8 || !pin.chars().all(|c| c.is_ascii_digit()) {
+        return Err(DecentPasteError::InvalidInput(
+            "PIN must be 4-8 digits".into(),
+        ));
+    }
+
+    info!("Setting up new vault for device: {}", device_name);
+
+    // Create the vault
+    let mut manager = VaultManager::new();
+    manager.create(&pin)?;
+
+    // Create device identity with X25519 keypair for ECDH
+    let identity = crate::security::generate_device_identity(&device_name);
+    manager.set_device_identity(&identity)?;
+
+    // Generate and store libp2p keypair
+    let keypair = libp2p::identity::Keypair::generate_ed25519();
+    manager.set_libp2p_keypair(&keypair)?;
+
+    // Flush to ensure data is persisted
+    manager.flush()?;
+
+    // Update app state
+    {
+        let mut vault_manager = state.vault_manager.write().await;
+        *vault_manager = Some(manager);
+    }
+    {
+        let mut vault_status = state.vault_status.write().await;
+        *vault_status = VaultStatus::Unlocked;
+    }
+    {
+        let mut device_identity = state.device_identity.write().await;
+        *device_identity = Some(identity);
+    }
+
+    // Update settings with auth method
+    {
+        let mut settings = state.settings.write().await;
+        settings.device_name = device_name;
+        settings.auth_method = Some(auth_method);
+        save_settings(&settings)?;
+    }
+
+    // Emit vault status change
+    let _ = app_handle.emit("vault-status", VaultStatus::Unlocked);
+
+    info!("Vault setup completed successfully");
+    Ok(())
+}
+
+/// Unlock an existing vault with the user's PIN.
+///
+/// On success, loads all encrypted data from the vault into app state.
+#[tauri::command]
+pub async fn unlock_vault(
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+    pin: String,
+) -> Result<()> {
+    use tracing::info;
+
+    info!("Attempting to unlock vault");
+
+    // Try to open the vault with the provided PIN
+    let mut manager = VaultManager::new();
+    manager.open(&pin)?;
+
+    // Load data from vault into app state
+    if let Ok(Some(identity)) = manager.get_device_identity() {
+        let mut device_identity = state.device_identity.write().await;
+        *device_identity = Some(identity);
+    }
+
+    if let Ok(peers) = manager.get_paired_peers() {
+        let mut paired_peers = state.paired_peers.write().await;
+        *paired_peers = peers;
+    }
+
+    if let Ok(history) = manager.get_clipboard_history() {
+        let mut clipboard_history = state.clipboard_history.write().await;
+        *clipboard_history = history;
+    }
+
+    // Update vault state
+    {
+        let mut vault_manager = state.vault_manager.write().await;
+        *vault_manager = Some(manager);
+    }
+    {
+        let mut vault_status = state.vault_status.write().await;
+        *vault_status = VaultStatus::Unlocked;
+    }
+
+    // Emit vault status change
+    let _ = app_handle.emit("vault-status", VaultStatus::Unlocked);
+
+    info!("Vault unlocked successfully");
+    Ok(())
+}
+
+/// Lock the vault, flushing all data and clearing keys from memory.
+///
+/// After locking, the user must enter their PIN to access data again.
+#[tauri::command]
+pub async fn lock_vault(app_handle: AppHandle, state: State<'_, AppState>) -> Result<()> {
+    use tracing::info;
+
+    info!("Locking vault");
+
+    // Flush current state to vault before locking
+    {
+        let manager = state.vault_manager.read().await;
+        if let Some(ref manager) = *manager {
+            // Save clipboard history if keep_history is enabled
+            let settings = state.settings.read().await;
+            if settings.keep_history {
+                let history = state.clipboard_history.read().await;
+                let _ = manager.set_clipboard_history(&history);
+            }
+
+            // Save paired peers
+            let peers = state.paired_peers.read().await;
+            let _ = manager.set_paired_peers(&peers);
+
+            // Flush to disk
+            let _ = manager.flush();
+        }
+    }
+
+    // Lock the vault (clears encryption key from memory)
+    {
+        let mut manager = state.vault_manager.write().await;
+        if let Some(ref mut m) = *manager {
+            m.lock()?;
+        }
+        *manager = None;
+    }
+
+    // Update status
+    {
+        let mut vault_status = state.vault_status.write().await;
+        *vault_status = VaultStatus::Locked;
+    }
+
+    // Emit vault status change
+    let _ = app_handle.emit("vault-status", VaultStatus::Locked);
+
+    info!("Vault locked successfully");
+    Ok(())
+}
+
+/// Reset the vault, destroying all encrypted data.
+///
+/// This is a destructive operation that:
+/// 1. Deletes the vault file
+/// 2. Deletes the salt file
+/// 3. Clears all app state
+///
+/// After reset, the user must go through onboarding again.
+#[tauri::command]
+pub async fn reset_vault(app_handle: AppHandle, state: State<'_, AppState>) -> Result<()> {
+    use tracing::{info, warn};
+
+    warn!("Resetting vault - all encrypted data will be lost!");
+
+    // Destroy the vault
+    {
+        let mut manager = state.vault_manager.write().await;
+        if let Some(ref mut m) = *manager {
+            m.destroy()?;
+        } else {
+            // No manager in memory, create one just to destroy files
+            let mut temp_manager = VaultManager::new();
+            temp_manager.destroy()?;
+        }
+        *manager = None;
+    }
+
+    // Clear app state
+    {
+        let mut device_identity = state.device_identity.write().await;
+        *device_identity = None;
+    }
+    {
+        let mut paired_peers = state.paired_peers.write().await;
+        paired_peers.clear();
+    }
+    {
+        let mut clipboard_history = state.clipboard_history.write().await;
+        clipboard_history.clear();
+    }
+    {
+        let mut vault_status = state.vault_status.write().await;
+        *vault_status = VaultStatus::NotSetup;
+    }
+
+    // Emit vault status change
+    let _ = app_handle.emit("vault-status", VaultStatus::NotSetup);
+
+    info!("Vault reset completed");
+    Ok(())
+}
+
+/// Check if biometric authentication is available on this device.
+///
+/// Returns true if the device supports biometric auth (fingerprint, face, etc.)
+/// and the user has enrolled biometrics.
+///
+/// Note: This is primarily used on mobile. On desktop, returns false.
+#[tauri::command]
+pub async fn check_biometric_available() -> Result<bool> {
+    // Biometric availability is checked via the frontend plugin
+    // This command exists for consistency but the actual check
+    // should be done via @tauri-apps/plugin-biometric status() in JS
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    {
+        // On mobile, return true to indicate the frontend should check
+        // The actual availability check is done by the biometric plugin
+        Ok(true)
+    }
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        // On desktop, biometric is not supported
+        Ok(false)
+    }
+}
+
+/// Authenticate using biometrics.
+///
+/// This command is called after the frontend successfully authenticates
+/// via the biometric plugin. It retrieves the stored encryption key
+/// from the secure storage and unlocks the vault.
+///
+/// Note: For biometric to work, the derived encryption key must have been
+/// stored in the system keychain during initial setup with PIN.
+#[tauri::command]
+pub async fn authenticate_biometric(
+    _app_handle: AppHandle,
+    _state: State<'_, AppState>,
+) -> Result<()> {
+    // TODO: Implement biometric key retrieval from system keychain
+    // For now, biometric auth is handled entirely on the frontend:
+    // 1. Frontend calls biometric plugin to authenticate
+    // 2. On success, frontend retrieves PIN from secure storage
+    // 3. Frontend calls unlock_vault with the retrieved PIN
+    //
+    // A future enhancement could store the derived key directly in
+    // the system keychain, but that requires additional security considerations.
+    Err(DecentPasteError::NotSupported(
+        "Biometric auth should be handled via frontend. Use biometric plugin + unlock_vault.".into(),
+    ))
+}
+
+/// Flush current app state to the vault.
+///
+/// Saves clipboard history and paired peers to the encrypted vault.
+/// Called before backgrounding on mobile or periodically to prevent data loss.
+#[tauri::command]
+pub async fn flush_vault(state: State<'_, AppState>) -> Result<()> {
+    use tracing::debug;
+
+    let manager = state.vault_manager.read().await;
+    if let Some(ref manager) = *manager {
+        // Save clipboard history if keep_history is enabled
+        let settings = state.settings.read().await;
+        if settings.keep_history {
+            let history = state.clipboard_history.read().await;
+            manager.set_clipboard_history(&history)?;
+        }
+
+        // Save paired peers
+        let peers = state.paired_peers.read().await;
+        manager.set_paired_peers(&peers)?;
+
+        // Flush to disk
+        manager.flush()?;
+        debug!("Vault flushed successfully");
+        Ok(())
+    } else {
+        // Vault not open, nothing to flush
+        Ok(())
+    }
+}

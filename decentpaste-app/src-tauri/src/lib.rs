@@ -39,8 +39,18 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        // Stronghold plugin - password callback returns bytes for encryption key
+        // Note: We handle our own Argon2 key derivation in VaultManager,
+        // so this callback is mainly for the JS API compatibility
+        .plugin(tauri_plugin_stronghold::Builder::new(|password| {
+            password.as_bytes().to_vec()
+        }).build())
         .manage(AppState::new())
         .setup(|app| {
+            // Biometric plugin - only available on mobile platforms (Android/iOS)
+            #[cfg(mobile)]
+            app.handle().plugin(tauri_plugin_biometric::Builder::new().build())?;
+
             let app_handle = app.handle().clone();
 
             // Setup system tray and window close interception (desktop only)
@@ -95,6 +105,15 @@ pub fn run() {
             commands::update_settings,
             commands::get_device_info,
             commands::get_pairing_sessions,
+            // Vault commands
+            commands::get_vault_status,
+            commands::setup_vault,
+            commands::unlock_vault,
+            commands::lock_vault,
+            commands::reset_vault,
+            commands::check_biometric_available,
+            commands::authenticate_biometric,
+            commands::flush_vault,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
