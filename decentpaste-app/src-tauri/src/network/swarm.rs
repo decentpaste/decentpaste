@@ -333,6 +333,19 @@ impl NetworkManager {
                 }
                 gossipsub::Event::Subscribed { peer_id, topic } => {
                     info!("Peer {} subscribed to topic {}", peer_id, topic);
+
+                    // Announce our device name now that the peer is subscribed
+                    // This ensures they receive our current name
+                    let local_peer_id = self.swarm.local_peer_id().to_string();
+                    let announce_msg = DeviceAnnounceMessage {
+                        peer_id: local_peer_id,
+                        device_name: self.device_name.clone(),
+                        timestamp: Utc::now(),
+                    };
+                    let protocol_msg = ProtocolMessage::DeviceAnnounce(announce_msg);
+                    if let Err(e) = self.swarm.behaviour_mut().publish_clipboard(&protocol_msg) {
+                        debug!("Failed to announce device name after peer subscribed: {}", e);
+                    }
                 }
                 gossipsub::Event::Unsubscribed { peer_id, topic } => {
                     info!("Peer {} unsubscribed from topic {}", peer_id, topic);
@@ -599,21 +612,8 @@ impl NetworkManager {
                     .send(NetworkEvent::PeerConnected(connected))
                     .await;
 
-                // Announce our device name to the newly connected peer
-                // This ensures they have our current name even if they missed earlier announcements
-                // (e.g., they were offline when we changed our name)
-                let local_peer_id = self.swarm.local_peer_id().to_string();
-                let announce_msg = DeviceAnnounceMessage {
-                    peer_id: local_peer_id,
-                    device_name: self.device_name.clone(),
-                    timestamp: Utc::now(),
-                };
-                let protocol_msg = ProtocolMessage::DeviceAnnounce(announce_msg);
-                if let Err(e) = self.swarm.behaviour_mut().publish_clipboard(&protocol_msg) {
-                    // This can fail if gossipsub mesh isn't ready yet, which is fine
-                    // The peer will still get our name from identify (if not changed since startup)
-                    debug!("Failed to announce device name on connection: {}", e);
-                }
+                // Device name announcement is now done in gossipsub::Event::Subscribed
+                // This ensures the peer has subscribed to the topic before we try to announce
             }
 
             SwarmEvent::ConnectionClosed { peer_id, .. } => {
