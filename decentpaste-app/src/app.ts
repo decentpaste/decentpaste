@@ -248,6 +248,68 @@ class App {
         store.set('activePairingSession', null);
         return;
       }
+
+      // Lock screen: Unlock button
+      const unlockBtn = target.closest('#btn-unlock') as HTMLButtonElement | null;
+      if (unlockBtn) {
+        const pinInput = document.getElementById('lock-pin-input') as HTMLInputElement | null;
+        const errorEl = document.getElementById('lock-error');
+        const pin = pinInput?.value || '';
+
+        if (pin.length < 4) {
+          if (errorEl) {
+            errorEl.textContent = 'PIN must be at least 4 digits';
+            errorEl.classList.remove('hidden');
+          }
+          return;
+        }
+
+        unlockBtn.disabled = true;
+        unlockBtn.innerHTML = `${icon('loader', 18, 'animate-spin')}<span>Unlocking...</span>`;
+
+        try {
+          await commands.unlockVault(pin);
+          // Status will be updated via vault-status event
+        } catch (error) {
+          if (errorEl) {
+            errorEl.textContent = getErrorMessage(error);
+            errorEl.classList.remove('hidden');
+          }
+          unlockBtn.disabled = false;
+          unlockBtn.innerHTML = `${icon('unlock', 18)}<span>Unlock</span>`;
+          if (pinInput) {
+            pinInput.value = '';
+            pinInput.focus();
+          }
+        }
+        return;
+      }
+
+      // Lock screen: Biometric unlock button
+      if (target.closest('#btn-biometric-unlock')) {
+        // TODO: Implement biometric unlock via frontend plugin
+        // For now, show a message that it's not implemented
+        store.addToast('Biometric unlock coming soon', 'info');
+        return;
+      }
+
+      // Lock screen: Forgot PIN button
+      if (target.closest('#btn-forgot-pin')) {
+        // Set a flag to show reset confirmation (will be implemented in Task 21)
+        store.set('onboardingStep', 'device-name'); // Temporary: show reset flow
+        store.addToast('Reset feature will be available soon', 'info');
+        return;
+      }
+    });
+
+    // Handle keydown events for PIN input (Enter to submit)
+    this.root.addEventListener('keydown', (e) => {
+      const target = e.target as HTMLElement;
+      if (target.id === 'lock-pin-input' && e.key === 'Enter') {
+        e.preventDefault();
+        const unlockBtn = document.getElementById('btn-unlock') as HTMLButtonElement | null;
+        unlockBtn?.click();
+      }
     });
 
     // Handle change events for settings (needs separate listener due to event type)
@@ -471,6 +533,7 @@ class App {
     store.subscribe('pairingModalMode', () => this.renderPairingModal());
     store.subscribe('activePairingSession', () => this.renderPairingModal());
     store.subscribe('isLoading', () => this.render());
+    store.subscribe('vaultStatus', () => this.render());
     store.subscribe('updateStatus', () => {
       this.renderUpdateBadge();
       this.renderUpdateSection();
@@ -496,6 +559,12 @@ class App {
           </div>
         </div>
       `;
+      return;
+    }
+
+    // Show lock screen if vault is locked (full integration in Task 22)
+    if (state.vaultStatus === 'Locked') {
+      this.root.innerHTML = this.renderLockScreen();
       return;
     }
 
@@ -836,6 +905,79 @@ class App {
               </div>
             </div>
           </div>
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Renders the lock screen for returning users.
+   * Shows PIN input with masked digits and optional biometric button.
+   */
+  private renderLockScreen(): string {
+    const settings = store.get('settings');
+    const biometricAvailable = store.get('biometricAvailable');
+    const deviceName = settings.device_name || 'Your Device';
+
+    return `
+      <div class="flex flex-col h-screen relative" style="background: #0a0a0b;">
+        <!-- Ambient background orbs -->
+        <div class="orb orb-teal animate-float" style="width: 400px; height: 400px; top: -15%; left: -10%;"></div>
+        <div class="orb orb-orange animate-float-delayed" style="width: 300px; height: 300px; bottom: 10%; right: -15%;"></div>
+
+        <!-- Lock Screen Content -->
+        <div class="flex-1 flex flex-col items-center justify-center relative z-10 p-6 pt-safe-top pb-safe-bottom">
+          <!-- Logo and Device Name -->
+          <div class="text-center mb-8">
+            <div class="w-20 h-20 rounded-2xl mx-auto mb-4 flex items-center justify-center glow-teal" style="background: linear-gradient(135deg, rgba(20, 184, 166, 0.2) 0%, rgba(13, 148, 136, 0.1) 100%); border: 1px solid rgba(20, 184, 166, 0.3);">
+              ${icon('lock', 36, 'text-teal-400')}
+            </div>
+            <h1 class="text-xl font-semibold text-white mb-1">Welcome back</h1>
+            <p class="text-white/50 text-sm">${escapeHtml(deviceName)}</p>
+          </div>
+
+          <!-- PIN Input -->
+          <div class="w-full max-w-xs mb-6">
+            <label class="block text-sm text-white/60 mb-2 text-center">Enter your PIN to unlock</label>
+            <div class="relative">
+              <input
+                type="password"
+                id="lock-pin-input"
+                inputmode="numeric"
+                pattern="[0-9]*"
+                maxlength="8"
+                placeholder="••••"
+                autocomplete="off"
+                class="w-full px-4 py-3 rounded-xl text-center text-xl tracking-[0.5em] font-mono"
+                style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: white; outline: none;"
+              />
+            </div>
+            <p id="lock-error" class="text-red-400 text-xs text-center mt-2 hidden"></p>
+          </div>
+
+          <!-- Unlock Button -->
+          <button id="btn-unlock" class="btn-primary w-full max-w-xs mb-4">
+            ${icon('unlock', 18)}
+            <span>Unlock</span>
+          </button>
+
+          <!-- Biometric Button (mobile only) -->
+          ${biometricAvailable ? `
+            <button id="btn-biometric-unlock" class="btn-secondary w-full max-w-xs mb-4">
+              ${icon('fingerprint', 18)}
+              <span>Use Biometric</span>
+            </button>
+          ` : ''}
+
+          <!-- Forgot PIN Link -->
+          <button id="btn-forgot-pin" class="text-white/40 hover:text-white/60 text-sm transition-colors">
+            Forgot PIN?
+          </button>
+        </div>
+
+        <!-- Toast Container -->
+        <div id="toast-container" class="fixed bottom-20 left-4 right-4 flex flex-col gap-2 z-50">
+          ${this.renderToastsContent()}
         </div>
       </div>
     `;
