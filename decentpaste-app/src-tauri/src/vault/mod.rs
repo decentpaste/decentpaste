@@ -10,7 +10,9 @@
 //! can be used as an alternative unlock method.
 
 pub mod auth;
+pub mod manager;
 pub mod salt;
 
 pub use auth::{AuthMethod, VaultStatus};
+pub use manager::VaultManager;
 pub use salt::{delete_salt, get_or_create_salt};
