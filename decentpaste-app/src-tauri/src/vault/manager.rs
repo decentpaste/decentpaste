@@ -287,6 +287,22 @@ impl VaultManager {
         self.stronghold.as_mut()
     }
 
+    /// Get the client's store for data operations.
+    ///
+    /// Returns an error if the vault is not open or client is not loaded.
+    fn get_client_store(&self) -> Result<iota_stronghold::Store> {
+        let stronghold = self.stronghold.as_ref().ok_or_else(|| {
+            DecentPasteError::Storage("Vault is not open".into())
+        })?;
+
+        // Get the client we created/loaded
+        let client = stronghold.get_client(VAULT_CLIENT_NAME).map_err(|e| {
+            DecentPasteError::Storage(format!("Failed to get vault client: {}", e))
+        })?;
+
+        Ok(client.store())
+    }
+
     // =========================================================================
     // Data Operations - Clipboard History
     // =========================================================================
@@ -295,11 +311,7 @@ impl VaultManager {
     ///
     /// Returns an empty vector if no history is stored or vault is not open.
     pub fn get_clipboard_history(&self) -> Result<Vec<ClipboardEntry>> {
-        let stronghold = self.stronghold.as_ref().ok_or_else(|| {
-            DecentPasteError::Storage("Vault is not open".into())
-        })?;
-
-        let store = stronghold.store();
+        let store = self.get_client_store()?;
         match store.get(STORE_KEY_CLIPBOARD_HISTORY) {
             Ok(Some(data)) => {
                 let history: Vec<ClipboardEntry> = serde_json::from_slice(&data)?;
@@ -324,12 +336,8 @@ impl VaultManager {
     ///
     /// This overwrites any existing history. Call `flush()` to persist.
     pub fn set_clipboard_history(&self, history: &[ClipboardEntry]) -> Result<()> {
-        let stronghold = self.stronghold.as_ref().ok_or_else(|| {
-            DecentPasteError::Storage("Vault is not open".into())
-        })?;
-
+        let store = self.get_client_store()?;
         let data = serde_json::to_vec(history)?;
-        let store = stronghold.store();
         store
             .insert(STORE_KEY_CLIPBOARD_HISTORY.to_vec(), data, None)
             .map_err(|e| {
@@ -348,11 +356,7 @@ impl VaultManager {
     ///
     /// Returns an empty vector if no peers are stored or vault is not open.
     pub fn get_paired_peers(&self) -> Result<Vec<PairedPeer>> {
-        let stronghold = self.stronghold.as_ref().ok_or_else(|| {
-            DecentPasteError::Storage("Vault is not open".into())
-        })?;
-
-        let store = stronghold.store();
+        let store = self.get_client_store()?;
         match store.get(STORE_KEY_PAIRED_PEERS) {
             Ok(Some(data)) => {
                 let peers: Vec<PairedPeer> = serde_json::from_slice(&data)?;
@@ -377,12 +381,8 @@ impl VaultManager {
     ///
     /// This overwrites any existing peers. Call `flush()` to persist.
     pub fn set_paired_peers(&self, peers: &[PairedPeer]) -> Result<()> {
-        let stronghold = self.stronghold.as_ref().ok_or_else(|| {
-            DecentPasteError::Storage("Vault is not open".into())
-        })?;
-
+        let store = self.get_client_store()?;
         let data = serde_json::to_vec(peers)?;
-        let store = stronghold.store();
         store
             .insert(STORE_KEY_PAIRED_PEERS.to_vec(), data, None)
             .map_err(|e| {
@@ -401,11 +401,7 @@ impl VaultManager {
     ///
     /// Returns `None` if no identity is stored or vault is not open.
     pub fn get_device_identity(&self) -> Result<Option<DeviceIdentity>> {
-        let stronghold = self.stronghold.as_ref().ok_or_else(|| {
-            DecentPasteError::Storage("Vault is not open".into())
-        })?;
-
-        let store = stronghold.store();
+        let store = self.get_client_store()?;
         match store.get(STORE_KEY_DEVICE_IDENTITY) {
             Ok(Some(data)) => {
                 let identity: DeviceIdentity = serde_json::from_slice(&data)?;
@@ -430,12 +426,8 @@ impl VaultManager {
     ///
     /// Call `flush()` to persist.
     pub fn set_device_identity(&self, identity: &DeviceIdentity) -> Result<()> {
-        let stronghold = self.stronghold.as_ref().ok_or_else(|| {
-            DecentPasteError::Storage("Vault is not open".into())
-        })?;
-
+        let store = self.get_client_store()?;
         let data = serde_json::to_vec(identity)?;
-        let store = stronghold.store();
         store
             .insert(STORE_KEY_DEVICE_IDENTITY.to_vec(), data, None)
             .map_err(|e| {
@@ -455,11 +447,7 @@ impl VaultManager {
     /// Returns `None` if no keypair is stored or vault is not open.
     /// The keypair is stored in protobuf encoding.
     pub fn get_libp2p_keypair(&self) -> Result<Option<libp2p::identity::Keypair>> {
-        let stronghold = self.stronghold.as_ref().ok_or_else(|| {
-            DecentPasteError::Storage("Vault is not open".into())
-        })?;
-
-        let store = stronghold.store();
+        let store = self.get_client_store()?;
         match store.get(STORE_KEY_LIBP2P_KEYPAIR) {
             Ok(Some(data)) => {
                 let keypair = libp2p::identity::Keypair::from_protobuf_encoding(&data)
@@ -490,15 +478,10 @@ impl VaultManager {
     ///
     /// The keypair is stored in protobuf encoding. Call `flush()` to persist.
     pub fn set_libp2p_keypair(&self, keypair: &libp2p::identity::Keypair) -> Result<()> {
-        let stronghold = self.stronghold.as_ref().ok_or_else(|| {
-            DecentPasteError::Storage("Vault is not open".into())
-        })?;
-
+        let store = self.get_client_store()?;
         let data = keypair.to_protobuf_encoding().map_err(|e| {
             DecentPasteError::Storage(format!("Failed to encode libp2p keypair: {}", e))
         })?;
-
-        let store = stronghold.store();
         store
             .insert(STORE_KEY_LIBP2P_KEYPAIR.to_vec(), data, None)
             .map_err(|e| {
