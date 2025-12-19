@@ -688,6 +688,33 @@ class App {
     eventManager.on('clipboardSyncedFromBackground', (payload) => {
       store.addToast(`Clipboard synced from ${payload.fromDevice}`, 'success');
     });
+
+    // Handle vault status changes - load data when unlocked
+    eventManager.on('vaultStatus', async (status) => {
+      const previousStatus = store.get('vaultStatus');
+      store.set('vaultStatus', status);
+
+      // If transitioning to Unlocked, load app data
+      if (status === 'Unlocked' && previousStatus !== 'Unlocked') {
+        await this.loadDataAfterUnlock();
+      }
+    });
+  }
+
+  /**
+   * Load app data after vault unlock or setup completion.
+   * Called when vaultStatus transitions to 'Unlocked'.
+   */
+  private async loadDataAfterUnlock(): Promise<void> {
+    store.set('isLoading', true);
+    try {
+      await this.loadInitialData();
+      store.addToast('Data loaded successfully', 'success');
+    } catch (error) {
+      console.error('Failed to load data after unlock:', error);
+      store.addToast('Failed to load some data', 'error');
+      store.set('isLoading', false);
+    }
   }
 
   private async loadInitialData(): Promise<void> {
