@@ -16,7 +16,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use clipboard::{ClipboardChange, ClipboardEntry, ClipboardMonitor, SyncManager};
 use network::{ClipboardMessage, NetworkCommand, NetworkEvent, NetworkManager, NetworkStatus};
 use security::get_or_create_identity;
-use state::AppState;
+use state::{AppState, PendingClipboard};
 use storage::{get_or_create_libp2p_keypair, init_data_dir, load_paired_peers, load_settings};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -78,6 +78,7 @@ pub fn run() {
             commands::start_network,
             commands::stop_network,
             commands::reconnect_peers,
+            commands::process_pending_clipboard,
             commands::get_discovered_peers,
             commands::get_paired_peers,
             commands::remove_paired_peer,
@@ -98,18 +99,95 @@ pub fn run() {
         .expect("error while building tauri application")
         .run(|app_handle, event| {
             // Handle app lifecycle events (especially for mobile)
-            if let tauri::RunEvent::Resumed = event {
-                info!("App resumed from background, triggering peer reconnection");
-                let state = app_handle.state::<AppState>();
-                let tx_arc = state.network_command_tx.clone();
-                tauri::async_runtime::spawn(async move {
-                    let tx = tx_arc.read().await;
-                    if let Some(tx) = tx.as_ref() {
-                        if let Err(e) = tx.send(NetworkCommand::ReconnectPeers).await {
-                            error!("Failed to send reconnect command: {}", e);
+            match event {
+                tauri::RunEvent::Resumed => {
+                    info!("App resumed from background (RunEvent::Resumed)");
+                    let state = app_handle.state::<AppState>();
+                    let app_handle_clone = app_handle.clone();
+
+                    // Mark as foreground
+                    let is_foreground = state.is_foreground.clone();
+                    let tx_arc = state.network_command_tx.clone();
+                    let pending_clipboard = state.pending_clipboard.clone();
+
+                    tauri::async_runtime::spawn(async move {
+                        info!("Resume async task started");
+
+                        // Set foreground state
+                        {
+                            let mut fg = is_foreground.write().await;
+                            *fg = true;
+                            info!("Foreground state set to true");
                         }
-                    }
-                });
+
+                        // Reconnect to peers
+                        let tx = tx_arc.read().await;
+                        if let Some(tx) = tx.as_ref() {
+                            if let Err(e) = tx.send(NetworkCommand::ReconnectPeers).await {
+                                error!("Failed to send reconnect command: {}", e);
+                            }
+                        }
+
+                        // Process pending clipboard (mobile background sync)
+                        #[cfg(any(target_os = "android", target_os = "ios"))]
+                        {
+                            info!("Checking for pending clipboard...");
+                            let pending = {
+                                let mut p = pending_clipboard.write().await;
+                                let has_pending = p.is_some();
+                                info!("Pending clipboard present: {}", has_pending);
+                                p.take()
+                            };
+                            if let Some(pending) = pending {
+                                info!(
+                                    "Processing pending clipboard from {} ({} chars)",
+                                    pending.from_device,
+                                    pending.content.len()
+                                );
+                                if let Err(e) = clipboard::monitor::set_clipboard_content(
+                                    &app_handle_clone,
+                                    &pending.content,
+                                ) {
+                                    error!("Failed to set pending clipboard: {}", e);
+                                } else {
+                                    info!("Pending clipboard copied successfully");
+                                    // Notify frontend
+                                    let _ = app_handle_clone.emit(
+                                        "clipboard-synced-from-background",
+                                        serde_json::json!({
+                                            "content": pending.content,
+                                            "fromDevice": pending.from_device,
+                                        }),
+                                    );
+                                }
+                            } else {
+                                info!("No pending clipboard to process");
+                            }
+                        }
+
+                        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+                        {
+                            let _ = pending_clipboard; // Suppress unused warning
+                            let _ = app_handle_clone;
+                        }
+                    });
+                }
+
+                #[cfg(any(target_os = "android", target_os = "ios"))]
+                tauri::RunEvent::WindowEvent {
+                    event: tauri::WindowEvent::Focused(false),
+                    ..
+                } => {
+                    info!("App lost focus (going to background)");
+                    let state = app_handle.state::<AppState>();
+                    let is_foreground = state.is_foreground.clone();
+                    tauri::async_runtime::spawn(async move {
+                        let mut fg = is_foreground.write().await;
+                        *fg = false;
+                    });
+                }
+
+                _ => {}
             }
         });
 }
@@ -378,6 +456,32 @@ async fn initialize_app(
                     sessions.retain(|s| !s.is_expired());
                     sessions.push(session);
 
+                    // Show notification for pairing request when app is backgrounded (mobile)
+                    // This is essential - pairing has a timeout and requires user action
+                    #[cfg(any(target_os = "android", target_os = "ios"))]
+                    {
+                        let is_foreground = *state.is_foreground.read().await;
+                        if !is_foreground {
+                            use tauri_plugin_notification::NotificationExt;
+                            info!(
+                                "App in background, showing notification for pairing request from {}",
+                                request.device_name
+                            );
+                            if let Err(e) = app_handle_network
+                                .notification()
+                                .builder()
+                                .title("Pairing Request")
+                                .body(&format!(
+                                    "{} wants to pair with this device",
+                                    request.device_name
+                                ))
+                                .show()
+                            {
+                                error!("Failed to show pairing notification: {}", e);
+                            }
+                        }
+                    }
+
                     let _ = app_handle_network.emit(
                         "pairing-request",
                         serde_json::json!({
@@ -601,14 +705,45 @@ async fn initialize_app(
                                             .await
                                             .on_received(&msg.content_hash)
                                         {
-                                            // Update local clipboard
-                                            if let Err(e) =
-                                                clipboard::monitor::set_clipboard_content(
-                                                    &app_handle_network,
-                                                    &content,
-                                                )
-                                            {
-                                                error!("Failed to set clipboard: {}", e);
+                                            // Check if we should queue for background (mobile only)
+                                            #[cfg(any(target_os = "android", target_os = "ios"))]
+                                            let is_foreground =
+                                                *state.is_foreground.read().await;
+                                            #[cfg(not(any(target_os = "android", target_os = "ios")))]
+                                            let is_foreground = true;
+
+                                            if is_foreground {
+                                                // Update local clipboard directly
+                                                if let Err(e) =
+                                                    clipboard::monitor::set_clipboard_content(
+                                                        &app_handle_network,
+                                                        &content,
+                                                    )
+                                                {
+                                                    error!("Failed to set clipboard: {}", e);
+                                                }
+                                            } else {
+                                                // Mobile background: queue clipboard silently (no notification)
+                                                // Clipboard will be copied when app resumes
+                                                #[cfg(any(target_os = "android", target_os = "ios"))]
+                                                {
+                                                    info!(
+                                                        "App in background, queuing clipboard from {} (silent)",
+                                                        msg.origin_device_name
+                                                    );
+
+                                                    // Store pending clipboard - will be processed on resume
+                                                    {
+                                                        let mut pending =
+                                                            state.pending_clipboard.write().await;
+                                                        *pending = Some(PendingClipboard {
+                                                            content: content.clone(),
+                                                            from_device: msg
+                                                                .origin_device_name
+                                                                .clone(),
+                                                        });
+                                                    }
+                                                }
                                             }
 
                                             // Add to history

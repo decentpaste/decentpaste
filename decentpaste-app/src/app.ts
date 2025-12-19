@@ -426,6 +426,11 @@ class App {
         localStorage.setItem('hasShownTrayNotification', 'true');
       }
     });
+
+    // Handle clipboard synced from background (Android only)
+    eventManager.on('clipboardSyncedFromBackground', (payload) => {
+      store.addToast(`Clipboard synced from ${payload.fromDevice}`, 'success');
+    });
   }
 
   private async loadInitialData(): Promise<void> {

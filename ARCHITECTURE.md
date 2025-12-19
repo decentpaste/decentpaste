@@ -262,10 +262,16 @@ pub struct AppSettings {
     pub auto_sync_enabled: bool,
     pub clipboard_history_limit: usize,
     pub clear_history_on_exit: bool,
-    pub show_notifications: bool,
+    pub show_notifications: bool,  // Desktop only; Android background clipboard sync is always silent
     pub clipboard_poll_interval_ms: u64,
 }
 ```
+
+**Mobile Background Notifications (Android & iOS):**
+- **Clipboard sync**: Always silent - content is queued and copied when app resumes (no notification spam)
+- **Pairing requests**: Always show notification when backgrounded (requires user action, has timeout)
+
+Note: On Android, a foreground service keeps the app alive indefinitely. On iOS, the app is suspended after ~30 seconds and network connections drop - clipboard queuing only works if content arrives before suspension.
 
 #### `peers.rs` - PairedPeer & Identity Persistence
 
@@ -554,7 +560,8 @@ yarn build
 1. **Text-only clipboard**: Currently only supports text. Images/files could be added.
 2. **Local network only**: Uses mDNS, so devices must be on same network. Internet relay could be added.
 3. **Mobile clipboard**: On Android/iOS, automatic clipboard monitoring is not supported. Users must manually share
-   content using the "Share" button. Receiving clipboard from desktop works automatically.
+   content using the "Share" button. Receiving clipboard from desktop works automatically (silently queued in background,
+   copied when app opens).
 4. **No persistence of clipboard history**: History is in-memory only.
 5. **Plaintext secret storage**: Shared secrets are stored in `peers.json` without OS keychain integration.
 6. **Device name in identify**: The identify protocol includes device name in `agent_version` field, which is

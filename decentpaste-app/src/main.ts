@@ -1,6 +1,6 @@
 import './styles.css';
 import { initApp } from './app';
-import { reconnectPeers } from './api/commands';
+import { reconnectPeers, processPendingClipboard } from './api/commands';
 import { store } from './state/store';
 import { checkForUpdates } from './api/updater';
 
@@ -11,7 +11,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // Handle app visibility changes (especially important for mobile)
-  // When app returns from background, reconnect to peers
+  // When app returns from background, reconnect to peers and process pending clipboard
   document.addEventListener('visibilitychange', async () => {
     if (document.visibilityState === 'visible') {
       store.set('isWindowVisible', true);
@@ -19,6 +19,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       console.log('App became visible, reconnecting to peers...');
       try {
         await reconnectPeers();
+
+        // Process any pending clipboard from background (Android)
+        const pending = await processPendingClipboard();
+        if (pending) {
+          console.log(`Clipboard synced from ${pending.from_device}`);
+          store.addToast(`Clipboard synced from ${pending.from_device}`, 'success');
+        }
       } catch (e) {
         console.error('Failed to reconnect peers:', e);
       }

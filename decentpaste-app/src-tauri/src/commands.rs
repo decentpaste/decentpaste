@@ -60,6 +60,60 @@ pub async fn reconnect_peers(state: State<'_, AppState>) -> Result<()> {
     Ok(())
 }
 
+/// Response from process_pending_clipboard
+#[derive(Debug, Clone, Serialize)]
+pub struct PendingClipboardResponse {
+    pub content: String,
+    pub from_device: String,
+}
+
+/// Process any pending clipboard content that was received while app was in background.
+/// Call this when the app becomes visible on mobile (from visibilitychange event).
+/// Returns the pending clipboard content if any was waiting.
+#[tauri::command]
+pub async fn process_pending_clipboard(
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Option<PendingClipboardResponse>> {
+    use tracing::info;
+
+    // Mark as foreground
+    {
+        let mut fg = state.is_foreground.write().await;
+        *fg = true;
+    }
+
+    // Take pending clipboard if any
+    let pending = {
+        let mut p = state.pending_clipboard.write().await;
+        p.take()
+    };
+
+    if let Some(pending) = pending {
+        info!(
+            "Processing pending clipboard from {} ({} chars)",
+            pending.from_device,
+            pending.content.len()
+        );
+
+        // Try to copy to clipboard
+        if let Err(e) =
+            crate::clipboard::monitor::set_clipboard_content(&app_handle, &pending.content)
+        {
+            tracing::error!("Failed to set pending clipboard: {}", e);
+            return Err(DecentPasteError::Clipboard(e.to_string()));
+        }
+
+        info!("Pending clipboard copied successfully");
+        Ok(Some(PendingClipboardResponse {
+            content: pending.content,
+            from_device: pending.from_device,
+        }))
+    } else {
+        Ok(None)
+    }
+}
+
 // Peer management
 #[tauri::command]
 pub async fn get_discovered_peers(state: State<'_, AppState>) -> Result<Vec<DiscoveredPeer>> {
