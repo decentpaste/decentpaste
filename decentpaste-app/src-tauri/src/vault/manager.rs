@@ -137,20 +137,38 @@ impl VaultManager {
         // Derive encryption key from PIN
         let key = Self::derive_key(pin, &salt)?;
 
+        debug!("Initializing Stronghold...");
+
         // Initialize Stronghold with the derived key
         // Stronghold::new automatically creates a new vault if file doesn't exist
         let stronghold = Stronghold::new(&vault_path, key)
             .map_err(|e| DecentPasteError::Storage(format!("Failed to create vault: {}", e)))?;
 
+        debug!("Stronghold initialized, creating client...");
+
         // Create the client within the vault for storing data
+        // NOTE: We must use create_client() first to create the client in memory,
+        // then write_client() or save() to persist it to disk.
+        // write_client() alone fails because it expects an existing in-memory client.
+        stronghold
+            .create_client(VAULT_CLIENT_NAME)
+            .map_err(|e| DecentPasteError::Storage(format!("Failed to create vault client: {}", e)))?;
+
+        debug!("Client created, writing to snapshot...");
+
+        // Write the newly created client to the snapshot
         stronghold
             .write_client(VAULT_CLIENT_NAME)
-            .map_err(|e| DecentPasteError::Storage(format!("Failed to create vault client: {}", e)))?;
+            .map_err(|e| DecentPasteError::Storage(format!("Failed to write vault client: {}", e)))?;
+
+        debug!("Client written, saving vault...");
 
         // Save the vault to disk
         stronghold
             .save()
             .map_err(|e| DecentPasteError::Storage(format!("Failed to save vault: {}", e)))?;
+
+        debug!("Vault saved successfully");
 
         self.stronghold = Some(stronghold);
 

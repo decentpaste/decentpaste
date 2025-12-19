@@ -37,6 +37,14 @@ pub fn run() {
 
     info!("Starting DecentPaste...");
 
+    // Reduce Stronghold's encryption work factor since we already use Argon2id
+    // for key derivation (64MB memory, 3 iterations). The default work factor
+    // causes ~35 second delays per save operation, which is unnecessary
+    // when the encryption key is already cryptographically strong.
+    if let Err(e) = iota_stronghold::engine::snapshot::try_set_encrypt_work_factor(0) {
+        warn!("Failed to set Stronghold work factor: {:?}", e);
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())

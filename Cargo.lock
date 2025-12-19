@@ -1113,6 +1113,7 @@ dependencies = [
  "futures",
  "hex",
  "hostname",
+ "iota_stronghold",
  "libp2p",
  "rand 0.8.5",
  "serde",
