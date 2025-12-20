@@ -131,11 +131,7 @@ export async function getVaultStatus(): Promise<VaultStatus> {
  * @param pin - The user's chosen PIN (4-8 digits)
  * @param authMethod - Auth method (currently only 'pin' is supported)
  */
-export async function setupVault(
-  deviceName: string,
-  pin: string,
-  authMethod: AuthMethod
-): Promise<void> {
+export async function setupVault(deviceName: string, pin: string, authMethod: AuthMethod): Promise<void> {
   return invoke('setup_vault', {
     deviceName,
     pin,

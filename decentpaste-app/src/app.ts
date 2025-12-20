@@ -1190,9 +1190,13 @@ class App {
     const progressIndicator = `
       <div class="flex items-center justify-center gap-2 mb-8">
         <div class="flex items-center gap-1">
-          ${[1, 2].map(n => `
+          ${[1, 2]
+            .map(
+              (n) => `
             <div class="w-2 h-2 rounded-full transition-all ${n === stepNumber ? 'bg-teal-400 w-6' : n < stepNumber ? 'bg-teal-400/50' : 'bg-white/20'}"></div>
-          `).join('')}
+          `,
+            )
+            .join('')}
         </div>
         <span class="text-xs text-white/40 ml-2">Step ${stepNumber} of 2</span>
       </div>
