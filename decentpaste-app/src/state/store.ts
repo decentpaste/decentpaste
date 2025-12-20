@@ -1,6 +1,5 @@
 import type {
   AppSettings,
-  AuthMethod,
   ClipboardEntry,
   DeviceInfo,
   DiscoveredPeer,
@@ -14,7 +13,7 @@ import type {
 } from '../api/types';
 
 export type View = 'dashboard' | 'peers' | 'history' | 'settings';
-export type OnboardingStep = 'device-name' | 'auth-method' | 'pin-setup' | null;
+export type OnboardingStep = 'device-name' | 'pin-setup' | null;
 
 export interface Toast {
   id: string;
@@ -62,12 +61,10 @@ export interface AppState {
 
   // Vault state
   vaultStatus: VaultStatus;
-  biometricAvailable: boolean;
 
   // Onboarding state
   onboardingStep: OnboardingStep;
   onboardingDeviceName: string;
-  onboardingAuthMethod: AuthMethod;
 
   // Reset confirmation state
   showResetConfirmation: boolean;
@@ -110,11 +107,9 @@ class Store {
       updateError: null,
       // Vault state
       vaultStatus: 'NotSetup',
-      biometricAvailable: false,
       // Onboarding state
       onboardingStep: null,
       onboardingDeviceName: '',
-      onboardingAuthMethod: 'pin',
       // Reset confirmation state
       showResetConfirmation: false,
     };

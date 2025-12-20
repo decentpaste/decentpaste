@@ -20,7 +20,6 @@
     "notification:default",
     "updater:default",
     "process:allow-restart",
-    "stronghold:default",
-    "biometric:default"
+    "stronghold:default"
   ]
 }

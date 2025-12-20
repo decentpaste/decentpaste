@@ -647,7 +647,7 @@ pub async fn get_vault_status(state: State<'_, AppState>) -> Result<VaultStatus>
 /// # Arguments
 /// * `device_name` - The user's chosen device name
 /// * `pin` - The user's chosen PIN (4-8 digits)
-/// * `auth_method` - Preferred auth method ("pin" or "biometric")
+/// * `auth_method` - Auth method (currently only "pin" is supported)
 #[tauri::command]
 pub async fn setup_vault(
     app_handle: AppHandle,
@@ -875,56 +875,6 @@ pub async fn reset_vault(app_handle: AppHandle, state: State<'_, AppState>) -> R
 
     info!("Vault reset completed");
     Ok(())
-}
-
-/// Check if biometric authentication is available on this device.
-///
-/// Returns true if the device supports biometric auth (fingerprint, face, etc.)
-/// and the user has enrolled biometrics.
-///
-/// Note: This is primarily used on mobile. On desktop, returns false.
-#[tauri::command]
-pub async fn check_biometric_available() -> Result<bool> {
-    // Biometric availability is checked via the frontend plugin
-    // This command exists for consistency but the actual check
-    // should be done via @tauri-apps/plugin-biometric status() in JS
-    #[cfg(any(target_os = "android", target_os = "ios"))]
-    {
-        // On mobile, return true to indicate the frontend should check
-        // The actual availability check is done by the biometric plugin
-        Ok(true)
-    }
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    {
-        // On desktop, biometric is not supported
-        Ok(false)
-    }
-}
-
-/// Authenticate using biometrics.
-///
-/// This command is called after the frontend successfully authenticates
-/// via the biometric plugin. It retrieves the stored encryption key
-/// from the secure storage and unlocks the vault.
-///
-/// Note: For biometric to work, the derived encryption key must have been
-/// stored in the system keychain during initial setup with PIN.
-#[tauri::command]
-pub async fn authenticate_biometric(
-    _app_handle: AppHandle,
-    _state: State<'_, AppState>,
-) -> Result<()> {
-    // TODO: Implement biometric key retrieval from system keychain
-    // For now, biometric auth is handled entirely on the frontend:
-    // 1. Frontend calls biometric plugin to authenticate
-    // 2. On success, frontend retrieves PIN from secure storage
-    // 3. Frontend calls unlock_vault with the retrieved PIN
-    //
-    // A future enhancement could store the derived key directly in
-    // the system keychain, but that requires additional security considerations.
-    Err(DecentPasteError::NotSupported(
-        "Biometric auth should be handled via frontend. Use biometric plugin + unlock_vault.".into(),
-    ))
 }
 
 /// Flush current app state to the vault.

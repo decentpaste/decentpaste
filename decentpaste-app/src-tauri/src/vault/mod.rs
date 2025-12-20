@@ -6,8 +6,7 @@
 //! - Device identity and keys
 //!
 //! The vault is protected by a user PIN which is transformed via Argon2id
-//! into an encryption key. On mobile devices, biometric authentication
-//! can be used as an alternative unlock method.
+//! into an encryption key.
 
 pub mod auth;
 pub mod error;

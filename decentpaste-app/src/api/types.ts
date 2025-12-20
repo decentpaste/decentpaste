@@ -53,7 +53,7 @@ export interface PairingSession {
 
 // Vault types
 export type VaultStatus = 'NotSetup' | 'Locked' | 'Unlocked';
-export type AuthMethod = 'pin' | 'biometric';
+export type AuthMethod = 'pin';
 
 // Settings types
 export interface AppSettings {
@@ -64,7 +64,7 @@ export interface AppSettings {
   keep_history: boolean;
   show_notifications: boolean;
   clipboard_poll_interval_ms: number;
-  /** Preferred authentication method for vault access ('pin' or 'biometric') */
+  /** Preferred authentication method for vault access (currently only 'pin') */
   auth_method: AuthMethod | null;
 }
 

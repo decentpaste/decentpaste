@@ -498,13 +498,6 @@
     "@tauri-apps/cli-win32-ia32-msvc" "2.9.6"
     "@tauri-apps/cli-win32-x64-msvc" "2.9.6"
 
-"@tauri-apps/plugin-biometric@^2":
-  version "2.3.2"
-  resolved "https://registry.yarnpkg.com/@tauri-apps/plugin-biometric/-/plugin-biometric-2.3.2.tgz#0eb03a90ca1537ef7fb30a6345787ba743d01382"
-  integrity sha512-RFydYGKEJ6m4UWdcPsO+vJQUb3JyyfFeNoZSPDs0uWjvwHBs03xey5wWO+uowmFFy03JAff1l2idQAwuycO8Uw==
-  dependencies:
-    "@tauri-apps/api" "^2.8.0"
-
 "@tauri-apps/plugin-clipboard-manager@^2":
   version "2.3.2"
   resolved "https://registry.yarnpkg.com/@tauri-apps/plugin-clipboard-manager/-/plugin-clipboard-manager-2.3.2.tgz#41def8a008eca94fd5abe2915d26a9c4b6ce54ca"

@@ -21,7 +21,7 @@ pub struct AppSettings {
     pub show_notifications: bool,
     pub clipboard_poll_interval_ms: u64,
     /// Preferred authentication method for vault access.
-    /// Can be "pin" or "biometric". None means not yet configured (onboarding).
+    /// Currently only "pin" is supported. None means not yet configured (onboarding).
     pub auth_method: Option<String>,
 }
 

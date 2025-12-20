@@ -129,7 +129,7 @@ export async function getVaultStatus(): Promise<VaultStatus> {
  * Creates an encrypted Stronghold vault protected by the user's PIN.
  * @param deviceName - The user's chosen device name
  * @param pin - The user's chosen PIN (4-8 digits)
- * @param authMethod - Preferred auth method ('pin' or 'biometric')
+ * @param authMethod - Auth method (currently only 'pin' is supported)
  */
 export async function setupVault(
   deviceName: string,
@@ -166,22 +166,6 @@ export async function lockVault(): Promise<void> {
  */
 export async function resetVault(): Promise<void> {
   return invoke('reset_vault');
-}
-
-/**
- * Check if biometric authentication is available on this device.
- * Returns true on mobile if device supports biometrics, false on desktop.
- */
-export async function checkBiometricAvailable(): Promise<boolean> {
-  return invoke('check_biometric_available');
-}
-
-/**
- * Authenticate using biometrics.
- * Note: Currently biometric auth is handled via frontend plugin + unlock_vault.
- */
-export async function authenticateBiometric(): Promise<void> {
-  return invoke('authenticate_biometric');
 }
 
 /**

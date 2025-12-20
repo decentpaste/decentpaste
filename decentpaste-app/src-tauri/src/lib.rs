@@ -59,10 +59,6 @@ pub fn run() {
         }).build())
         .manage(AppState::new())
         .setup(|app| {
-            // Biometric plugin - only available on mobile platforms (Android/iOS)
-            #[cfg(mobile)]
-            app.handle().plugin(tauri_plugin_biometric::init())?;
-
             let app_handle = app.handle().clone();
 
             // Setup system tray and window close interception (desktop only)
@@ -123,8 +119,6 @@ pub fn run() {
             commands::unlock_vault,
             commands::lock_vault,
             commands::reset_vault,
-            commands::check_biometric_available,
-            commands::authenticate_biometric,
             commands::flush_vault,
         ])
         .build(tauri::generate_context!())

@@ -25,7 +25,7 @@ pub enum VaultError {
     NotSetup,
 
     /// The vault is locked and requires authentication.
-    /// User needs to enter PIN or use biometrics.
+    /// User needs to enter PIN.
     #[error("Vault is locked")]
     Locked,
 

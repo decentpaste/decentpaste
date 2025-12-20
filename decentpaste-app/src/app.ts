@@ -26,13 +26,8 @@ class App {
 
     // Check vault status first - determines what data to load
     try {
-      const [vaultStatus, biometricAvailable] = await Promise.all([
-        commands.getVaultStatus(),
-        commands.checkBiometricAvailable(),
-      ]);
-
+      const vaultStatus = await commands.getVaultStatus();
       store.set('vaultStatus', vaultStatus);
-      store.set('biometricAvailable', biometricAvailable);
 
       // Only load full app data if vault is unlocked
       if (vaultStatus === 'Unlocked') {
@@ -323,14 +318,6 @@ class App {
         return;
       }
 
-      // Lock screen: Biometric unlock button
-      if (target.closest('#btn-biometric-unlock')) {
-        // TODO: Implement biometric unlock via frontend plugin
-        // For now, show a message that it's not implemented
-        store.addToast('Biometric unlock coming soon', 'info');
-        return;
-      }
-
       // Lock screen: Forgot PIN button - show reset confirmation
       if (target.closest('#btn-forgot-pin')) {
         store.set('showResetConfirmation', true);
@@ -395,23 +382,6 @@ class App {
         }
 
         store.set('onboardingDeviceName', deviceName);
-        store.set('onboardingStep', 'auth-method');
-        this.render();
-        return;
-      }
-
-      // Onboarding: Step 2 - Select auth method
-      const pinMethodBtn = target.closest('#btn-auth-method-pin');
-      if (pinMethodBtn) {
-        store.set('onboardingAuthMethod', 'pin');
-        store.set('onboardingStep', 'pin-setup');
-        this.render();
-        return;
-      }
-
-      const biometricMethodBtn = target.closest('#btn-auth-method-biometric');
-      if (biometricMethodBtn) {
-        store.set('onboardingAuthMethod', 'biometric');
         store.set('onboardingStep', 'pin-setup');
         this.render();
         return;
@@ -424,14 +394,7 @@ class App {
         return;
       }
 
-      // Onboarding: Step 3 - Back button
-      if (target.closest('#btn-onboarding-step3-back')) {
-        store.set('onboardingStep', 'auth-method');
-        this.render();
-        return;
-      }
-
-      // Onboarding: Step 3 - Complete setup
+      // Onboarding: Step 2 - Complete setup
       const completeSetupBtn = target.closest('#btn-onboarding-complete') as HTMLButtonElement | null;
       if (completeSetupBtn) {
         const pinInput = document.getElementById('onboarding-pin') as HTMLInputElement | null;
@@ -474,14 +437,12 @@ class App {
 
         try {
           const deviceName = store.get('onboardingDeviceName');
-          const authMethod = store.get('onboardingAuthMethod');
 
-          await commands.setupVault(deviceName, pin, authMethod);
+          await commands.setupVault(deviceName, pin, 'pin');
 
           // Reset onboarding state
           store.set('onboardingStep', null);
           store.set('onboardingDeviceName', '');
-          store.set('onboardingAuthMethod', 'pin');
 
           // Vault status will be updated via event, triggering re-render
           store.addToast('Vault created successfully!', 'success');
@@ -1149,11 +1110,10 @@ class App {
 
   /**
    * Renders the lock screen for returning users.
-   * Shows PIN input with masked digits and optional biometric button.
+   * Shows PIN input with masked digits.
    */
   private renderLockScreen(): string {
     const settings = store.get('settings');
-    const biometricAvailable = store.get('biometricAvailable');
     const showResetConfirmation = store.get('showResetConfirmation');
     const deviceName = settings.device_name || 'Your Device';
 
@@ -1199,14 +1159,6 @@ class App {
             <span>Unlock</span>
           </button>
 
-          <!-- Biometric Button (mobile only) -->
-          ${biometricAvailable ? `
-            <button id="btn-biometric-unlock" class="btn-secondary w-full max-w-xs mb-4">
-              ${icon('fingerprint', 18)}
-              <span>Use Biometric</span>
-            </button>
-          ` : ''}
-
           <!-- Forgot PIN Link -->
           <button id="btn-forgot-pin" class="text-white/40 hover:text-white/60 text-sm transition-colors">
             Forgot PIN?
@@ -1226,24 +1178,23 @@ class App {
 
   /**
    * Renders the onboarding wizard for first-time setup.
-   * 3-step flow: Device Name → Auth Method → PIN Setup
+   * 2-step flow: Device Name → PIN Setup
    */
   private renderOnboarding(): string {
     const step = store.get('onboardingStep') || 'device-name';
-    const biometricAvailable = store.get('biometricAvailable');
     const deviceInfo = store.get('deviceInfo');
     const defaultDeviceName = deviceInfo?.device_name || 'My Device';
 
     // Progress indicator
-    const stepNumber = step === 'device-name' ? 1 : step === 'auth-method' ? 2 : 3;
+    const stepNumber = step === 'device-name' ? 1 : 2;
     const progressIndicator = `
       <div class="flex items-center justify-center gap-2 mb-8">
         <div class="flex items-center gap-1">
-          ${[1, 2, 3].map(n => `
+          ${[1, 2].map(n => `
             <div class="w-2 h-2 rounded-full transition-all ${n === stepNumber ? 'bg-teal-400 w-6' : n < stepNumber ? 'bg-teal-400/50' : 'bg-white/20'}"></div>
           `).join('')}
         </div>
-        <span class="text-xs text-white/40 ml-2">Step ${stepNumber} of 3</span>
+        <span class="text-xs text-white/40 ml-2">Step ${stepNumber} of 2</span>
       </div>
     `;
 
@@ -1279,70 +1230,14 @@ class App {
           <span>Continue</span>
         </button>
       `;
-    } else if (step === 'auth-method') {
-      stepContent = `
-        <div class="text-center mb-6">
-          <div class="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center" style="background: linear-gradient(135deg, rgba(20, 184, 166, 0.2) 0%, rgba(13, 148, 136, 0.1) 100%); border: 1px solid rgba(20, 184, 166, 0.3);">
-            ${icon('shield', 28, 'text-teal-400')}
-          </div>
-          <h2 class="text-xl font-semibold text-white mb-2">Choose Security Method</h2>
-          <p class="text-white/50 text-sm">Select how you want to unlock DecentPaste</p>
-        </div>
-
-        <div class="space-y-3 mb-6">
-          <!-- PIN Option -->
-          <button id="btn-auth-method-pin" class="w-full p-4 rounded-xl text-left flex items-center gap-4 transition-all hover:scale-[1.02]" style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1);">
-            <div class="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style="background: linear-gradient(135deg, rgba(20, 184, 166, 0.2) 0%, rgba(13, 148, 136, 0.1) 100%);">
-              ${icon('lock', 22, 'text-teal-400')}
-            </div>
-            <div class="flex-1">
-              <p class="text-white font-medium">PIN Code</p>
-              <p class="text-white/40 text-sm">Use a 4-8 digit PIN to unlock</p>
-            </div>
-            ${icon('chevronRight', 20, 'text-white/30')}
-          </button>
-
-          <!-- Biometric Option (only show if available) -->
-          ${biometricAvailable ? `
-            <button id="btn-auth-method-biometric" class="w-full p-4 rounded-xl text-left flex items-center gap-4 transition-all hover:scale-[1.02]" style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1);">
-              <div class="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style="background: linear-gradient(135deg, rgba(251, 146, 60, 0.2) 0%, rgba(234, 88, 12, 0.1) 100%);">
-                ${icon('fingerprint', 22, 'text-orange-400')}
-              </div>
-              <div class="flex-1">
-                <p class="text-white font-medium">Biometric</p>
-                <p class="text-white/40 text-sm">Use fingerprint or face recognition</p>
-              </div>
-              ${icon('chevronRight', 20, 'text-white/30')}
-            </button>
-          ` : `
-            <div class="w-full p-4 rounded-xl text-left flex items-center gap-4 opacity-50" style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.05);">
-              <div class="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style="background: rgba(255, 255, 255, 0.03);">
-                ${icon('fingerprint', 22, 'text-white/30')}
-              </div>
-              <div class="flex-1">
-                <p class="text-white/50 font-medium">Biometric</p>
-                <p class="text-white/30 text-sm">Not available on this device</p>
-              </div>
-            </div>
-          `}
-        </div>
-
-        <button id="btn-onboarding-step2-back" class="btn-secondary w-full">
-          ${icon('arrowLeft', 18)}
-          <span>Back</span>
-        </button>
-      `;
     } else if (step === 'pin-setup') {
-      const authMethod = store.get('onboardingAuthMethod');
-      const isUsingBiometric = authMethod === 'biometric';
-
       stepContent = `
         <div class="text-center mb-6">
           <div class="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center" style="background: linear-gradient(135deg, rgba(20, 184, 166, 0.2) 0%, rgba(13, 148, 136, 0.1) 100%); border: 1px solid rgba(20, 184, 166, 0.3);">
             ${icon('key', 28, 'text-teal-400')}
           </div>
           <h2 class="text-xl font-semibold text-white mb-2">Create Your PIN</h2>
-          <p class="text-white/50 text-sm">${isUsingBiometric ? 'A backup PIN is required even with biometrics' : 'Choose a 4-8 digit PIN to secure your vault'}</p>
+          <p class="text-white/50 text-sm">Choose a 4-8 digit PIN to secure your vault</p>
         </div>
 
         <div class="space-y-4 mb-6">
@@ -1382,7 +1277,7 @@ class App {
             ${icon('check', 18)}
             <span>Complete Setup</span>
           </button>
-          <button id="btn-onboarding-step3-back" class="btn-secondary w-full">
+          <button id="btn-onboarding-step2-back" class="btn-secondary w-full">
             ${icon('arrowLeft', 18)}
             <span>Back</span>
           </button>

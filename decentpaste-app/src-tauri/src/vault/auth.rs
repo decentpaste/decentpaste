@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 /// The vault transitions between these states:
 /// - `NotSetup` → `Unlocked` (after first-time setup with PIN)
 /// - `Unlocked` → `Locked` (when user locks or app backgrounds)
-/// - `Locked` → `Unlocked` (after successful PIN/biometric auth)
+/// - `Locked` → `Unlocked` (after successful PIN auth)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub enum VaultStatus {
@@ -34,9 +34,6 @@ impl Default for VaultStatus {
 pub enum AuthMethod {
     /// PIN-based authentication (4-8 digits)
     Pin,
-    /// Biometric authentication (fingerprint, face, etc.)
-    /// Falls back to PIN if biometric fails or is unavailable
-    Biometric,
 }
 
 impl Default for AuthMethod {
@@ -59,7 +56,6 @@ impl std::fmt::Display for AuthMethod {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Pin => write!(f, "pin"),
-            Self::Biometric => write!(f, "biometric"),
         }
     }
 }
