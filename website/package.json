@@ -1,0 +1,25 @@
+{
+  "name": "decentpaste-website",
+  "version": "1.0.0",
+  "description": "DecentPaste landing page",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k \"yarn watch:css\" \"yarn serve\"",
+    "serve": "serve . -l 3000",
+    "watch:css": "npx @tailwindcss/cli -i ./src/input.css -o ./dist/output.css --watch",
+    "build:css": "npx @tailwindcss/cli -i ./src/input.css -o ./dist/output.css --minify",
+    "build": "node scripts/build.js",
+    "preview": "serve dist -l 3000",
+    "format:fix": "prettier . --write"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.0.0",
+    "concurrently": "^9.1.2",
+    "html-minifier-terser": "^7.2.0",
+    "prettier": "^3.7.4",
+    "serve": "^14.2.4",
+    "tailwindcss": "^4.0.0",
+    "terser": "^5.37.0"
+  }
+}
