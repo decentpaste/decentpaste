@@ -9,6 +9,7 @@ import type {
   PairingPinPayload,
   PairingRequestPayload,
   PeerNameUpdatedPayload,
+  VaultStatus,
 } from './types';
 
 /** Payload for clipboard synced while app was in background (Android) */
@@ -34,6 +35,7 @@ interface EventListeners {
   clipboardSyncedFromBackground: EventHandler<ClipboardSyncedFromBackgroundPayload>[];
   networkError: EventHandler<string>[];
   appMinimizedToTray: EventHandler<void>[];
+  vaultStatus: EventHandler<VaultStatus>[];
 }
 
 class EventManager {
@@ -52,6 +54,7 @@ class EventManager {
     clipboardSyncedFromBackground: [],
     networkError: [],
     appMinimizedToTray: [],
+    vaultStatus: [],
   };
 
   private unlistenFns: UnlistenFn[] = [];
@@ -99,6 +102,9 @@ class EventManager {
       }),
       listen('app-minimized-to-tray', () => {
         this.listeners.appMinimizedToTray.forEach((fn) => fn());
+      }),
+      listen<VaultStatus>('vault-status', (e) => {
+        this.listeners.vaultStatus.forEach((fn) => fn(e.payload));
       }),
     ]);
   }

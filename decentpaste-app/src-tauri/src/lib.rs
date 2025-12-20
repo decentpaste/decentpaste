@@ -6,18 +6,23 @@ mod security;
 mod state;
 mod storage;
 mod tray;
+pub mod vault;
 
 use chrono::Utc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::mpsc;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use clipboard::{ClipboardChange, ClipboardEntry, ClipboardMonitor, SyncManager};
-use network::{ClipboardMessage, NetworkCommand, NetworkEvent, NetworkManager, NetworkStatus};
-use security::get_or_create_identity;
+use network::{ClipboardMessage, NetworkCommand, NetworkEvent, NetworkManager};
 use state::{AppState, PendingClipboard};
-use storage::{get_or_create_libp2p_keypair, init_data_dir, load_paired_peers, load_settings};
+use storage::{init_data_dir, load_settings};
+use vault::{VaultManager, VaultStatus};
+
+/// Track whether network services have been started (to prevent double-start)
+static SERVICES_STARTED: AtomicBool = AtomicBool::new(false);
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -32,12 +37,26 @@ pub fn run() {
 
     info!("Starting DecentPaste...");
 
+    // Reduce Stronghold's encryption work factor since we already use Argon2id
+    // for key derivation (64MB memory, 3 iterations). The default work factor
+    // causes ~35 second delays per save operation, which is unnecessary
+    // when the encryption key is already cryptographically strong.
+    if let Err(e) = iota_stronghold::engine::snapshot::try_set_encrypt_work_factor(0) {
+        warn!("Failed to set Stronghold work factor: {:?}", e);
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        // Stronghold plugin - password callback returns bytes for encryption key
+        // Note: We handle our own Argon2 key derivation in VaultManager,
+        // so this callback is mainly for the JS API compatibility
+        .plugin(tauri_plugin_stronghold::Builder::new(|password| {
+            password.as_bytes().to_vec()
+        }).build())
         .manage(AppState::new())
         .setup(|app| {
             let app_handle = app.handle().clone();
@@ -94,6 +113,13 @@ pub fn run() {
             commands::update_settings,
             commands::get_device_info,
             commands::get_pairing_sessions,
+            // Vault commands
+            commands::get_vault_status,
+            commands::setup_vault,
+            commands::unlock_vault,
+            commands::lock_vault,
+            commands::reset_vault,
+            commands::flush_vault,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
@@ -178,13 +204,92 @@ pub fn run() {
                     event: tauri::WindowEvent::Focused(false),
                     ..
                 } => {
-                    info!("App lost focus (going to background)");
+                    info!("App lost focus (going to background) - flushing vault");
                     let state = app_handle.state::<AppState>();
                     let is_foreground = state.is_foreground.clone();
+                    let vault_manager = state.vault_manager.clone();
+                    let settings = state.settings.clone();
+                    let clipboard_history = state.clipboard_history.clone();
+                    let paired_peers = state.paired_peers.clone();
+
                     tauri::async_runtime::spawn(async move {
-                        let mut fg = is_foreground.write().await;
-                        *fg = false;
+                        // Mark as background
+                        {
+                            let mut fg = is_foreground.write().await;
+                            *fg = false;
+                        }
+
+                        // Flush vault data before going to background
+                        let manager = vault_manager.read().await;
+                        if let Some(ref manager) = *manager {
+                            // Check if we should save clipboard history
+                            let keep_history = settings.read().await.keep_history;
+                            if keep_history {
+                                let history = clipboard_history.read().await;
+                                if let Err(e) = manager.set_clipboard_history(&history) {
+                                    error!("Failed to flush clipboard history: {}", e);
+                                }
+                            }
+
+                            // Always save paired peers
+                            let peers = paired_peers.read().await;
+                            if let Err(e) = manager.set_paired_peers(&peers) {
+                                error!("Failed to flush paired peers: {}", e);
+                            }
+
+                            // Commit to disk
+                            if let Err(e) = manager.flush() {
+                                error!("Failed to flush vault to disk: {}", e);
+                            } else {
+                                info!("Vault flushed before backgrounding");
+                            }
+                        }
                     });
+                }
+
+                // Flush vault on app exit (desktop)
+                tauri::RunEvent::ExitRequested { .. } => {
+                    info!("App exit requested - flushing vault");
+                    let state = app_handle.state::<AppState>();
+
+                    // Use blocking runtime for synchronous shutdown
+                    let vault_manager = state.vault_manager.clone();
+                    let settings = state.settings.clone();
+                    let clipboard_history = state.clipboard_history.clone();
+                    let paired_peers = state.paired_peers.clone();
+
+                    // Spawn blocking task to ensure flush completes before exit
+                    std::thread::spawn(move || {
+                        let rt = tokio::runtime::Runtime::new().unwrap();
+                        rt.block_on(async {
+                            let manager = vault_manager.read().await;
+                            if let Some(ref manager) = *manager {
+                                // Check if we should save clipboard history
+                                let keep_history = settings.read().await.keep_history;
+                                if keep_history {
+                                    let history = clipboard_history.read().await;
+                                    if let Err(e) = manager.set_clipboard_history(&history) {
+                                        error!("Failed to flush clipboard history on exit: {}", e);
+                                    }
+                                }
+
+                                // Always save paired peers
+                                let peers = paired_peers.read().await;
+                                if let Err(e) = manager.set_paired_peers(&peers) {
+                                    error!("Failed to flush paired peers on exit: {}", e);
+                                }
+
+                                // Commit to disk
+                                if let Err(e) = manager.flush() {
+                                    error!("Failed to flush vault on exit: {}", e);
+                                } else {
+                                    info!("Vault flushed before exit");
+                                }
+                            }
+                        });
+                    })
+                    .join()
+                    .ok();
                 }
 
                 _ => {}
@@ -192,6 +297,8 @@ pub fn run() {
         });
 }
 
+/// Initialize the app - check vault status and load settings.
+/// Network/clipboard services are NOT started here - they start after vault unlock.
 async fn initialize_app(
     app_handle: AppHandle,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -200,27 +307,73 @@ async fn initialize_app(
 
     let state = app_handle.state::<AppState>();
 
-    // Load settings
+    // Load settings (always available - not sensitive)
     let settings = load_settings().unwrap_or_default();
     {
         let mut s = state.settings.write().await;
         *s = settings.clone();
     }
 
-    // Load or create device identity
-    let identity = get_or_create_identity()?;
-    {
-        let mut id = state.device_identity.write().await;
-        *id = Some(identity.clone());
-    }
-    info!("Device ID: {}", identity.device_id);
+    // Check vault status
+    let vault_exists = VaultManager::exists().unwrap_or(false);
+    let vault_status = if vault_exists {
+        VaultStatus::Locked
+    } else {
+        VaultStatus::NotSetup
+    };
 
-    // Load paired peers
-    let paired = load_paired_peers().unwrap_or_default();
+    // Update state and emit event
     {
-        let mut peers = state.paired_peers.write().await;
-        *peers = paired;
+        let mut status = state.vault_status.write().await;
+        *status = vault_status.clone();
     }
+    let _ = app_handle.emit("vault-status", &vault_status);
+
+    info!(
+        "Vault status: {:?} - waiting for authentication before starting services",
+        vault_status
+    );
+
+    // Don't start network/clipboard services here.
+    // They will be started after vault is unlocked via start_network_services().
+
+    info!("DecentPaste initialized - vault authentication required");
+    Ok(())
+}
+
+/// Start network and clipboard services after vault is unlocked.
+/// This is called from unlock_vault/setup_vault commands.
+pub async fn start_network_services(
+    app_handle: AppHandle,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    // Prevent double-start
+    if SERVICES_STARTED.swap(true, Ordering::SeqCst) {
+        warn!("Network services already started, skipping");
+        return Ok(());
+    }
+
+    let state = app_handle.state::<AppState>();
+
+    // Get device identity from state (loaded from vault during unlock)
+    let identity = {
+        let id = state.device_identity.read().await;
+        id.clone().ok_or("Device identity not loaded")?
+    };
+    info!("Starting network services for device: {}", identity.device_id);
+
+    // Get settings for clipboard poll interval
+    let settings = state.settings.read().await.clone();
+
+    // Get libp2p keypair from vault manager
+    let libp2p_keypair = {
+        let manager = state.vault_manager.read().await;
+        manager
+            .as_ref()
+            .ok_or("Vault not unlocked")?
+            .get_libp2p_keypair()?
+            .ok_or("libp2p keypair not found in vault")?
+    };
+    info!("Loaded libp2p keypair from vault");
 
     // Create channels
     let (network_cmd_tx, network_cmd_rx) = mpsc::channel::<NetworkCommand>(100);
@@ -232,10 +385,6 @@ async fn initialize_app(
         let mut tx = state.network_command_tx.write().await;
         *tx = Some(network_cmd_tx.clone());
     }
-
-    // Load or create the libp2p keypair for consistent peer ID across restarts
-    let libp2p_keypair = get_or_create_libp2p_keypair()?;
-    info!("Loaded libp2p keypair, peer ID will be consistent across restarts");
 
     // Get device name for network identification
     let device_name = identity.device_name.clone();
@@ -407,8 +556,12 @@ async fn initialize_app(
                         if let Some(peer) = peers.iter_mut().find(|p| p.peer_id == peer_id) {
                             if peer.device_name != device_name {
                                 peer.device_name = device_name.clone();
-                                // Save updated paired peers
-                                let _ = storage::save_paired_peers(&peers);
+                                // Save updated paired peers to vault
+                                let vault_manager = state.vault_manager.read().await;
+                                if let Some(ref manager) = *vault_manager {
+                                    let _ = manager.set_paired_peers(&peers);
+                                    let _ = manager.flush();
+                                }
                                 true
                             } else {
                                 false
@@ -649,7 +802,12 @@ async fn initialize_app(
                         let mut peers = state.paired_peers.write().await;
                         if !peers.iter().any(|p| p.peer_id == peer_id) {
                             peers.push(paired_peer);
-                            let _ = storage::save_paired_peers(&peers);
+                            // Save to vault instead of plaintext
+                            let vault_manager = state.vault_manager.read().await;
+                            if let Some(ref manager) = *vault_manager {
+                                let _ = manager.set_paired_peers(&peers);
+                                let _ = manager.flush();
+                            }
                         }
                     }
 
@@ -793,6 +951,6 @@ async fn initialize_app(
         }
     });
 
-    info!("DecentPaste initialized successfully");
+    info!("Network services started successfully");
     Ok(())
 }

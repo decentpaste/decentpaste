@@ -121,12 +121,16 @@ Modify the Tailwind config in `index.html`:
     theme: {
       extend: {
         colors: {
-          teal: { /* your colors */ },
-          orange: { /* your colors */ },
+          teal: {
+            /* your colors */
+          },
+          orange: {
+            /* your colors */
+          },
         },
       },
     },
-  }
+  };
 </script>
 ```
 

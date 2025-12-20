@@ -19,6 +19,7 @@
     "clipboard-manager:allow-clear",
     "notification:default",
     "updater:default",
-    "process:allow-restart"
+    "process:allow-restart",
+    "stronghold:default"
   ]
 }

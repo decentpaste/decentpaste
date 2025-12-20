@@ -51,14 +51,21 @@ export interface PairingSession {
   created_at: string;
 }
 
+// Vault types
+export type VaultStatus = 'NotSetup' | 'Locked' | 'Unlocked';
+export type AuthMethod = 'pin';
+
 // Settings types
 export interface AppSettings {
   device_name: string;
   auto_sync_enabled: boolean;
   clipboard_history_limit: number;
-  clear_history_on_exit: boolean;
+  /** Whether to persist clipboard history across app restarts */
+  keep_history: boolean;
   show_notifications: boolean;
   clipboard_poll_interval_ms: number;
+  /** Preferred authentication method for vault access (currently only 'pin') */
+  auth_method: AuthMethod | null;
 }
 
 // Device info

@@ -24,8 +24,25 @@ class App {
     await eventManager.setup();
     this.setupEventHandlers();
 
-    // Load initial data
-    await this.loadInitialData();
+    // Check vault status first - determines what data to load
+    try {
+      const vaultStatus = await commands.getVaultStatus();
+      store.set('vaultStatus', vaultStatus);
+
+      // Only load full app data if vault is unlocked
+      if (vaultStatus === 'Unlocked') {
+        await this.loadInitialData();
+      } else {
+        // For NotSetup/Locked states, just mark loading as complete
+        // Data will be loaded after unlock/setup via loadDataAfterUnlock()
+        store.set('isLoading', false);
+      }
+    } catch (error) {
+      console.error('Failed to check vault status:', error);
+      // Fallback: assume not setup if we can't check
+      store.set('vaultStatus', 'NotSetup');
+      store.set('isLoading', false);
+    }
 
     // Render UI
     this.render();
@@ -173,6 +190,22 @@ class App {
         return;
       }
 
+      // Lock vault button (header)
+      const lockVaultBtn = target.closest('#btn-lock-vault') as HTMLButtonElement | null;
+      if (lockVaultBtn) {
+        lockVaultBtn.disabled = true;
+        lockVaultBtn.innerHTML = icon('loader', 20, 'animate-spin');
+        try {
+          await commands.lockVault();
+          // vaultStatus will be updated via event, triggering re-render to lock screen
+        } catch (error) {
+          store.addToast(`Failed to lock vault: ${getErrorMessage(error)}`, 'error');
+          lockVaultBtn.disabled = false;
+          lockVaultBtn.innerHTML = icon('lock', 20);
+        }
+        return;
+      }
+
       // Pairing modal buttons
       const acceptBtn = target.closest('#btn-accept-pairing') as HTMLButtonElement | null;
       if (acceptBtn) {
@@ -248,6 +281,191 @@ class App {
         store.set('activePairingSession', null);
         return;
       }
+
+      // Lock screen: Unlock button
+      const unlockBtn = target.closest('#btn-unlock') as HTMLButtonElement | null;
+      if (unlockBtn) {
+        const pinInput = document.getElementById('lock-pin-input') as HTMLInputElement | null;
+        const errorEl = document.getElementById('lock-error');
+        const pin = pinInput?.value || '';
+
+        if (pin.length < 4) {
+          if (errorEl) {
+            errorEl.textContent = 'PIN must be at least 4 digits';
+            errorEl.classList.remove('hidden');
+          }
+          return;
+        }
+
+        unlockBtn.disabled = true;
+        unlockBtn.innerHTML = `${icon('loader', 18, 'animate-spin')}<span>Unlocking...</span>`;
+
+        try {
+          await commands.unlockVault(pin);
+          // Status will be updated via vault-status event
+        } catch (error) {
+          if (errorEl) {
+            errorEl.textContent = getErrorMessage(error);
+            errorEl.classList.remove('hidden');
+          }
+          unlockBtn.disabled = false;
+          unlockBtn.innerHTML = `${icon('unlock', 18)}<span>Unlock</span>`;
+          if (pinInput) {
+            pinInput.value = '';
+            pinInput.focus();
+          }
+        }
+        return;
+      }
+
+      // Lock screen: Forgot PIN button - show reset confirmation
+      if (target.closest('#btn-forgot-pin')) {
+        store.set('showResetConfirmation', true);
+        return;
+      }
+
+      // Reset confirmation: Cancel button
+      if (target.closest('#btn-reset-cancel')) {
+        store.set('showResetConfirmation', false);
+        return;
+      }
+
+      // Reset confirmation: Confirm button
+      const resetConfirmBtn = target.closest('#btn-reset-confirm') as HTMLButtonElement | null;
+      if (resetConfirmBtn) {
+        const resetInput = document.getElementById('reset-confirmation-input') as HTMLInputElement | null;
+        const errorEl = document.getElementById('reset-error');
+        const inputValue = resetInput?.value.trim() || '';
+
+        if (inputValue !== 'RESET') {
+          if (errorEl) {
+            errorEl.textContent = 'Please type RESET to confirm';
+            errorEl.classList.remove('hidden');
+          }
+          return;
+        }
+
+        // Disable button and show loading
+        resetConfirmBtn.disabled = true;
+        resetConfirmBtn.innerHTML = `${icon('loader', 18, 'animate-spin')}<span>Resetting...</span>`;
+
+        try {
+          await commands.resetVault();
+          store.set('showResetConfirmation', false);
+          store.set('vaultStatus', 'NotSetup');
+          store.set('onboardingStep', 'device-name');
+          store.addToast('Vault reset. Please set up again.', 'info');
+        } catch (error) {
+          if (errorEl) {
+            errorEl.textContent = getErrorMessage(error);
+            errorEl.classList.remove('hidden');
+          }
+          resetConfirmBtn.disabled = false;
+          resetConfirmBtn.innerHTML = `${icon('trash', 18)}<span>Reset Everything</span>`;
+        }
+        return;
+      }
+
+      // Onboarding: Step 1 - Continue from device name
+      const step1ContinueBtn = target.closest('#btn-onboarding-step1-continue') as HTMLButtonElement | null;
+      if (step1ContinueBtn) {
+        const deviceNameInput = document.getElementById('onboarding-device-name') as HTMLInputElement | null;
+        const errorEl = document.getElementById('onboarding-step1-error');
+        const deviceName = deviceNameInput?.value.trim() || '';
+
+        if (deviceName.length < 1) {
+          if (errorEl) {
+            errorEl.textContent = 'Please enter a device name';
+            errorEl.classList.remove('hidden');
+          }
+          return;
+        }
+
+        store.set('onboardingDeviceName', deviceName);
+        store.set('onboardingStep', 'pin-setup');
+        this.render();
+        return;
+      }
+
+      // Onboarding: Step 2 - Back button
+      if (target.closest('#btn-onboarding-step2-back')) {
+        store.set('onboardingStep', 'device-name');
+        this.render();
+        return;
+      }
+
+      // Onboarding: Step 2 - Complete setup
+      const completeSetupBtn = target.closest('#btn-onboarding-complete') as HTMLButtonElement | null;
+      if (completeSetupBtn) {
+        const pinInput = document.getElementById('onboarding-pin') as HTMLInputElement | null;
+        const confirmInput = document.getElementById('onboarding-pin-confirm') as HTMLInputElement | null;
+        const errorEl = document.getElementById('onboarding-step3-error');
+
+        const pin = pinInput?.value || '';
+        const confirmPin = confirmInput?.value || '';
+
+        // Validate PIN length
+        if (pin.length < 4 || pin.length > 8) {
+          if (errorEl) {
+            errorEl.textContent = 'PIN must be 4-8 digits';
+            errorEl.classList.remove('hidden');
+          }
+          return;
+        }
+
+        // Validate PIN is numeric
+        if (!/^\d+$/.test(pin)) {
+          if (errorEl) {
+            errorEl.textContent = 'PIN must contain only digits';
+            errorEl.classList.remove('hidden');
+          }
+          return;
+        }
+
+        // Validate PIN confirmation matches
+        if (pin !== confirmPin) {
+          if (errorEl) {
+            errorEl.textContent = 'PINs do not match';
+            errorEl.classList.remove('hidden');
+          }
+          return;
+        }
+
+        // Disable button and show loading
+        completeSetupBtn.disabled = true;
+        completeSetupBtn.innerHTML = `${icon('loader', 18, 'animate-spin')}<span>Setting up...</span>`;
+
+        try {
+          const deviceName = store.get('onboardingDeviceName');
+
+          await commands.setupVault(deviceName, pin, 'pin');
+
+          // Reset onboarding state
+          store.set('onboardingStep', null);
+          store.set('onboardingDeviceName', '');
+
+          // Vault status will be updated via event, triggering re-render
+          store.addToast('Vault created successfully!', 'success');
+        } catch (error) {
+          if (errorEl) {
+            errorEl.textContent = getErrorMessage(error);
+            errorEl.classList.remove('hidden');
+          }
+          completeSetupBtn.disabled = false;
+          completeSetupBtn.innerHTML = `${icon('check', 18)}<span>Complete Setup</span>`;
+        }
+        return;
+      }
+    });
+
+    // Handle keydown events for PIN input (Enter to submit)
+    this.root.addEventListener('keydown', (e) => {
+      const target = e.target as HTMLElement;
+      if (target.id === 'lock-pin-input' && e.key === 'Enter') {
+        e.preventDefault();
+        const unlockBtn = document.getElementById('btn-unlock') as HTMLButtonElement | null;
+        unlockBtn?.click();
+      }
     });
 
     // Handle change events for settings (needs separate listener due to event type)
@@ -297,10 +515,10 @@ class App {
         return;
       }
 
-      // Clear on exit toggle
-      if (target.id === 'clear-on-exit-toggle') {
+      // Keep history toggle (direct: checked = keep_history)
+      if (target.id === 'keep-history-toggle') {
         const checked = (target as HTMLInputElement).checked;
-        const settings = { ...store.get('settings'), clear_history_on_exit: checked };
+        const settings = { ...store.get('settings'), keep_history: checked };
         try {
           await commands.updateSettings(settings);
           store.set('settings', settings);
@@ -431,6 +649,33 @@ class App {
     eventManager.on('clipboardSyncedFromBackground', (payload) => {
       store.addToast(`Clipboard synced from ${payload.fromDevice}`, 'success');
     });
+
+    // Handle vault status changes - load data when unlocked
+    eventManager.on('vaultStatus', async (status) => {
+      const previousStatus = store.get('vaultStatus');
+      store.set('vaultStatus', status);
+
+      // If transitioning to Unlocked, load app data
+      if (status === 'Unlocked' && previousStatus !== 'Unlocked') {
+        await this.loadDataAfterUnlock();
+      }
+    });
+  }
+
+  /**
+   * Load app data after vault unlock or setup completion.
+   * Called when vaultStatus transitions to 'Unlocked'.
+   */
+  private async loadDataAfterUnlock(): Promise<void> {
+    store.set('isLoading', true);
+    try {
+      await this.loadInitialData();
+      store.addToast('Data loaded successfully', 'success');
+    } catch (error) {
+      console.error('Failed to load data after unlock:', error);
+      store.addToast('Failed to load some data', 'error');
+      store.set('isLoading', false);
+    }
   }
 
   private async loadInitialData(): Promise<void> {
@@ -471,6 +716,9 @@ class App {
     store.subscribe('pairingModalMode', () => this.renderPairingModal());
     store.subscribe('activePairingSession', () => this.renderPairingModal());
     store.subscribe('isLoading', () => this.render());
+    store.subscribe('vaultStatus', () => this.render());
+    store.subscribe('onboardingStep', () => this.render());
+    store.subscribe('showResetConfirmation', () => this.render());
     store.subscribe('updateStatus', () => {
       this.renderUpdateBadge();
       this.renderUpdateSection();
@@ -499,6 +747,18 @@ class App {
       return;
     }
 
+    // Show onboarding if vault is not set up
+    if (state.vaultStatus === 'NotSetup') {
+      this.root.innerHTML = this.renderOnboarding();
+      return;
+    }
+
+    // Show lock screen if vault is locked
+    if (state.vaultStatus === 'Locked') {
+      this.root.innerHTML = this.renderLockScreen();
+      return;
+    }
+
     this.root.innerHTML = `
       <div class="flex flex-col h-screen relative" style="background: #0a0a0b;">
         <!-- Ambient background orbs -->
@@ -507,7 +767,7 @@ class App {
 
         <!-- Header -->
         <header class="relative z-10 px-4 py-1 pt-safe-top border-b" style="background: rgba(17, 17, 19, 0.8); backdrop-filter: blur(12px); border-color: rgba(255, 255, 255, 0.06);">
-          <div class="flex items-center">
+          <div class="flex items-center justify-between">
             <div class="flex items-center gap-3">
               <img src="${logoDark}" alt="DecentPaste Logo" class="w-12 h-12" />
               <div>
@@ -515,6 +775,10 @@ class App {
                 <p class="text-xs text-white/40">${state.deviceInfo?.device_name || 'Loading...'}</p>
               </div>
             </div>
+            <!-- Lock Button -->
+            <button id="btn-lock-vault" class="p-2 rounded-xl text-white/50 hover:text-teal-400 hover:bg-teal-500/10 transition-all" title="Lock vault">
+              ${icon('lock', 20)}
+            </button>
           </div>
         </header>
 
@@ -793,11 +1057,14 @@ class App {
             </div>
             <div class="divider"></div>
             <label class="flex items-center justify-between p-4 cursor-pointer hover:bg-white/[0.02] transition-colors">
-              <span class="text-sm text-white/70">Clear history on exit</span>
+              <div>
+                <span class="text-sm text-white/70 block">Keep clipboard history</span>
+                <span class="text-xs text-white/40">Save history in encrypted vault</span>
+              </div>
               <input
                 type="checkbox"
-                id="clear-on-exit-toggle"
-                ${settings.clear_history_on_exit ? 'checked' : ''}
+                id="keep-history-toggle"
+                ${settings.keep_history ? 'checked' : ''}
                 class="checkbox"
               />
             </label>
@@ -834,6 +1101,282 @@ class App {
                 <p class="text-sm font-semibold text-white">DecentPaste <span class="text-white/40 font-normal">v0.1.0</span></p>
                 <p class="text-xs text-white/40">Cross-platform P2P clipboard sharing</p>
               </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Renders the lock screen for returning users.
+   * Shows PIN input with masked digits.
+   */
+  private renderLockScreen(): string {
+    const settings = store.get('settings');
+    const showResetConfirmation = store.get('showResetConfirmation');
+    const deviceName = settings.device_name || 'Your Device';
+
+    return `
+      <div class="flex flex-col h-screen relative" style="background: #0a0a0b;">
+        <!-- Ambient background orbs -->
+        <div class="orb orb-teal animate-float" style="width: 400px; height: 400px; top: -15%; left: -10%;"></div>
+        <div class="orb orb-orange animate-float-delayed" style="width: 300px; height: 300px; bottom: 10%; right: -15%;"></div>
+
+        <!-- Lock Screen Content -->
+        <div class="flex-1 flex flex-col items-center justify-center relative z-10 p-6 pt-safe-top pb-safe-bottom">
+          <!-- Logo and Device Name -->
+          <div class="text-center mb-8">
+            <div class="w-20 h-20 rounded-2xl mx-auto mb-4 flex items-center justify-center glow-teal" style="background: linear-gradient(135deg, rgba(20, 184, 166, 0.2) 0%, rgba(13, 148, 136, 0.1) 100%); border: 1px solid rgba(20, 184, 166, 0.3);">
+              ${icon('lock', 36, 'text-teal-400')}
+            </div>
+            <h1 class="text-xl font-semibold text-white mb-1">Welcome back</h1>
+            <p class="text-white/50 text-sm">${escapeHtml(deviceName)}</p>
+          </div>
+
+          <!-- PIN Input -->
+          <div class="w-full max-w-xs mb-6">
+            <label class="block text-sm text-white/60 mb-2 text-center">Enter your PIN to unlock</label>
+            <div class="relative">
+              <input
+                type="password"
+                id="lock-pin-input"
+                inputmode="numeric"
+                pattern="[0-9]*"
+                maxlength="8"
+                placeholder="••••"
+                autocomplete="off"
+                class="w-full px-4 py-3 rounded-xl text-center text-xl tracking-[0.5em] font-mono"
+                style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: white; outline: none;"
+              />
+            </div>
+            <p id="lock-error" class="text-red-400 text-xs text-center mt-2 hidden"></p>
+          </div>
+
+          <!-- Unlock Button -->
+          <button id="btn-unlock" class="btn-primary w-full max-w-xs mb-4">
+            ${icon('unlock', 18)}
+            <span>Unlock</span>
+          </button>
+
+          <!-- Forgot PIN Link -->
+          <button id="btn-forgot-pin" class="text-white/40 hover:text-white/60 text-sm transition-colors">
+            Forgot PIN?
+          </button>
+        </div>
+
+        <!-- Toast Container -->
+        <div id="toast-container" class="fixed bottom-20 left-4 right-4 flex flex-col gap-2 z-50">
+          ${this.renderToastsContent()}
+        </div>
+
+        <!-- Reset Confirmation Modal -->
+        ${showResetConfirmation ? this.renderResetConfirmation() : ''}
+      </div>
+    `;
+  }
+
+  /**
+   * Renders the onboarding wizard for first-time setup.
+   * 2-step flow: Device Name → PIN Setup
+   */
+  private renderOnboarding(): string {
+    const step = store.get('onboardingStep') || 'device-name';
+    const deviceInfo = store.get('deviceInfo');
+    const defaultDeviceName = deviceInfo?.device_name || 'My Device';
+
+    // Progress indicator
+    const stepNumber = step === 'device-name' ? 1 : 2;
+    const progressIndicator = `
+      <div class="flex items-center justify-center gap-2 mb-8">
+        <div class="flex items-center gap-1">
+          ${[1, 2]
+            .map(
+              (n) => `
+            <div class="w-2 h-2 rounded-full transition-all ${n === stepNumber ? 'bg-teal-400 w-6' : n < stepNumber ? 'bg-teal-400/50' : 'bg-white/20'}"></div>
+          `,
+            )
+            .join('')}
+        </div>
+        <span class="text-xs text-white/40 ml-2">Step ${stepNumber} of 2</span>
+      </div>
+    `;
+
+    let stepContent = '';
+
+    if (step === 'device-name') {
+      const savedDeviceName = store.get('onboardingDeviceName') || defaultDeviceName;
+      stepContent = `
+        <div class="text-center mb-6">
+          <div class="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center glow-teal" style="background: linear-gradient(135deg, rgba(20, 184, 166, 0.2) 0%, rgba(13, 148, 136, 0.1) 100%); border: 1px solid rgba(20, 184, 166, 0.3);">
+            ${icon('monitor', 28, 'text-teal-400')}
+          </div>
+          <h2 class="text-xl font-semibold text-white mb-2">Name Your Device</h2>
+          <p class="text-white/50 text-sm">This name will be visible to other devices on your network</p>
+        </div>
+
+        <div class="mb-6">
+          <label class="block text-sm text-white/60 mb-2">Device Name</label>
+          <input
+            type="text"
+            id="onboarding-device-name"
+            value="${escapeHtml(savedDeviceName)}"
+            maxlength="50"
+            placeholder="e.g., My MacBook"
+            class="w-full px-4 py-3 rounded-xl text-white"
+            style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); outline: none;"
+          />
+          <p id="onboarding-step1-error" class="text-red-400 text-xs mt-2 hidden"></p>
+        </div>
+
+        <button id="btn-onboarding-step1-continue" class="btn-primary w-full">
+          ${icon('arrowRight', 18)}
+          <span>Continue</span>
+        </button>
+      `;
+    } else if (step === 'pin-setup') {
+      stepContent = `
+        <div class="text-center mb-6">
+          <div class="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center" style="background: linear-gradient(135deg, rgba(20, 184, 166, 0.2) 0%, rgba(13, 148, 136, 0.1) 100%); border: 1px solid rgba(20, 184, 166, 0.3);">
+            ${icon('key', 28, 'text-teal-400')}
+          </div>
+          <h2 class="text-xl font-semibold text-white mb-2">Create Your PIN</h2>
+          <p class="text-white/50 text-sm">Choose a 4-8 digit PIN to secure your vault</p>
+        </div>
+
+        <div class="space-y-4 mb-6">
+          <div>
+            <label class="block text-sm text-white/60 mb-2">Enter PIN</label>
+            <input
+              type="password"
+              id="onboarding-pin"
+              inputmode="numeric"
+              pattern="[0-9]*"
+              maxlength="8"
+              placeholder="••••"
+              autocomplete="new-password"
+              class="w-full px-4 py-3 rounded-xl text-center text-xl tracking-[0.5em] font-mono"
+              style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: white; outline: none;"
+            />
+          </div>
+          <div>
+            <label class="block text-sm text-white/60 mb-2">Confirm PIN</label>
+            <input
+              type="password"
+              id="onboarding-pin-confirm"
+              inputmode="numeric"
+              pattern="[0-9]*"
+              maxlength="8"
+              placeholder="••••"
+              autocomplete="new-password"
+              class="w-full px-4 py-3 rounded-xl text-center text-xl tracking-[0.5em] font-mono"
+              style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: white; outline: none;"
+            />
+          </div>
+          <p id="onboarding-step3-error" class="text-red-400 text-xs text-center hidden"></p>
+        </div>
+
+        <div class="space-y-3">
+          <button id="btn-onboarding-complete" class="btn-primary w-full">
+            ${icon('check', 18)}
+            <span>Complete Setup</span>
+          </button>
+          <button id="btn-onboarding-step2-back" class="btn-secondary w-full">
+            ${icon('arrowLeft', 18)}
+            <span>Back</span>
+          </button>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="flex flex-col h-screen relative" style="background: #0a0a0b;">
+        <!-- Ambient background orbs -->
+        <div class="orb orb-teal animate-float" style="width: 400px; height: 400px; top: -15%; left: -10%;"></div>
+        <div class="orb orb-orange animate-float-delayed" style="width: 300px; height: 300px; bottom: 10%; right: -15%;"></div>
+
+        <!-- Onboarding Content -->
+        <div class="flex-1 flex flex-col items-center justify-center relative z-10 p-6 pt-safe-top pb-safe-bottom">
+          <div class="w-full max-w-sm">
+            <!-- Logo -->
+            <div class="text-center mb-6">
+              <img src="${logoDark}" alt="DecentPaste Logo" class="w-16 h-16 mx-auto mb-2" />
+              <h1 class="text-lg font-semibold text-white tracking-tight">Welcome to DecentPaste</h1>
+            </div>
+
+            ${progressIndicator}
+            ${stepContent}
+          </div>
+        </div>
+
+        <!-- Toast Container -->
+        <div id="toast-container" class="fixed bottom-20 left-4 right-4 flex flex-col gap-2 z-50">
+          ${this.renderToastsContent()}
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Renders the reset confirmation modal.
+   * Requires user to type "RESET" to confirm destructive action.
+   */
+  private renderResetConfirmation(): string {
+    return `
+      <div class="fixed inset-0 modal-overlay flex items-center justify-center z-50 p-4">
+        <div class="modal-content p-6 max-w-sm w-full">
+          <div class="text-center">
+            <!-- Warning Icon -->
+            <div class="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center" style="background: linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(185, 28, 28, 0.1) 100%); border: 1px solid rgba(239, 68, 68, 0.3);">
+              ${icon('alertTriangle', 28, 'text-red-400')}
+            </div>
+
+            <h2 class="text-xl font-semibold text-white mb-2">Reset Vault?</h2>
+            <p class="text-white/50 text-sm mb-4">This will permanently delete all your data:</p>
+
+            <!-- Warning List -->
+            <div class="text-left mb-6 p-3 rounded-xl" style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2);">
+              <ul class="text-sm text-red-300/80 space-y-1">
+                <li class="flex items-center gap-2">
+                  ${icon('x', 14, 'text-red-400')}
+                  <span>Paired devices will be unpaired</span>
+                </li>
+                <li class="flex items-center gap-2">
+                  ${icon('x', 14, 'text-red-400')}
+                  <span>Clipboard history will be erased</span>
+                </li>
+                <li class="flex items-center gap-2">
+                  ${icon('x', 14, 'text-red-400')}
+                  <span>Encryption keys will be destroyed</span>
+                </li>
+              </ul>
+            </div>
+
+            <!-- Confirmation Input -->
+            <div class="mb-6">
+              <label class="block text-sm text-white/60 mb-2">Type <span class="font-mono font-bold text-red-400">RESET</span> to confirm</label>
+              <input
+                type="text"
+                id="reset-confirmation-input"
+                placeholder="Type RESET here"
+                autocomplete="off"
+                autocapitalize="characters"
+                class="w-full px-4 py-3 rounded-xl text-center text-white font-mono uppercase"
+                style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); outline: none;"
+              />
+              <p id="reset-error" class="text-red-400 text-xs text-center mt-2 hidden"></p>
+            </div>
+
+            <!-- Buttons -->
+            <div class="space-y-3">
+              <button id="btn-reset-confirm" class="btn-danger w-full">
+                ${icon('trash', 18)}
+                <span>Reset Everything</span>
+              </button>
+              <button id="btn-reset-cancel" class="btn-secondary w-full">
+                ${icon('arrowLeft', 18)}
+                <span>Cancel</span>
+              </button>
             </div>
           </div>
         </div>

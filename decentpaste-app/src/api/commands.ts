@@ -1,12 +1,14 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
   AppSettings,
+  AuthMethod,
   ClipboardEntry,
   DeviceInfo,
   DiscoveredPeer,
   NetworkStatus,
   PairedPeer,
   PairingSession,
+  VaultStatus,
 } from './types';
 
 // Network commands
@@ -108,4 +110,64 @@ export async function updateSettings(settings: AppSettings): Promise<void> {
 
 export async function getDeviceInfo(): Promise<DeviceInfo> {
   return invoke('get_device_info');
+}
+
+// Vault commands - Secure storage authentication and management
+
+/**
+ * Get the current vault status.
+ * - NotSetup: First-time user, needs onboarding
+ * - Locked: Vault exists but requires PIN to unlock
+ * - Unlocked: Vault is open and data is accessible
+ */
+export async function getVaultStatus(): Promise<VaultStatus> {
+  return invoke('get_vault_status');
+}
+
+/**
+ * Set up a new vault during first-time onboarding.
+ * Creates an encrypted Stronghold vault protected by the user's PIN.
+ * @param deviceName - The user's chosen device name
+ * @param pin - The user's chosen PIN (4-8 digits)
+ * @param authMethod - Auth method (currently only 'pin' is supported)
+ */
+export async function setupVault(deviceName: string, pin: string, authMethod: AuthMethod): Promise<void> {
+  return invoke('setup_vault', {
+    deviceName,
+    pin,
+    authMethod,
+  });
+}
+
+/**
+ * Unlock an existing vault with the user's PIN.
+ * On success, loads all encrypted data and starts network/clipboard services.
+ * @param pin - The user's PIN
+ */
+export async function unlockVault(pin: string): Promise<void> {
+  return invoke('unlock_vault', { pin });
+}
+
+/**
+ * Lock the vault, flushing all data and clearing keys from memory.
+ * After locking, the user must enter their PIN to access data again.
+ */
+export async function lockVault(): Promise<void> {
+  return invoke('lock_vault');
+}
+
+/**
+ * Reset the vault, destroying all encrypted data.
+ * This is a destructive operation - user must go through onboarding again.
+ */
+export async function resetVault(): Promise<void> {
+  return invoke('reset_vault');
+}
+
+/**
+ * Flush current app state to the vault.
+ * Called before backgrounding on mobile or periodically to prevent data loss.
+ */
+export async function flushVault(): Promise<void> {
+  return invoke('flush_vault');
 }

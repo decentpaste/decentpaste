@@ -24,6 +24,12 @@ import {
   Send,
   Share2,
   Download,
+  Lock,
+  Unlock,
+  KeyRound,
+  AlertTriangle,
+  Shield,
+  ChevronRight,
   createElement,
   type IconNode,
 } from 'lucide';
@@ -52,6 +58,12 @@ const iconMap: Record<string, IconNode> = {
   send: Send,
   share: Share2,
   download: Download,
+  lock: Lock,
+  unlock: Unlock,
+  key: KeyRound,
+  alertTriangle: AlertTriangle,
+  shield: Shield,
+  chevronRight: ChevronRight,
 };
 
 export type IconName = keyof typeof iconMap;

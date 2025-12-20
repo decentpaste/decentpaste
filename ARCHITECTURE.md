@@ -25,6 +25,7 @@ macOS, Linux, Android, iOS).
 - **Networking**: libp2p (mDNS, gossipsub, request-response)
 - **Encryption**: AES-256-GCM, SHA-256
 - **Key Exchange**: X25519 ECDH (Elliptic Curve Diffie-Hellman)
+- **Secure Storage**: IOTA Stronghold with Argon2id key derivation
 
 ---
 
@@ -85,6 +86,12 @@ decentpaste/
             │   ├── crypto.rs     # AES-GCM encryption
             │   ├── identity.rs   # Device identity
             │   └── pairing.rs    # PIN pairing protocol
+            ├── vault/            # Secure encrypted storage
+            │   ├── mod.rs        # Module exports
+            │   ├── auth.rs       # VaultStatus & AuthMethod types
+            │   ├── error.rs      # Vault-specific error types
+            │   ├── manager.rs    # VaultManager lifecycle & CRUD
+            │   └── salt.rs       # Installation-specific salt handling
             └── storage/          # Persistence
                 ├── mod.rs
                 ├── config.rs     # App settings
@@ -252,7 +259,103 @@ PIN-based pairing protocol with X25519 key exchange:
    - Device B: `shared = ECDH(B_private, A_public)`
 6. No secret is transmitted over the network - only public keys
 
-### 4. Storage Layer (`src/storage/`)
+### 4. Vault & Secure Storage (`src/vault/`)
+
+The vault module provides encrypted storage for all sensitive data using IOTA Stronghold.
+
+#### Architecture Overview
+
+```
+User enters PIN (4-8 digits)
+        │
+        ▼
+┌─────────────────────────────────────┐
+│           Argon2id KDF              │
+│  ┌─────────────┬─────────────────┐  │
+│  │ Salt (16B)  │ PIN             │  │
+│  │ salt.bin    │                 │  │
+│  └─────────────┴─────────────────┘  │
+│         │                           │
+│         ▼                           │
+│  Memory: 64 MB, Time: 3, Lanes: 4   │
+│         │                           │
+│         ▼                           │
+│  256-bit Encryption Key             │
+└─────────────────────────────────────┘
+        │
+        ▼
+┌─────────────────────────────────────┐
+│        IOTA Stronghold              │
+│           vault.hold                │
+├─────────────────────────────────────┤
+│  ┌─────────────────────────────┐   │
+│  │     Encrypted Store          │   │
+│  ├─────────────────────────────┤   │
+│  │ • clipboard_history         │   │
+│  │ • paired_peers              │   │
+│  │ • device_identity           │   │
+│  │ • libp2p_keypair            │   │
+│  └─────────────────────────────┘   │
+└─────────────────────────────────────┘
+```
+
+#### `auth.rs` - Authentication Types
+
+```rust
+pub enum VaultStatus {
+    NotSetup,  // First-time user, needs onboarding
+    Locked,    // Vault exists, requires PIN
+    Unlocked,  // Vault open, data accessible
+}
+
+pub enum AuthMethod {
+    Pin,  // 4-8 digit PIN
+}
+```
+
+#### `manager.rs` - VaultManager
+
+Core vault lifecycle operations:
+
+| Method        | Description                                              |
+|---------------|----------------------------------------------------------|
+| `exists()`    | Check if vault.hold file exists (fast, no unlock needed) |
+| `create(pin)` | Create new vault with Argon2id-derived key               |
+| `open(pin)`   | Unlock existing vault                                    |
+| `destroy()`   | Delete vault and salt files (factory reset)              |
+| `flush()`     | Save in-memory data to encrypted file                    |
+| `lock()`      | Flush and clear encryption key from memory               |
+
+Data operations:
+- `get_clipboard_history()` / `set_clipboard_history()`
+- `get_paired_peers()` / `set_paired_peers()`
+- `get_device_identity()` / `set_device_identity()`
+- `get_libp2p_keypair()` / `set_libp2p_keypair()`
+
+#### `salt.rs` - Salt Management
+
+- `get_or_create_salt()` - Returns 16-byte cryptographic salt
+- `delete_salt()` - Removes salt file during vault destruction
+- Salt is unique per installation, stored in `salt.bin`
+
+#### Flush Triggers
+
+Data is automatically flushed to the encrypted vault on:
+
+1. **App backgrounded (mobile)** - `visibilitychange` event triggers flush
+2. **App exit** - `RunEvent::ExitRequested` triggers flush
+3. **Manual lock** - User clicks lock button → flush + clear key
+4. **Periodic saves** - After significant data changes
+
+#### Security Properties
+
+- **PIN never stored** - Only the derived key is used temporarily in memory
+- **Per-installation salt** - Prevents rainbow table attacks
+- **Argon2id parameters** - 64 MB memory, 3 iterations makes brute-force expensive
+- **Memory isolation** - Stronghold uses secure memory allocation
+- **Zeroization** - Key material cleared from memory on lock
+
+### 5. Storage Layer (`src/storage/`)
 
 #### `config.rs` - AppSettings
 
@@ -261,9 +364,10 @@ pub struct AppSettings {
     pub device_name: String,
     pub auto_sync_enabled: bool,
     pub clipboard_history_limit: usize,
-    pub clear_history_on_exit: bool,
-    pub show_notifications: bool,  // Desktop only; Android background clipboard sync is always silent
+    pub keep_history: bool,           // Persist clipboard history in vault
+    pub show_notifications: bool,     // Desktop only; mobile is always silent
     pub clipboard_poll_interval_ms: u64,
+    pub auth_method: Option<String>,  // "pin" (stored for UI preference)
 }
 ```
 
@@ -273,21 +377,17 @@ pub struct AppSettings {
 
 Note: On Android, a foreground service keeps the app alive indefinitely. On iOS, the app is suspended after ~30 seconds and network connections drop - clipboard queuing only works if content arrives before suspension.
 
-#### `peers.rs` - PairedPeer & Identity Persistence
+#### `peers.rs` - PairedPeer Types
 
-Stores paired device information:
+Defines paired device data structures:
 
 - Peer ID, device name
-- Shared secret (encrypted at rest)
+- Shared secret
 - Pairing timestamp, last seen
 
-Also handles **libp2p keypair persistence**:
+**Note**: Paired peers, device identity, and libp2p keypair are now stored in the encrypted vault (`vault.hold`), not in plaintext JSON files. The `peers.rs` module defines the types used by VaultManager.
 
-- `get_or_create_libp2p_keypair()` - Loads or creates the libp2p Ed25519 keypair
-- Stored in `libp2p_keypair.bin` using protobuf encoding
-- Ensures consistent PeerId across app restarts (critical for pairing to work)
-
-### 5. Commands (`src/commands.rs`)
+### 6. Commands (`src/commands.rs`)
 
 Tauri commands exposed to frontend:
 
@@ -309,19 +409,27 @@ Tauri commands exposed to frontend:
 | `get_settings` / `update_settings` | Manage app settings (broadcasts device name change)                       |
 | `get_device_info`                  | Get this device's info                                                    |
 | `get_pairing_sessions`             | Get active pairing sessions                                               |
+| `get_vault_status`                 | Get current vault state (NotSetup/Locked/Unlocked)                        |
+| `setup_vault`                      | Create new vault during onboarding (device_name, pin)                     |
+| `unlock_vault`                     | Unlock existing vault with PIN                                            |
+| `lock_vault`                       | Flush data and lock vault                                                 |
+| `reset_vault`                      | Destroy vault and all data (factory reset)                                |
+| `flush_vault`                      | Force save vault data to disk                                             |
+| `process_pending_clipboard`        | Process clipboard queued while app was backgrounded                       |
 
-### 6. Events (Emitted to Frontend)
+### 7. Events (Emitted to Frontend)
 
-| Event                | Payload                           | Description                                  |
+| Event                | Payload                           | Description                                     |
 |----------------------|-----------------------------------|-------------------------------------------------|
-| `network-status`     | `NetworkStatus`                   | Network state changed                        |
-| `peer-discovered`    | `DiscoveredPeer`                  | New peer found                               |
-| `peer-lost`          | `string` (peer_id)                | Peer went offline                            |
+| `network-status`     | `NetworkStatus`                   | Network state changed                           |
+| `peer-discovered`    | `DiscoveredPeer`                  | New peer found                                  |
+| `peer-lost`          | `string` (peer_id)                | Peer went offline                               |
 | `peer-name-updated`  | `{peerId, deviceName}`            | Peer's device name changed (via DeviceAnnounce) |
-| `clipboard-received` | `ClipboardEntry`                  | Clipboard from peer                          |
-| `pairing-request`    | `{sessionId, peerId, deviceName}` | Incoming pairing request                     |
-| `pairing-pin`        | `{sessionId, pin}`                | PIN ready to display                         |
-| `pairing-complete`   | `{sessionId, peerId, deviceName}` | Pairing succeeded                            |
+| `clipboard-received` | `ClipboardEntry`                  | Clipboard from peer                             |
+| `pairing-request`    | `{sessionId, peerId, deviceName}` | Incoming pairing request                        |
+| `pairing-pin`        | `{sessionId, pin}`                | PIN ready to display                            |
+| `pairing-complete`   | `{sessionId, peerId, deviceName}` | Pairing succeeded                               |
+| `vault-status`       | `VaultStatus`                     | Vault state changed (NotSetup/Locked/Unlocked)  |
 
 ---
 
@@ -334,24 +442,33 @@ Simple reactive store with subscriptions:
 ```typescript
 interface AppState {
     networkStatus: NetworkStatus;
+    vaultStatus: VaultStatus;       // NotSetup | Locked | Unlocked
     discoveredPeers: DiscoveredPeer[];
     pairedPeers: PairedPeer[];
     clipboardHistory: ClipboardEntry[];
     currentView: 'dashboard' | 'peers' | 'history' | 'settings';
     settings: AppSettings;
     deviceInfo: DeviceInfo | null;
+    // Onboarding state
+    onboardingStep: 'device-name' | 'pin-setup' | null;
+    onboardingDeviceName: string;
     // ... UI state
 }
 ```
 
 ### Views (`src/app.ts`)
 
-Single-file application with four main views:
+Single-file application with authentication and main views:
 
+**Authentication (before main app):**
+- **Onboarding**: First-time setup wizard (device name → PIN setup)
+- **Lock Screen**: PIN input for returning users, "Forgot PIN?" reset option
+
+**Main Views (after unlock):**
 1. **Dashboard**: Quick stats, recent clipboard items, quick actions
 2. **Peers**: Discovered and paired devices, pairing UI
 3. **History**: Full clipboard history with copy actions
-4. **Settings**: Device name, sync preferences, history settings
+4. **Settings**: Device name, sync preferences, history settings, lock button
 
 ### API Layer (`src/api/`)
 
@@ -525,11 +642,16 @@ git push origin main --tags
 
 ### Data Directory (`~/.local/share/com.decentpaste.app/`)
 
-- `identity.json` - Device identity (device_id, device_name, public_key)
-- `private_key.bin` - Device private key (restricted permissions)
-- `libp2p_keypair.bin` - libp2p Ed25519 keypair for consistent PeerId
-- `peers.json` - Paired peers with shared secrets
-- `settings.json` - App settings
+**Encrypted (Stronghold vault):**
+- `vault.hold` - IOTA Stronghold encrypted vault containing:
+  - Paired peers with shared secrets
+  - Clipboard history (if `keep_history` enabled)
+  - Device identity (device_id, device_name, keys)
+  - libp2p Ed25519 keypair for consistent PeerId
+- `salt.bin` - 16-byte cryptographic salt for Argon2id key derivation
+
+**Plaintext:**
+- `settings.json` - App settings (non-sensitive preferences)
 
 ---
 
@@ -562,9 +684,7 @@ yarn build
 3. **Mobile clipboard**: On Android/iOS, automatic clipboard monitoring is not supported. Users must manually share
    content using the "Share" button. Receiving clipboard from desktop works automatically (silently queued in background,
    copied when app opens).
-4. **No persistence of clipboard history**: History is in-memory only.
-5. **Plaintext secret storage**: Shared secrets are stored in `peers.json` without OS keychain integration.
-6. **Device name in identify**: The identify protocol includes device name in `agent_version` field, which is
+4. **Device name in identify**: The identify protocol includes device name in `agent_version` field, which is
    cosmetic (for human readability) but not ideal. Custom TXT records in mDNS would be better but more complex.
 
 ---
@@ -598,8 +718,10 @@ yarn build
 - `tauri` v2 - Application framework
 - `libp2p` v0.56 - P2P networking
 - `tauri-plugin-clipboard-manager` v2 - Cross-platform clipboard (including mobile)
+- `tauri-plugin-stronghold` v2 - IOTA Stronghold encrypted storage
 - `tauri-plugin-updater` v2 - Auto-updates for desktop
 - `tauri-plugin-process` v2 - App restart after update
+- `argon2` v0.5 - Argon2id key derivation
 - `aes-gcm` v0.10 - AES-256-GCM encryption
 - `x25519-dalek` v2 - X25519 ECDH key exchange
 - `tokio` v1 - Async runtime
@@ -608,6 +730,7 @@ yarn build
 
 - `@tauri-apps/api` v2 - Tauri JavaScript API
 - `@tauri-apps/plugin-clipboard-manager` v2 - Clipboard access for mobile
+- `@tauri-apps/plugin-stronghold` v2 - Vault plugin (initialized from backend)
 - `@tauri-apps/plugin-updater` v2 - Auto-update UI
 - `@tauri-apps/plugin-process` v2 - App restart
 - `tailwindcss` v4 - CSS framework

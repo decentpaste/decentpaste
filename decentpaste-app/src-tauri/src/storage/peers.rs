@@ -14,7 +14,8 @@ pub struct DeviceIdentity {
     pub device_id: String,
     pub device_name: String,
     pub public_key: Vec<u8>,
-    #[serde(skip_serializing, skip_deserializing)]
+    /// X25519 private key for ECDH key derivation during pairing.
+    /// Now stored in encrypted vault (previously skipped for plaintext storage).
     pub private_key: Option<Vec<u8>>,
     pub created_at: DateTime<Utc>,
 }

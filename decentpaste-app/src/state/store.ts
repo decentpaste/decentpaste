@@ -9,9 +9,11 @@ import type {
   UpdateInfo,
   UpdateProgress,
   UpdateStatus,
+  VaultStatus,
 } from '../api/types';
 
 export type View = 'dashboard' | 'peers' | 'history' | 'settings';
+export type OnboardingStep = 'device-name' | 'pin-setup' | null;
 
 export interface Toast {
   id: string;
@@ -56,6 +58,16 @@ export interface AppState {
   updateInfo: UpdateInfo | null;
   updateProgress: UpdateProgress | null;
   updateError: string | null;
+
+  // Vault state
+  vaultStatus: VaultStatus;
+
+  // Onboarding state
+  onboardingStep: OnboardingStep;
+  onboardingDeviceName: string;
+
+  // Reset confirmation state
+  showResetConfirmation: boolean;
 }
 
 type StateListener<K extends keyof AppState> = (value: AppState[K]) => void;
@@ -80,9 +92,10 @@ class Store {
         device_name: 'My Device',
         auto_sync_enabled: true,
         clipboard_history_limit: 50,
-        clear_history_on_exit: false,
+        keep_history: true,
         show_notifications: true,
         clipboard_poll_interval_ms: 500,
+        auth_method: null,
       },
       deviceInfo: null,
       isLoading: true,
@@ -92,6 +105,13 @@ class Store {
       updateInfo: null,
       updateProgress: null,
       updateError: null,
+      // Vault state
+      vaultStatus: 'NotSetup',
+      // Onboarding state
+      onboardingStep: null,
+      onboardingDeviceName: '',
+      // Reset confirmation state
+      showResetConfirmation: false,
     };
   }
 

@@ -1,2 +1,7 @@
 /target
 .idea
+website/node_modules
+website/dist
+.spec-workflow
+.playwright-mcp
+audit.log

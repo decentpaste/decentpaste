@@ -10,6 +10,7 @@ uses:
 - **mDNS** for local network device discovery
 - **X25519 ECDH** for secure key exchange during pairing
 - **AES-256-GCM** for end-to-end encryption
+- **IOTA Stronghold** for encrypted local storage (PIN-protected vault)
 
 ## Quick Start
 
@@ -42,6 +43,10 @@ decentpaste-app/
     │   ├── crypto.rs       # AES-256-GCM encryption
     │   ├── identity.rs     # X25519 keypair & ECDH key derivation
     │   └── pairing.rs      # 6-digit PIN pairing
+    ├── vault/              # Encrypted storage (Stronghold)
+    │   ├── auth.rs         # VaultStatus & AuthMethod types
+    │   ├── manager.rs      # VaultManager (create, open, lock, flush)
+    │   └── salt.rs         # Installation-specific salt
     └── storage/            # Settings & peer persistence
 ```
 
@@ -51,8 +56,9 @@ decentpaste-app/
 |----------------------------------|-----------------------------------------------|
 | `src-tauri/src/lib.rs`           | App startup, spawns network & clipboard tasks |
 | `src-tauri/src/commands.rs`      | All Tauri commands                            |
+| `src-tauri/src/vault/manager.rs` | VaultManager - encrypted storage lifecycle    |
 | `src-tauri/src/network/swarm.rs` | libp2p network manager                        |
-| `src/app.ts`                     | All frontend UI in one file                   |
+| `src/app.ts`                     | All frontend UI (incl. onboarding, lock screen) |
 | `src/api/types.ts`               | TypeScript interfaces                         |
 | `src/api/updater.ts`             | Auto-update check and install logic           |
 
@@ -73,15 +79,84 @@ decentpaste-app/
 5. User confirms PIN matches on both devices
 6. Both devices independently derive **same shared secret** via ECDH:
    - `shared_secret = ECDH(my_private_key, peer_public_key)`
-7. Stored in `~/.local/share/com.decentpaste.app/peers.json`
+7. Stored encrypted in `vault.hold` (Stronghold)
 
 **Security**: No secret is transmitted - both sides derive it from the exchanged public keys.
 
+## Vault & Authentication
+
+All sensitive data is stored in an encrypted IOTA Stronghold vault, protected by a user PIN.
+
+### How it works
+
+```
+User PIN (4-8 digits)
+       │
+       ▼
+┌─────────────────────────┐
+│    Argon2id KDF         │ ← salt.bin (16 bytes, unique per install)
+│ Memory: 64MB, Time: 3   │
+└─────────────────────────┘
+       │
+       ▼
+   256-bit Key
+       │
+       ▼
+┌─────────────────────────┐
+│   vault.hold            │  ← IOTA Stronghold encrypted file
+│  ┌───────────────────┐  │
+│  │ • paired_peers     │  │
+│  │ • clipboard_history│  │
+│  │ • device_identity  │  │
+│  │ • libp2p_keypair   │  │
+│  └───────────────────┘  │
+└─────────────────────────┘
+```
+
+### Vault States (VaultStatus)
+
+| State | UI Shown | Next Action |
+|-------|----------|-------------|
+| `NotSetup` | Onboarding wizard | User creates PIN |
+| `Locked` | Lock screen | User enters PIN |
+| `Unlocked` | Main app | Normal usage |
+
+### Key Vault Commands
+
+| Command | Purpose |
+|---------|---------|
+| `get_vault_status` | Check current vault state |
+| `setup_vault` | Create new vault during onboarding |
+| `unlock_vault` | Open vault with PIN |
+| `lock_vault` | Flush data and lock |
+| `reset_vault` | Destroy vault (factory reset) |
+| `flush_vault` | Force save to disk |
+
+### Data Storage Locations
+
+| Data | Location | Format |
+|------|----------|--------|
+| Paired peers + secrets | `vault.hold` | Encrypted |
+| Clipboard history | `vault.hold` | Encrypted |
+| Device identity + keys | `vault.hold` | Encrypted |
+| libp2p keypair | `vault.hold` | Encrypted |
+| Salt for Argon2 | `salt.bin` | Raw bytes |
+| App settings | `settings.json` | Plaintext JSON |
+
+### Flush Triggers
+
+Data is saved to the encrypted vault on:
+1. **App backgrounded** (mobile) - `visibilitychange` handler
+2. **App exit** - `RunEvent::ExitRequested`
+3. **Manual lock** - User clicks lock button
+4. **Settings save** - When user updates preferences
+
 ## Persistent Identity
 
-- **libp2p keypair** is persisted in `~/.local/share/com.decentpaste.app/libp2p_keypair.bin`
+- **libp2p keypair** is stored in the encrypted `vault.hold` file
 - This ensures the PeerId stays consistent across app restarts
 - Without this, paired devices would appear as "new" after restart
+- The keypair is only accessible when the vault is unlocked
 
 ## Connection Resilience
 
@@ -186,10 +261,16 @@ listen<MyPayload>('my-event', (e) => {
 
 All UI is in `src/app.ts`. Key methods:
 
+**Authentication views:**
+- `renderOnboarding()` - First-time setup (device name → PIN)
+- `renderLockScreen()` - PIN entry for returning users
+- `renderResetConfirmation()` - "Forgot PIN?" reset flow
+
+**Main app views:**
 - `renderDashboard()` - Home view
 - `renderPeersView()` - Peers list
 - `renderHistoryView()` - Clipboard history
-- `renderSettingsView()` - Settings page
+- `renderSettingsView()` - Settings page + lock button
 - `renderPairingModalContent()` - Pairing dialog
 
 ## Design Decisions
@@ -200,6 +281,8 @@ All UI is in `src/app.ts`. Key methods:
 4. **Why request-response for pairing?** Needs reliable 1:1 communication
 5. **Why shared secret per pair?** Each device pair has unique encryption key
 6. **Why X25519 ECDH?** Industry-standard key exchange - shared secret derived, never transmitted
+7. **Why Stronghold over OS keychain?** Cross-platform consistency, stores complex data, offline access
+8. **Why Argon2id?** Memory-hard KDF resists GPU/ASIC brute-force attacks on PIN
 
 ## Mobile Background Sync (Android & iOS)
 
@@ -258,10 +341,8 @@ Mobile OSes block clipboard access in background. When clipboard arrives while a
 
 - **Text only** - No image/file support yet
 - **Local network only** - mDNS doesn't work across networks
-- **In-memory history** - Not persisted to disk
 - **Mobile clipboard (outgoing)** - Auto-monitoring disabled on Android/iOS; use "Share Clipboard" button
 - **Mobile clipboard (incoming)** - Can receive in background (Android: via foreground service; iOS: limited ~30s window), actual copy happens on resume due to OS restrictions
-- **Plaintext storage** - Shared secrets stored in JSON without OS keychain integration
 
 ## Testing
 
