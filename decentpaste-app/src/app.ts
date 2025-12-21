@@ -902,6 +902,7 @@ class App {
     const allItems = state.clipboardHistory;
     const syncEnabled = state.settings.auto_sync_enabled;
     const hideContent = state.settings.hide_clipboard_content;
+    const autoLockMinutes = state.settings.auto_lock_minutes;
 
     return `
       <div class="flex flex-col h-full">
@@ -948,10 +949,23 @@ class App {
           <!-- Quick Actions -->
           <div class="mb-6">
             <h2 class="text-sm font-semibold text-white/80 mb-3 tracking-tight">Quick Actions</h2>
-            <button id="btn-share-clipboard" class="btn-primary w-full">
-              ${icon('share', 18)}
-              <span>Share Clipboard</span>
-            </button>
+            <div class="flex gap-3">
+              <button id="btn-share-clipboard" class="btn-primary flex-1">
+                ${icon('share', 18)}
+                <span>Share Clipboard</span>
+              </button>
+              <div class="flex items-center gap-2">
+                <span class="text-white/40">${icon('lock', 14)}</span>
+                <select id="auto-lock-select" class="bg-white/5 border border-white/10 rounded-lg px-2 py-2 text-xs text-white/70 cursor-pointer hover:bg-white/10 transition-colors focus:outline-none focus:ring-1 focus:ring-teal-500/50">
+                  <option value="0" ${autoLockMinutes === 0 ? 'selected' : ''}>Never</option>
+                  <option value="1" ${autoLockMinutes === 1 ? 'selected' : ''}>1 min</option>
+                  <option value="5" ${autoLockMinutes === 5 ? 'selected' : ''}>5 min</option>
+                  <option value="15" ${autoLockMinutes === 15 ? 'selected' : ''}>15 min</option>
+                  <option value="30" ${autoLockMinutes === 30 ? 'selected' : ''}>30 min</option>
+                  <option value="60" ${autoLockMinutes === 60 ? 'selected' : ''}>1 hour</option>
+                </select>
+              </div>
+            </div>
           </div>
 
           <!-- Clipboard History Header -->
@@ -1137,6 +1151,7 @@ class App {
                 <option value="5" ${settings.auto_lock_minutes === 5 ? 'selected' : ''}>5 minutes</option>
                 <option value="15" ${settings.auto_lock_minutes === 15 ? 'selected' : ''}>15 minutes</option>
                 <option value="30" ${settings.auto_lock_minutes === 30 ? 'selected' : ''}>30 minutes</option>
+                <option value="60" ${settings.auto_lock_minutes === 60 ? 'selected' : ''}>1 hour</option>
               </select>
             </div>
           </div>

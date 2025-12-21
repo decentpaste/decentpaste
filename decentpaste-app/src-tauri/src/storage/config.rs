@@ -41,7 +41,7 @@ impl Default for AppSettings {
             clipboard_poll_interval_ms: 500,
             auth_method: None,
             hide_clipboard_content: false,
-            auto_lock_minutes: 0,
+            auto_lock_minutes: 15,
         }
     }
 }

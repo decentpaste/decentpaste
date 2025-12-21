@@ -97,7 +97,7 @@ class Store {
         clipboard_poll_interval_ms: 500,
         auth_method: null,
         hide_clipboard_content: false,
-        auto_lock_minutes: 0,
+        auto_lock_minutes: 15,
       },
       deviceInfo: null,
       isLoading: true,
