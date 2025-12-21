@@ -959,13 +959,14 @@ class App {
           <!-- Clipboard History Header -->
           <div class="flex items-center justify-between mb-3">
             <h2 class="text-sm font-semibold text-white/80 tracking-tight">Clipboard History</h2>
-            <div class="flex items-center gap-2">
-              <button id="btn-toggle-visibility" class="p-1.5 rounded-lg text-white/40 hover:text-teal-400 hover:bg-teal-500/10 transition-all" title="${hideContent ? 'Show content' : 'Hide content'}">
-                ${icon(hideContent ? 'eye' : 'eyeOff', 16)}
+            <div class="flex items-center gap-1.5 flex-shrink-0">
+              <button id="btn-toggle-visibility" class="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all ${hideContent ? 'bg-teal-500/15 text-teal-400 border border-teal-500/30' : 'bg-white/5 text-white/50 border border-white/10 hover:bg-white/10 hover:text-white/70'}" title="${hideContent ? 'Show content' : 'Hide content'}">
+                ${icon(hideContent ? 'eye' : 'eyeOff', 12)}
+                <span>${hideContent ? 'Hidden' : 'Visible'}</span>
               </button>
-              <button id="btn-clear-history" class="btn-danger text-xs px-3 py-1.5">
+              <button id="btn-clear-history" class="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium bg-red-500/10 text-red-400/80 border border-red-500/20 hover:bg-red-500/20 hover:text-red-400 transition-all">
                 ${icon('trash', 12)}
-                <span>Clear All</span>
+                <span>Clear</span>
               </button>
             </div>
           </div>
