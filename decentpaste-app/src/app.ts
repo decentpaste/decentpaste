@@ -902,7 +902,6 @@ class App {
     const allItems = state.clipboardHistory;
     const syncEnabled = state.settings.auto_sync_enabled;
     const hideContent = state.settings.hide_clipboard_content;
-    const autoLockMinutes = state.settings.auto_lock_minutes;
 
     return `
       <div class="flex flex-col h-full">
@@ -949,22 +948,10 @@ class App {
           <!-- Quick Actions -->
           <div class="mb-6">
             <h2 class="text-sm font-semibold text-white/80 mb-3 tracking-tight">Quick Actions</h2>
-            <div class="flex gap-3">
-              <button id="btn-share-clipboard" class="btn-primary flex-1">
-                ${icon('share', 18)}
-                <span>Share Clipboard</span>
-              </button>
-              <div class="flex items-center gap-2">
-                <span class="text-xs text-white/40">${icon('lock', 12)}</span>
-                <select id="auto-lock-select" class="bg-white/5 border border-white/10 rounded-lg px-2 py-2 text-xs text-white/70 cursor-pointer hover:bg-white/10 transition-colors focus:outline-none focus:ring-1 focus:ring-teal-500/50">
-                  <option value="0" ${autoLockMinutes === 0 ? 'selected' : ''}>Never</option>
-                  <option value="1" ${autoLockMinutes === 1 ? 'selected' : ''}>1 min</option>
-                  <option value="5" ${autoLockMinutes === 5 ? 'selected' : ''}>5 min</option>
-                  <option value="15" ${autoLockMinutes === 15 ? 'selected' : ''}>15 min</option>
-                  <option value="30" ${autoLockMinutes === 30 ? 'selected' : ''}>30 min</option>
-                </select>
-              </div>
-            </div>
+            <button id="btn-share-clipboard" class="btn-primary w-full">
+              ${icon('share', 18)}
+              <span>Share Clipboard</span>
+            </button>
           </div>
 
           <!-- Clipboard History Header -->
@@ -1127,6 +1114,31 @@ class App {
                 class="checkbox"
               />
             </label>
+          </div>
+        </div>
+
+        <!-- Security -->
+        <div class="mb-6">
+          <div class="flex items-center gap-2 mb-3">
+            <div class="icon-container-teal" style="width: 1.5rem; height: 1.5rem; border-radius: 0.5rem;">
+              ${icon('lock', 12)}
+            </div>
+            <h2 class="text-sm font-semibold text-white/80 tracking-tight">Security</h2>
+          </div>
+          <div class="card overflow-hidden">
+            <div class="flex items-center justify-between p-4">
+              <div>
+                <span class="text-sm text-white/70 block">Auto-lock</span>
+                <span class="text-xs text-white/40">Lock vault after inactivity</span>
+              </div>
+              <select id="auto-lock-select" class="select">
+                <option value="0" ${settings.auto_lock_minutes === 0 ? 'selected' : ''}>Never</option>
+                <option value="1" ${settings.auto_lock_minutes === 1 ? 'selected' : ''}>1 minute</option>
+                <option value="5" ${settings.auto_lock_minutes === 5 ? 'selected' : ''}>5 minutes</option>
+                <option value="15" ${settings.auto_lock_minutes === 15 ? 'selected' : ''}>15 minutes</option>
+                <option value="30" ${settings.auto_lock_minutes === 30 ? 'selected' : ''}>30 minutes</option>
+              </select>
+            </div>
           </div>
         </div>
 
