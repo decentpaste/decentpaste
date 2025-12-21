@@ -8,7 +8,9 @@ import { getErrorMessage } from './utils/error';
 import { notifyClipboardReceived, notifyMinimizedToTray } from './utils/notifications';
 import { checkForUpdates, downloadAndInstallUpdate, formatBytes, getDownloadPercentage } from './api/updater';
 import type { ClipboardEntry, DiscoveredPeer, PairedPeer } from './api/types';
-import logoDark from './assets/logo_dark.svg';
+// ?url suffix prevents race condition where Tauri webview loads before Vite is ready,
+// causing "image/svg+xml is not a valid JavaScript MIME type" error on first load
+import logoDark from './assets/logo_dark.svg?url';
 
 class App {
   private root: HTMLElement;
