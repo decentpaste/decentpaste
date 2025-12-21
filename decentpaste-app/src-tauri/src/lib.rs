@@ -432,6 +432,12 @@ pub async fn start_network_services(
         let state = app_handle_clipboard.state::<AppState>();
 
         while let Some(change) = clipboard_rx.recv().await {
+            // Check if auto-sync is enabled before broadcasting
+            let auto_sync_enabled = state.settings.read().await.auto_sync_enabled;
+            if !auto_sync_enabled {
+                continue; // Skip broadcast when sync is paused
+            }
+
             if change.is_local
                 && sync_manager_clipboard
                     .lock()

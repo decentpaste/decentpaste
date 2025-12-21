@@ -12,7 +12,7 @@ import type {
   VaultStatus,
 } from '../api/types';
 
-export type View = 'dashboard' | 'peers' | 'history' | 'settings';
+export type View = 'dashboard' | 'peers' | 'settings';
 export type OnboardingStep = 'device-name' | 'pin-setup' | null;
 
 export interface Toast {
@@ -96,6 +96,8 @@ class Store {
         show_notifications: true,
         clipboard_poll_interval_ms: 500,
         auth_method: null,
+        hide_clipboard_content: false,
+        auto_lock_minutes: 0,
       },
       deviceInfo: null,
       isLoading: true,

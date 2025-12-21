@@ -66,6 +66,10 @@ export interface AppSettings {
   clipboard_poll_interval_ms: number;
   /** Preferred authentication method for vault access (currently only 'pin') */
   auth_method: AuthMethod | null;
+  /** Whether to hide clipboard content in the UI (privacy mode) */
+  hide_clipboard_content: boolean;
+  /** Auto-lock timeout in minutes. 0 means never auto-lock */
+  auto_lock_minutes: number;
 }
 
 // Device info
