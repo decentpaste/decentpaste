@@ -167,15 +167,33 @@ class App {
         return;
       }
 
-      // Clear history buttons
+      // Clear history buttons - show confirmation modal
       if (target.closest('#btn-clear-history') || target.closest('#btn-clear-all-history')) {
+        const historyCount = store.get('clipboardHistory').length;
+        if (historyCount === 0) {
+          store.addToast('History is already empty', 'info');
+          return;
+        }
+        store.set('showClearHistoryConfirm', true);
+        return;
+      }
+
+      // Clear history confirmation - confirm button
+      if (target.closest('#btn-confirm-clear-history')) {
         try {
           await commands.clearClipboardHistory();
           store.set('clipboardHistory', []);
+          store.set('showClearHistoryConfirm', false);
           store.addToast('History cleared', 'success');
         } catch (error) {
           store.addToast(`Failed to clear history: ${getErrorMessage(error)}`, 'error');
         }
+        return;
+      }
+
+      // Clear history confirmation - cancel button
+      if (target.closest('#btn-cancel-clear-history')) {
+        store.set('showClearHistoryConfirm', false);
         return;
       }
 
@@ -767,6 +785,7 @@ class App {
     store.subscribe('showPairingModal', () => this.renderPairingModal());
     store.subscribe('pairingModalMode', () => this.renderPairingModal());
     store.subscribe('activePairingSession', () => this.renderPairingModal());
+    store.subscribe('showClearHistoryConfirm', () => this.updateClearHistoryModal());
     store.subscribe('isLoading', () => this.render());
     store.subscribe('vaultStatus', () => this.render());
     store.subscribe('onboardingStep', () => this.render());
@@ -858,6 +877,11 @@ class App {
         <!-- Pairing Modal -->
         <div id="pairing-modal" class="${state.showPairingModal ? '' : 'hidden'}">
           ${this.renderPairingModalContent()}
+        </div>
+
+        <!-- Clear History Confirmation Modal -->
+        <div id="clear-history-modal" class="${state.showClearHistoryConfirm ? '' : 'hidden'}">
+          ${this.renderClearHistoryConfirmModal()}
         </div>
       </div>
     `;
@@ -1459,6 +1483,40 @@ class App {
     `;
   }
 
+  /**
+   * Renders the clear history confirmation modal.
+   */
+  private renderClearHistoryConfirmModal(): string {
+    const count = store.get('clipboardHistory').length;
+    return `
+      <div class="fixed inset-0 modal-overlay flex items-center justify-center z-50 p-4">
+        <div class="modal-content p-5 max-w-xs w-full">
+          <div class="text-center">
+            <!-- Warning Icon -->
+            <div class="w-12 h-12 rounded-xl mx-auto mb-3 flex items-center justify-center bg-red-500/15 border border-red-500/25">
+              ${icon('trash', 22, 'text-red-400')}
+            </div>
+
+            <h2 class="text-lg font-semibold text-white mb-1">Clear History?</h2>
+            <p class="text-white/50 text-sm mb-5">
+              This will delete ${count} clipboard ${count === 1 ? 'item' : 'items'}. This action cannot be undone.
+            </p>
+
+            <!-- Buttons -->
+            <div class="flex gap-3">
+              <button id="btn-cancel-clear-history" class="btn-secondary flex-1 py-2.5">
+                Cancel
+              </button>
+              <button id="btn-confirm-clear-history" class="flex-1 py-2.5 rounded-full font-medium text-sm bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 transition-all">
+                Clear All
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   private renderClipboardItem(item: ClipboardEntry, hideContent = false): string {
     const isLocal = item.is_local;
     // Escape HTML to prevent XSS attacks from malicious clipboard content
@@ -1677,6 +1735,15 @@ class App {
         modal.innerHTML = this.renderPairingModalContent();
       }
     });
+  }
+
+  private updateClearHistoryModal(): void {
+    const modal = $('#clear-history-modal');
+    if (modal) {
+      const show = store.get('showClearHistoryConfirm');
+      modal.className = show ? '' : 'hidden';
+      modal.innerHTML = this.renderClearHistoryConfirmModal();
+    }
   }
 
   private renderPeersList(): void {

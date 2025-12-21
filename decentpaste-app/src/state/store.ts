@@ -68,6 +68,9 @@ export interface AppState {
 
   // Reset confirmation state
   showResetConfirmation: boolean;
+
+  // Clear history confirmation state
+  showClearHistoryConfirm: boolean;
 }
 
 type StateListener<K extends keyof AppState> = (value: AppState[K]) => void;
@@ -114,6 +117,8 @@ class Store {
       onboardingDeviceName: '',
       // Reset confirmation state
       showResetConfirmation: false,
+      // Clear history confirmation state
+      showClearHistoryConfirm: false,
     };
   }
 
