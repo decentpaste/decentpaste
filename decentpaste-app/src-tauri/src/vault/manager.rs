@@ -150,16 +150,16 @@ impl VaultManager {
         // NOTE: We must use create_client() first to create the client in memory,
         // then write_client() or save() to persist it to disk.
         // write_client() alone fails because it expects an existing in-memory client.
-        stronghold
-            .create_client(VAULT_CLIENT_NAME)
-            .map_err(|e| DecentPasteError::Storage(format!("Failed to create vault client: {}", e)))?;
+        stronghold.create_client(VAULT_CLIENT_NAME).map_err(|e| {
+            DecentPasteError::Storage(format!("Failed to create vault client: {}", e))
+        })?;
 
         debug!("Client created, writing to snapshot...");
 
         // Write the newly created client to the snapshot
-        stronghold
-            .write_client(VAULT_CLIENT_NAME)
-            .map_err(|e| DecentPasteError::Storage(format!("Failed to write vault client: {}", e)))?;
+        stronghold.write_client(VAULT_CLIENT_NAME).map_err(|e| {
+            DecentPasteError::Storage(format!("Failed to write vault client: {}", e))
+        })?;
 
         debug!("Client written, saving vault...");
 
@@ -291,14 +291,15 @@ impl VaultManager {
     ///
     /// Returns an error if the vault is not open or client is not loaded.
     fn get_client_store(&self) -> Result<iota_stronghold::Store> {
-        let stronghold = self.stronghold.as_ref().ok_or_else(|| {
-            DecentPasteError::Storage("Vault is not open".into())
-        })?;
+        let stronghold = self
+            .stronghold
+            .as_ref()
+            .ok_or_else(|| DecentPasteError::Storage("Vault is not open".into()))?;
 
         // Get the client we created/loaded
-        let client = stronghold.get_client(VAULT_CLIENT_NAME).map_err(|e| {
-            DecentPasteError::Storage(format!("Failed to get vault client: {}", e))
-        })?;
+        let client = stronghold
+            .get_client(VAULT_CLIENT_NAME)
+            .map_err(|e| DecentPasteError::Storage(format!("Failed to get vault client: {}", e)))?;
 
         Ok(client.store())
     }
@@ -385,9 +386,7 @@ impl VaultManager {
         let data = serde_json::to_vec(peers)?;
         store
             .insert(STORE_KEY_PAIRED_PEERS.to_vec(), data, None)
-            .map_err(|e| {
-                DecentPasteError::Storage(format!("Failed to set paired peers: {}", e))
-            })?;
+            .map_err(|e| DecentPasteError::Storage(format!("Failed to set paired peers: {}", e)))?;
 
         debug!("Stored {} paired peers in vault", peers.len());
         Ok(())
@@ -450,12 +449,9 @@ impl VaultManager {
         let store = self.get_client_store()?;
         match store.get(STORE_KEY_LIBP2P_KEYPAIR) {
             Ok(Some(data)) => {
-                let keypair = libp2p::identity::Keypair::from_protobuf_encoding(&data)
-                    .map_err(|e| {
-                        DecentPasteError::Storage(format!(
-                            "Failed to decode libp2p keypair: {}",
-                            e
-                        ))
+                let keypair =
+                    libp2p::identity::Keypair::from_protobuf_encoding(&data).map_err(|e| {
+                        DecentPasteError::Storage(format!("Failed to decode libp2p keypair: {}", e))
                     })?;
                 debug!("Loaded libp2p keypair from vault");
                 Ok(Some(keypair))
@@ -504,9 +500,10 @@ impl VaultManager {
     /// - Periodically to prevent data loss
     /// - Before app exit
     pub fn flush(&self) -> Result<()> {
-        let stronghold = self.stronghold.as_ref().ok_or_else(|| {
-            DecentPasteError::Storage("Vault is not open".into())
-        })?;
+        let stronghold = self
+            .stronghold
+            .as_ref()
+            .ok_or_else(|| DecentPasteError::Storage("Vault is not open".into()))?;
 
         stronghold.save().map_err(|e| {
             error!("Failed to flush vault: {}", e);

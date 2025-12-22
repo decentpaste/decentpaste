@@ -54,9 +54,9 @@ pub fn run() {
         // Stronghold plugin - password callback returns bytes for encryption key
         // Note: We handle our own Argon2 key derivation in VaultManager,
         // so this callback is mainly for the JS API compatibility
-        .plugin(tauri_plugin_stronghold::Builder::new(|password| {
-            password.as_bytes().to_vec()
-        }).build())
+        .plugin(
+            tauri_plugin_stronghold::Builder::new(|password| password.as_bytes().to_vec()).build(),
+        )
         .manage(AppState::new())
         .setup(|app| {
             let app_handle = app.handle().clone();
@@ -359,7 +359,10 @@ pub async fn start_network_services(
         let id = state.device_identity.read().await;
         id.clone().ok_or("Device identity not loaded")?
     };
-    info!("Starting network services for device: {}", identity.device_id);
+    info!(
+        "Starting network services for device: {}",
+        identity.device_id
+    );
 
     // Get settings for clipboard poll interval
     let settings = state.settings.read().await.clone();
@@ -528,7 +531,8 @@ pub async fn start_network_services(
                     if !is_paired {
                         let mut peers = state.discovered_peers.write().await;
                         // Update existing peer or add new one
-                        if let Some(existing) = peers.iter_mut().find(|p| p.peer_id == peer.peer_id) {
+                        if let Some(existing) = peers.iter_mut().find(|p| p.peer_id == peer.peer_id)
+                        {
                             // Update with new info (e.g., device name from identify)
                             *existing = peer.clone();
                         } else {
@@ -871,9 +875,11 @@ pub async fn start_network_services(
                                         {
                                             // Check if we should queue for background (mobile only)
                                             #[cfg(any(target_os = "android", target_os = "ios"))]
-                                            let is_foreground =
-                                                *state.is_foreground.read().await;
-                                            #[cfg(not(any(target_os = "android", target_os = "ios")))]
+                                            let is_foreground = *state.is_foreground.read().await;
+                                            #[cfg(not(any(
+                                                target_os = "android",
+                                                target_os = "ios"
+                                            )))]
                                             let is_foreground = true;
 
                                             if is_foreground {
@@ -889,7 +895,10 @@ pub async fn start_network_services(
                                             } else {
                                                 // Mobile background: queue clipboard silently (no notification)
                                                 // Clipboard will be copied when app resumes
-                                                #[cfg(any(target_os = "android", target_os = "ios"))]
+                                                #[cfg(any(
+                                                    target_os = "android",
+                                                    target_os = "ios"
+                                                ))]
                                                 {
                                                     info!(
                                                         "App in background, queuing clipboard from {} (silent)",

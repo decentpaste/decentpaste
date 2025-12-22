@@ -73,9 +73,7 @@ impl From<VaultError> for crate::error::DecentPasteError {
             VaultError::NotSetup => {
                 crate::error::DecentPasteError::Storage("Vault not set up".into())
             }
-            VaultError::Locked => {
-                crate::error::DecentPasteError::Storage("Vault is locked".into())
-            }
+            VaultError::Locked => crate::error::DecentPasteError::Storage("Vault is locked".into()),
             VaultError::Corrupted(msg) => {
                 crate::error::DecentPasteError::Storage(format!("Vault corrupted: {}", msg))
             }
@@ -139,7 +137,10 @@ mod tests {
     fn test_vault_error_to_decent_paste_error() {
         let vault_err = VaultError::InvalidPin;
         let app_err: crate::error::DecentPasteError = vault_err.into();
-        assert!(matches!(app_err, crate::error::DecentPasteError::InvalidPin));
+        assert!(matches!(
+            app_err,
+            crate::error::DecentPasteError::InvalidPin
+        ));
     }
 
     #[test]

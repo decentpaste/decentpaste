@@ -344,7 +344,10 @@ impl NetworkManager {
                     };
                     let protocol_msg = ProtocolMessage::DeviceAnnounce(announce_msg);
                     if let Err(e) = self.swarm.behaviour_mut().publish_clipboard(&protocol_msg) {
-                        debug!("Failed to announce device name after peer subscribed: {}", e);
+                        debug!(
+                            "Failed to announce device name after peer subscribed: {}",
+                            e
+                        );
                     }
                 }
                 gossipsub::Event::Unsubscribed { peer_id, topic } => {
