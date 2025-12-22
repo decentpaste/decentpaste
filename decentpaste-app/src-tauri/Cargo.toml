@@ -1,6 +1,6 @@
 [package]
 name = "decentpaste-app"
-version = "0.1.0"
+version = "0.2.0"
 description = "Cross-platform clipboard sharing over P2P network"
 authors = ["you"]
 edition = "2021"
