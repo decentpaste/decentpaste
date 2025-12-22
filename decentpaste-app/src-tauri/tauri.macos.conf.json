@@ -3,7 +3,7 @@
     "createUpdaterArtifacts": true,
     "macOS": {
       "minimumSystemVersion": "13.0",
-      "signingIdentity": "7313B3B155D36C94A37FE4ADE8E02D3CD417DBD8"
+      "signingIdentity": "B222E29DDA1B4124CA6E1B0A486E7C07003429C4"
     }
   }
 }
