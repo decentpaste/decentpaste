@@ -25,7 +25,7 @@ yarn tauri dev
 ```
 decentpaste-app/
 ├── src/                    # Frontend (TypeScript + Tailwind v4)
-│   ├── app.ts              # Main UI (Dashboard, Peers, History, Settings)
+│   ├── app.ts              # Main UI (Dashboard, Peers, Settings)
 │   ├── api/commands.ts     # Tauri command wrappers
 │   ├── api/events.ts       # Event listeners
 │   ├── api/updater.ts      # Auto-update logic
@@ -65,10 +65,11 @@ decentpaste-app/
 ## How Clipboard Sync Works
 
 1. `ClipboardMonitor` polls every 500ms, hashes content
-2. If content changed & is local → encrypt separately for **each paired peer** using their specific shared secret
-3. Broadcast via gossipsub (one message per peer)
-4. Receiving peer decrypts with their shared secret, updates clipboard
-5. Hash tracked to prevent echo loops
+2. If `auto_sync_enabled` is false, skip broadcast (sync paused)
+3. If content changed & is local → encrypt separately for **each paired peer** using their specific shared secret
+4. Broadcast via gossipsub (one message per peer)
+5. Receiving peer decrypts with their shared secret, updates clipboard
+6. Hash tracked to prevent echo loops
 
 ## How Pairing Works (X25519 ECDH Key Exchange)
 

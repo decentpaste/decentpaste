@@ -108,11 +108,11 @@ decentpaste/
 ┌─────────────────────────────────────────────────────────────────────┐
 │                         FRONTEND (TypeScript)                        │
 ├─────────────────────────────────────────────────────────────────────┤
-│  ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐      │
-│  │Dashboard │    │ PeerList │    │ History  │    │ Settings │      │
-│  └────┬─────┘    └────┬─────┘    └────┬─────┘    └────┬─────┘      │
-│       │               │               │               │             │
-│       └───────────────┴───────────────┴───────────────┘             │
+│  ┌──────────┐         ┌──────────┐         ┌──────────┐            │
+│  │Dashboard │         │ PeerList │         │ Settings │            │
+│  └────┬─────┘         └────┬─────┘         └────┬─────┘            │
+│       │                    │                    │                   │
+│       └────────────────────┴────────────────────┘                   │
 │                               │                                      │
 │                        ┌──────┴──────┐                              │
 │                        │    Store    │  (Reactive State)            │
@@ -364,10 +364,12 @@ pub struct AppSettings {
     pub device_name: String,
     pub auto_sync_enabled: bool,
     pub clipboard_history_limit: usize,
-    pub keep_history: bool,           // Persist clipboard history in vault
-    pub show_notifications: bool,     // Desktop only; mobile is always silent
+    pub keep_history: bool,              // Persist clipboard history in vault
+    pub show_notifications: bool,        // Desktop only; mobile is always silent
     pub clipboard_poll_interval_ms: u64,
-    pub auth_method: Option<String>,  // "pin" (stored for UI preference)
+    pub auth_method: Option<String>,     // "pin" (stored for UI preference)
+    pub hide_clipboard_content: bool,    // Privacy mode - mask content in UI
+    pub auto_lock_minutes: u32,          // Auto-lock vault after inactivity (0 = never)
 }
 ```
 
@@ -430,6 +432,7 @@ Tauri commands exposed to frontend:
 | `pairing-pin`        | `{sessionId, pin}`                | PIN ready to display                            |
 | `pairing-complete`   | `{sessionId, peerId, deviceName}` | Pairing succeeded                               |
 | `vault-status`       | `VaultStatus`                     | Vault state changed (NotSetup/Locked/Unlocked)  |
+| `settings-changed`   | `{auto_sync_enabled?: boolean}`   | Settings changed from system tray               |
 
 ---
 
@@ -446,7 +449,7 @@ interface AppState {
     discoveredPeers: DiscoveredPeer[];
     pairedPeers: PairedPeer[];
     clipboardHistory: ClipboardEntry[];
-    currentView: 'dashboard' | 'peers' | 'history' | 'settings';
+    currentView: 'dashboard' | 'peers' | 'settings';
     settings: AppSettings;
     deviceInfo: DeviceInfo | null;
     // Onboarding state
@@ -465,10 +468,9 @@ Single-file application with authentication and main views:
 - **Lock Screen**: PIN input for returning users, "Forgot PIN?" reset option
 
 **Main Views (after unlock):**
-1. **Dashboard**: Quick stats, recent clipboard items, quick actions
+1. **Dashboard**: Full clipboard history with sync toggle, privacy toggle, and quick actions
 2. **Peers**: Discovered and paired devices, pairing UI
-3. **History**: Full clipboard history with copy actions
-4. **Settings**: Device name, sync preferences, history settings, lock button
+3. **Settings**: Device name, sync preferences, history settings, security (auto-lock), lock button
 
 ### API Layer (`src/api/`)
 

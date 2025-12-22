@@ -23,6 +23,11 @@ pub struct AppSettings {
     /// Preferred authentication method for vault access.
     /// Currently only "pin" is supported. None means not yet configured (onboarding).
     pub auth_method: Option<String>,
+    /// Whether to hide clipboard content in the UI (privacy mode).
+    /// When true, content is masked with dots.
+    pub hide_clipboard_content: bool,
+    /// Auto-lock timeout in minutes. 0 means never auto-lock.
+    pub auto_lock_minutes: u32,
 }
 
 impl Default for AppSettings {
@@ -35,6 +40,8 @@ impl Default for AppSettings {
             show_notifications: true,
             clipboard_poll_interval_ms: 500,
             auth_method: None,
+            hide_clipboard_content: false,
+            auto_lock_minutes: 15,
         }
     }
 }

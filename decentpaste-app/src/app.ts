@@ -8,12 +8,15 @@ import { getErrorMessage } from './utils/error';
 import { notifyClipboardReceived, notifyMinimizedToTray } from './utils/notifications';
 import { checkForUpdates, downloadAndInstallUpdate, formatBytes, getDownloadPercentage } from './api/updater';
 import type { ClipboardEntry, DiscoveredPeer, PairedPeer } from './api/types';
-import logoDark from './assets/logo_dark.svg';
+// ?url suffix prevents race condition where Tauri webview loads before Vite is ready,
+// causing "image/svg+xml is not a valid JavaScript MIME type" error on first load
+import logoDark from './assets/logo_dark.svg?url';
 
 class App {
   private root: HTMLElement;
   private pairingInProgress: boolean = false; // Guard against duplicate pairing operations
   private modalRenderPending: boolean = false; // Debounce modal renders
+  private autoLockTimer: ReturnType<typeof setTimeout> | null = null; // Auto-lock timer
 
   constructor(rootElement: HTMLElement) {
     this.root = rootElement;
@@ -52,6 +55,9 @@ class App {
 
     // Subscribe to state changes
     this.setupStateSubscriptions();
+
+    // Setup auto-lock activity tracking
+    this.setupActivityTracking();
   }
 
   /**
@@ -71,7 +77,7 @@ class App {
         return;
       }
 
-      // Copy buttons
+      // Copy buttons with visual feedback animation
       const copyEl = target.closest('[data-copy]');
       if (copyEl) {
         const id = copyEl.getAttribute('data-copy');
@@ -79,7 +85,17 @@ class App {
         const item = history.find((h) => h.id === id);
         if (item) {
           await commands.setClipboard(item.content);
-          store.addToast('Copied to clipboard', 'success');
+
+          // Visual feedback: change to checkmark with green tint
+          const button = copyEl as HTMLElement;
+          button.innerHTML = icon('check', 16);
+          button.classList.add('copied');
+
+          // Revert after 800ms
+          setTimeout(() => {
+            button.innerHTML = icon('copy', 16);
+            button.classList.remove('copied');
+          }, 800);
         }
         return;
       }
@@ -151,15 +167,33 @@ class App {
         return;
       }
 
-      // Clear history buttons
+      // Clear history buttons - show confirmation modal
       if (target.closest('#btn-clear-history') || target.closest('#btn-clear-all-history')) {
+        const historyCount = store.get('clipboardHistory').length;
+        if (historyCount === 0) {
+          store.addToast('History is already empty', 'info');
+          return;
+        }
+        store.set('showClearHistoryConfirm', true);
+        return;
+      }
+
+      // Clear history confirmation - confirm button
+      if (target.closest('#btn-confirm-clear-history')) {
         try {
           await commands.clearClipboardHistory();
           store.set('clipboardHistory', []);
+          store.set('showClearHistoryConfirm', false);
           store.addToast('History cleared', 'success');
         } catch (error) {
           store.addToast(`Failed to clear history: ${getErrorMessage(error)}`, 'error');
         }
+        return;
+      }
+
+      // Clear history confirmation - cancel button
+      if (target.closest('#btn-cancel-clear-history')) {
+        store.set('showClearHistoryConfirm', false);
         return;
       }
 
@@ -179,6 +213,19 @@ class App {
         return;
       }
 
+      // Toggle clipboard content visibility
+      if (target.closest('#btn-toggle-visibility')) {
+        const currentSetting = store.get('settings').hide_clipboard_content;
+        const settings = { ...store.get('settings'), hide_clipboard_content: !currentSetting };
+        try {
+          await commands.updateSettings(settings);
+          store.set('settings', settings);
+        } catch (error) {
+          store.addToast(`Failed to update settings: ${getErrorMessage(error)}`, 'error');
+        }
+        return;
+      }
+
       // Update buttons
       if (target.closest('#btn-check-update')) {
         checkForUpdates();
@@ -194,14 +241,14 @@ class App {
       const lockVaultBtn = target.closest('#btn-lock-vault') as HTMLButtonElement | null;
       if (lockVaultBtn) {
         lockVaultBtn.disabled = true;
-        lockVaultBtn.innerHTML = icon('loader', 20, 'animate-spin');
+        lockVaultBtn.innerHTML = icon('loader', 16, 'animate-spin');
         try {
           await commands.lockVault();
           // vaultStatus will be updated via event, triggering re-render to lock screen
         } catch (error) {
           store.addToast(`Failed to lock vault: ${getErrorMessage(error)}`, 'error');
           lockVaultBtn.disabled = false;
-          lockVaultBtn.innerHTML = icon('lock', 20);
+          lockVaultBtn.innerHTML = icon('lock', 16);
         }
         return;
       }
@@ -472,8 +519,8 @@ class App {
     this.root.addEventListener('change', async (e) => {
       const target = e.target as HTMLInputElement | HTMLSelectElement;
 
-      // Auto-sync toggle
-      if (target.id === 'auto-sync-toggle') {
+      // Auto-sync toggle (Settings page and Dashboard)
+      if (target.id === 'auto-sync-toggle' || target.id === 'dashboard-sync-toggle') {
         const checked = (target as HTMLInputElement).checked;
         const settings = { ...store.get('settings'), auto_sync_enabled: checked };
         try {
@@ -482,6 +529,21 @@ class App {
         } catch (error) {
           store.addToast(`Failed to update settings: ${getErrorMessage(error)}`, 'error');
           (target as HTMLInputElement).checked = !checked; // Revert
+        }
+        return;
+      }
+
+      // Auto-lock timer select
+      if (target.id === 'auto-lock-select') {
+        const value = parseInt((target as HTMLSelectElement).value, 10);
+        const oldSettings = store.get('settings');
+        const settings = { ...oldSettings, auto_lock_minutes: value };
+        try {
+          await commands.updateSettings(settings);
+          store.set('settings', settings);
+        } catch (error) {
+          store.addToast(`Failed to update settings: ${getErrorMessage(error)}`, 'error');
+          (target as HTMLSelectElement).value = String(oldSettings.auto_lock_minutes);
         }
         return;
       }
@@ -660,6 +722,14 @@ class App {
         await this.loadDataAfterUnlock();
       }
     });
+
+    // Handle settings changes from system tray
+    eventManager.on('settingsChanged', (payload) => {
+      if (payload.auto_sync_enabled !== undefined) {
+        const settings = { ...store.get('settings'), auto_sync_enabled: payload.auto_sync_enabled };
+        store.set('settings', settings);
+      }
+    });
   }
 
   /**
@@ -715,6 +785,7 @@ class App {
     store.subscribe('showPairingModal', () => this.renderPairingModal());
     store.subscribe('pairingModalMode', () => this.renderPairingModal());
     store.subscribe('activePairingSession', () => this.renderPairingModal());
+    store.subscribe('showClearHistoryConfirm', () => this.updateClearHistoryModal());
     store.subscribe('isLoading', () => this.render());
     store.subscribe('vaultStatus', () => this.render());
     store.subscribe('onboardingStep', () => this.render());
@@ -724,6 +795,8 @@ class App {
       this.renderUpdateSection();
     });
     store.subscribe('updateProgress', () => this.renderUpdateSection());
+    // Re-render when settings change (for sync toggle and hide clipboard toggle)
+    store.subscribe('settings', () => this.render());
   }
 
   private render(): void {
@@ -775,9 +848,9 @@ class App {
                 <p class="text-xs text-white/40">${state.deviceInfo?.device_name || 'Loading...'}</p>
               </div>
             </div>
-            <!-- Lock Button -->
-            <button id="btn-lock-vault" class="p-2 rounded-xl text-white/50 hover:text-teal-400 hover:bg-teal-500/10 transition-all" title="Lock vault">
-              ${icon('lock', 20)}
+            <!-- Lock Button with teal icon container styling -->
+            <button id="btn-lock-vault" class="icon-container-teal hover:scale-105 transition-transform" style="width: 2.25rem; height: 2.25rem;" title="Lock vault">
+              ${icon('lock', 16)}
             </button>
           </div>
         </header>
@@ -792,7 +865,6 @@ class App {
           <div class="flex justify-around py-2">
             ${this.renderNavItem('dashboard', 'home', 'Home')}
             ${this.renderNavItem('peers', 'users', 'Peers')}
-            ${this.renderNavItem('history', 'history', 'History')}
             ${this.renderNavItem('settings', 'settings', 'Settings')}
           </div>
         </nav>
@@ -805,6 +877,11 @@ class App {
         <!-- Pairing Modal -->
         <div id="pairing-modal" class="${state.showPairingModal ? '' : 'hidden'}">
           ${this.renderPairingModalContent()}
+        </div>
+
+        <!-- Clear History Confirmation Modal -->
+        <div id="clear-history-modal" class="${state.showClearHistoryConfirm ? '' : 'hidden'}">
+          ${this.renderClearHistoryConfirmModal()}
         </div>
       </div>
     `;
@@ -838,8 +915,6 @@ class App {
         return this.renderDashboard();
       case 'peers':
         return this.renderPeersView();
-      case 'history':
-        return this.renderHistoryView();
       case 'settings':
         return this.renderSettingsView();
       default:
@@ -849,9 +924,10 @@ class App {
 
   private renderDashboard(): string {
     const state = store.getState();
-    const pairedCount = state.pairedPeers.length;
     const historyCount = state.clipboardHistory.length;
-    const recentItems = state.clipboardHistory.slice(0, 3);
+    const allItems = state.clipboardHistory;
+    const syncEnabled = state.settings.auto_sync_enabled;
+    const hideContent = state.settings.hide_clipboard_content;
 
     return `
       <div class="flex flex-col h-full">
@@ -859,17 +935,29 @@ class App {
         <div class="flex-shrink-0 p-4 pb-0">
           <!-- Stats Grid -->
           <div class="grid grid-cols-2 gap-3 mb-6">
+            <!-- Sync Toggle Card -->
             <div class="card p-4">
               <div class="flex items-center gap-3">
-                <div class="icon-container-green">
-                  ${icon('users', 18)}
+                <div class="${syncEnabled ? 'icon-container-teal' : 'icon-container-orange'}">
+                  ${icon(syncEnabled ? 'refreshCw' : 'wifiOff', 18)}
                 </div>
-                <div>
-                  <p class="text-2xl font-bold text-white tracking-tight">${pairedCount}</p>
-                  <p class="text-xs text-white/40">Paired Devices</p>
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm font-medium text-white">Sync</p>
+                  <p class="text-xs text-white/40">${syncEnabled ? 'Active' : 'Paused'}</p>
                 </div>
+                <label class="relative inline-block w-10 h-6 flex-shrink-0">
+                  <input
+                    type="checkbox"
+                    id="dashboard-sync-toggle"
+                    ${syncEnabled ? 'checked' : ''}
+                    class="peer sr-only"
+                  />
+                  <span class="absolute inset-0 bg-white/10 rounded-full cursor-pointer transition-colors peer-checked:bg-teal-500/50"></span>
+                  <span class="absolute left-1 top-1 w-4 h-4 bg-white/60 rounded-full transition-transform peer-checked:translate-x-4 peer-checked:bg-white"></span>
+                </label>
               </div>
             </div>
+            <!-- Clipboard Count Card -->
             <div class="card p-4">
               <div class="flex items-center gap-3">
                 <div class="icon-container-teal">
@@ -892,17 +980,26 @@ class App {
             </button>
           </div>
 
-          <!-- Recent Clipboard Header -->
+          <!-- Clipboard History Header -->
           <div class="flex items-center justify-between mb-3">
-            <h2 class="text-sm font-semibold text-white/80 tracking-tight">Recent Clipboard</h2>
-            <button data-nav="history" class="text-xs text-teal-400 hover:text-teal-300 font-medium transition-colors">View all</button>
+            <h2 class="text-sm font-semibold text-white/80 tracking-tight">Clipboard History</h2>
+            <div class="flex items-center gap-1.5 flex-shrink-0">
+              <button id="btn-toggle-visibility" class="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all ${hideContent ? 'bg-teal-500/15 text-teal-400 border border-teal-500/30' : 'bg-white/5 text-white/50 border border-white/10 hover:bg-white/10 hover:text-white/70'}" title="${hideContent ? 'Show content' : 'Hide content'}">
+                ${icon(hideContent ? 'eye' : 'eyeOff', 12)}
+                <span>${hideContent ? 'Hidden' : 'Visible'}</span>
+              </button>
+              <button id="btn-clear-history" class="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium bg-red-500/10 text-red-400/80 border border-red-500/20 hover:bg-red-500/20 hover:text-red-400 transition-all">
+                ${icon('trash', 12)}
+                <span>Clear</span>
+              </button>
+            </div>
           </div>
         </div>
 
-        <!-- Scrollable Recent Clipboard Items -->
+        <!-- Scrollable Clipboard History (Full List) -->
         <div class="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
-          <div id="recent-clipboard" class="space-y-2">
-            ${recentItems.length > 0 ? recentItems.map((item) => this.renderClipboardItem(item)).join('') : this.renderEmptyState('No clipboard items yet', 'Copy something to get started')}
+          <div id="clipboard-history-list" class="space-y-2">
+            ${allItems.length > 0 ? allItems.map((item) => this.renderClipboardItem(item, hideContent)).join('') : this.renderEmptyState('No clipboard items yet', 'Copy something to get started')}
           </div>
         </div>
       </div>
@@ -945,30 +1042,6 @@ class App {
           <div id="discovered-peers" class="space-y-2">
             ${discoveredPeers.length > 0 ? discoveredPeers.map((peer) => this.renderDiscoveredPeer(peer)).join('') : this.renderEmptyState('No devices found', 'Searching on local network...')}
           </div>
-        </div>
-      </div>
-    `;
-  }
-
-  private renderHistoryView(): string {
-    const history = store.get('clipboardHistory');
-
-    return `
-      <div class="p-4 h-full overflow-y-auto">
-        <div class="flex items-center justify-between mb-4">
-          <div class="flex items-center gap-2">
-            <div class="icon-container-teal" style="width: 1.5rem; height: 1.5rem; border-radius: 0.5rem;">
-              ${icon('history', 12)}
-            </div>
-            <h2 class="text-sm font-semibold text-white/80 tracking-tight">Clipboard History</h2>
-          </div>
-          <button id="btn-clear-all-history" class="btn-danger text-xs px-3 py-1.5">
-            ${icon('trash', 12)}
-            <span>Clear All</span>
-          </button>
-        </div>
-        <div id="clipboard-history" class="space-y-2">
-          ${history.length > 0 ? history.map((item) => this.renderClipboardItem(item)).join('') : this.renderEmptyState('No clipboard history', 'Your copied items will appear here')}
         </div>
       </div>
     `;
@@ -1068,6 +1141,32 @@ class App {
                 class="checkbox"
               />
             </label>
+          </div>
+        </div>
+
+        <!-- Security -->
+        <div class="mb-6">
+          <div class="flex items-center gap-2 mb-3">
+            <div class="icon-container-teal" style="width: 1.5rem; height: 1.5rem; border-radius: 0.5rem;">
+              ${icon('lock', 12)}
+            </div>
+            <h2 class="text-sm font-semibold text-white/80 tracking-tight">Security</h2>
+          </div>
+          <div class="card overflow-hidden">
+            <div class="flex items-center justify-between p-4">
+              <div>
+                <span class="text-sm text-white/70 block">Auto-lock</span>
+                <span class="text-xs text-white/40">Lock vault after inactivity</span>
+              </div>
+              <select id="auto-lock-select" class="select">
+                <option value="0" ${settings.auto_lock_minutes === 0 ? 'selected' : ''}>Never</option>
+                <option value="1" ${settings.auto_lock_minutes === 1 ? 'selected' : ''}>1 minute</option>
+                <option value="5" ${settings.auto_lock_minutes === 5 ? 'selected' : ''}>5 minutes</option>
+                <option value="15" ${settings.auto_lock_minutes === 15 ? 'selected' : ''}>15 minutes</option>
+                <option value="30" ${settings.auto_lock_minutes === 30 ? 'selected' : ''}>30 minutes</option>
+                <option value="60" ${settings.auto_lock_minutes === 60 ? 'selected' : ''}>1 hour</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -1384,15 +1483,49 @@ class App {
     `;
   }
 
-  private renderClipboardItem(item: ClipboardEntry): string {
+  /**
+   * Renders the clear history confirmation modal.
+   */
+  private renderClearHistoryConfirmModal(): string {
+    const count = store.get('clipboardHistory').length;
+    return `
+      <div class="fixed inset-0 modal-overlay flex items-center justify-center z-50 p-4">
+        <div class="modal-content p-5 max-w-xs w-full">
+          <div class="text-center">
+            <!-- Warning Icon -->
+            <div class="w-12 h-12 rounded-xl mx-auto mb-3 flex items-center justify-center bg-red-500/15 border border-red-500/25">
+              ${icon('trash', 22, 'text-red-400')}
+            </div>
+
+            <h2 class="text-lg font-semibold text-white mb-1">Clear History?</h2>
+            <p class="text-white/50 text-sm mb-5">
+              This will delete ${count} clipboard ${count === 1 ? 'item' : 'items'}. This action cannot be undone.
+            </p>
+
+            <!-- Buttons -->
+            <div class="flex gap-3">
+              <button id="btn-cancel-clear-history" class="btn-secondary flex-1 py-2.5">
+                Cancel
+              </button>
+              <button id="btn-confirm-clear-history" class="flex-1 py-2.5 rounded-full font-medium text-sm bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 transition-all">
+                Clear All
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  private renderClipboardItem(item: ClipboardEntry, hideContent = false): string {
     const isLocal = item.is_local;
     // Escape HTML to prevent XSS attacks from malicious clipboard content
-    const safeContent = escapeHtml(truncate(item.content, 120));
+    const safeContent = hideContent ? '••••••••••••••••' : escapeHtml(truncate(item.content, 120));
     return `
-      <div class="card p-3 group cursor-pointer" style="transition: all 0.2s ease;">
+      <div class="card p-3 group cursor-pointer clipboard-item" data-id="${item.id}" style="transition: all 0.2s ease;">
         <div class="flex items-start justify-between gap-3">
           <div class="flex-1 min-w-0">
-            <p class="text-sm text-white/90 break-words line-clamp-2 leading-relaxed">${safeContent}</p>
+            <p class="text-sm text-white/90 break-words line-clamp-2 leading-relaxed ${hideContent ? 'select-none' : ''}">${safeContent}</p>
             <div class="flex items-center gap-2 mt-2">
               <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${isLocal ? 'bg-teal-500/10 text-teal-400' : 'bg-orange-500/10 text-orange-400'}">
                 ${isLocal ? icon('monitor', 10) : icon('download', 10)}
@@ -1403,7 +1536,7 @@ class App {
           </div>
           <button
             data-copy="${item.id}"
-            class="p-2 rounded-lg text-white/30 hover:text-teal-400 hover:bg-teal-500/10 transition-all flex-shrink-0"
+            class="copy-btn p-2 rounded-lg text-white/30 hover:text-teal-400 hover:bg-teal-500/10 transition-all flex-shrink-0"
             title="Copy to clipboard"
           >
             ${icon('copy', 16)}
@@ -1604,6 +1737,15 @@ class App {
     });
   }
 
+  private updateClearHistoryModal(): void {
+    const modal = $('#clear-history-modal');
+    if (modal) {
+      const show = store.get('showClearHistoryConfirm');
+      modal.className = show ? '' : 'hidden';
+      modal.innerHTML = this.renderClearHistoryConfirmModal();
+    }
+  }
+
   private renderPeersList(): void {
     const view = store.get('currentView');
     if (view === 'peers') {
@@ -1616,17 +1758,9 @@ class App {
 
   private renderClipboardHistory(): void {
     const view = store.get('currentView');
-    if (view === 'history') {
-      const container = $('#clipboard-history');
-      if (container) {
-        const history = store.get('clipboardHistory');
-        container.innerHTML =
-          history.length > 0
-            ? history.map((item) => this.renderClipboardItem(item)).join('')
-            : this.renderEmptyState('No clipboard history', 'Your copied items will appear here');
-      }
-    } else if (view === 'dashboard') {
+    if (view === 'dashboard') {
       const history = store.get('clipboardHistory');
+      const hideContent = store.get('settings').hide_clipboard_content;
 
       // Update the clipboard count in stats
       const countEl = $('#clipboard-count');
@@ -1634,13 +1768,12 @@ class App {
         countEl.textContent = String(history.length);
       }
 
-      // Update the recent clipboard items
-      const container = $('#recent-clipboard');
+      // Update the full clipboard history list
+      const container = $('#clipboard-history-list');
       if (container) {
-        const recentItems = history.slice(0, 3);
         container.innerHTML =
-          recentItems.length > 0
-            ? recentItems.map((item) => this.renderClipboardItem(item)).join('')
+          history.length > 0
+            ? history.map((item) => this.renderClipboardItem(item, hideContent)).join('')
             : this.renderEmptyState('No clipboard items yet', 'Copy something to get started');
       }
     }
@@ -1790,6 +1923,49 @@ class App {
     if (badge) {
       badge.className = status === 'available' ? 'update-badge' : 'hidden';
     }
+  }
+
+  /**
+   * Reset the auto-lock timer based on current settings.
+   * Called on user activity and when settings change.
+   */
+  private resetAutoLockTimer(): void {
+    // Clear existing timer
+    if (this.autoLockTimer) {
+      clearTimeout(this.autoLockTimer);
+      this.autoLockTimer = null;
+    }
+
+    const settings = store.get('settings');
+    const vaultStatus = store.get('vaultStatus');
+
+    // Only set timer if auto-lock is enabled and vault is unlocked
+    if (settings.auto_lock_minutes > 0 && vaultStatus === 'Unlocked') {
+      const timeoutMs = settings.auto_lock_minutes * 60 * 1000;
+      this.autoLockTimer = setTimeout(async () => {
+        try {
+          await commands.lockVault();
+          store.addToast('Vault locked due to inactivity', 'info');
+        } catch (error) {
+          console.error('Failed to auto-lock vault:', error);
+        }
+      }, timeoutMs);
+    }
+  }
+
+  /**
+   * Setup activity tracking to reset the auto-lock timer.
+   * Listens for user interactions to detect activity.
+   */
+  private setupActivityTracking(): void {
+    const activityEvents = ['mousedown', 'keydown', 'touchstart', 'scroll'];
+    activityEvents.forEach((eventType) => {
+      document.addEventListener(eventType, () => this.resetAutoLockTimer(), { passive: true });
+    });
+
+    // Also reset timer when vault is unlocked or settings change
+    store.subscribe('vaultStatus', () => this.resetAutoLockTimer());
+    store.subscribe('settings', () => this.resetAutoLockTimer());
   }
 }
 

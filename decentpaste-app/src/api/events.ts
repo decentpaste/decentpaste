@@ -18,6 +18,11 @@ export interface ClipboardSyncedFromBackgroundPayload {
   fromDevice: string;
 }
 
+/** Payload for settings changed from system tray */
+export interface SettingsChangedPayload {
+  auto_sync_enabled?: boolean;
+}
+
 export type EventHandler<T> = (payload: T) => void;
 
 interface EventListeners {
@@ -36,6 +41,7 @@ interface EventListeners {
   networkError: EventHandler<string>[];
   appMinimizedToTray: EventHandler<void>[];
   vaultStatus: EventHandler<VaultStatus>[];
+  settingsChanged: EventHandler<SettingsChangedPayload>[];
 }
 
 class EventManager {
@@ -55,6 +61,7 @@ class EventManager {
     networkError: [],
     appMinimizedToTray: [],
     vaultStatus: [],
+    settingsChanged: [],
   };
 
   private unlistenFns: UnlistenFn[] = [];
@@ -105,6 +112,9 @@ class EventManager {
       }),
       listen<VaultStatus>('vault-status', (e) => {
         this.listeners.vaultStatus.forEach((fn) => fn(e.payload));
+      }),
+      listen<SettingsChangedPayload>('settings-changed', (e) => {
+        this.listeners.settingsChanged.forEach((fn) => fn(e.payload));
       }),
     ]);
   }

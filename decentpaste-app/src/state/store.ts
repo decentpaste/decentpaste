@@ -12,7 +12,7 @@ import type {
   VaultStatus,
 } from '../api/types';
 
-export type View = 'dashboard' | 'peers' | 'history' | 'settings';
+export type View = 'dashboard' | 'peers' | 'settings';
 export type OnboardingStep = 'device-name' | 'pin-setup' | null;
 
 export interface Toast {
@@ -68,6 +68,9 @@ export interface AppState {
 
   // Reset confirmation state
   showResetConfirmation: boolean;
+
+  // Clear history confirmation state
+  showClearHistoryConfirm: boolean;
 }
 
 type StateListener<K extends keyof AppState> = (value: AppState[K]) => void;
@@ -96,6 +99,8 @@ class Store {
         show_notifications: true,
         clipboard_poll_interval_ms: 500,
         auth_method: null,
+        hide_clipboard_content: false,
+        auto_lock_minutes: 15,
       },
       deviceInfo: null,
       isLoading: true,
@@ -112,6 +117,8 @@ class Store {
       onboardingDeviceName: '',
       // Reset confirmation state
       showResetConfirmation: false,
+      // Clear history confirmation state
+      showClearHistoryConfirm: false,
     };
   }
 
