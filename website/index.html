@@ -760,13 +760,44 @@
             </div>
           </div>
 
-          <!-- Screenshot Indicators -->
-          <div class="flex justify-center gap-2 mt-8 fade-in-up" style="animation-delay: 0.3s">
-            <button class="screenshot-dot active" data-index="0" aria-label="View screenshot set 1"></button>
-            <button class="screenshot-dot" data-index="1" aria-label="View screenshot set 2"></button>
-            <button class="screenshot-dot" data-index="2" aria-label="View screenshot set 3"></button>
-            <button class="screenshot-dot" data-index="3" aria-label="View screenshot set 4"></button>
-            <button class="screenshot-dot" data-index="4" aria-label="View screenshot set 5"></button>
+          <!-- Enhanced Screenshot Navigation -->
+          <div class="screenshot-nav fade-in-up" style="animation-delay: 0.3s">
+            <!-- Caption -->
+            <p id="screenshot-caption" class="screenshot-caption">Dashboard & Device Pairing</p>
+
+            <!-- Navigation Controls -->
+            <div class="screenshot-nav-controls">
+              <!-- Previous Arrow -->
+              <button id="screenshot-prev" class="screenshot-arrow" aria-label="Previous screenshot">
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+
+              <!-- Dots Container -->
+              <div class="screenshot-dots-container">
+                <button class="screenshot-dot active" data-index="0" aria-label="View screenshot set 1"></button>
+                <button class="screenshot-dot" data-index="1" aria-label="View screenshot set 2"></button>
+                <button class="screenshot-dot" data-index="2" aria-label="View screenshot set 3"></button>
+                <button class="screenshot-dot" data-index="3" aria-label="View screenshot set 4"></button>
+                <button class="screenshot-dot" data-index="4" aria-label="View screenshot set 5"></button>
+              </div>
+
+              <!-- Next Arrow -->
+              <button id="screenshot-next" class="screenshot-arrow" aria-label="Next screenshot">
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+
+            <!-- Touch hint for mobile -->
+            <div class="touch-hint">
+              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+              </svg>
+              <span>Swipe to browse</span>
+            </div>
           </div>
         </div>
       </section>

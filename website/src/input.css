@@ -25,11 +25,14 @@
 
 html {
   scroll-behavior: smooth;
+  overflow-x: hidden;
 }
 
 body {
   background-color: #0a0a0b;
   color: #ffffff;
+  overflow-x: hidden;
+  position: relative;
 }
 
 /* =============================================================================
@@ -747,8 +750,13 @@ button:focus-visible {
 }
 
 /* =============================================================================
-   Screenshot Showcase - Floating Glow Design
+   Screenshot Showcase - Enhanced Floating Glow Design
    ============================================================================= */
+
+/* Section container - prevents overflow */
+#screenshots {
+  overflow: hidden;
+}
 
 .device-showcase {
   display: flex;
@@ -756,8 +764,9 @@ button:focus-visible {
   align-items: center;
   gap: 0;
   position: relative;
-  min-height: 450px;
+  min-height: 480px;
   perspective: 1200px;
+  overflow: visible;
 }
 
 /* Desktop Screenshot - Floating with Gradient Glow Aura */
@@ -768,11 +777,15 @@ button:focus-visible {
   transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s ease;
 }
 
-/* Gradient glow aura behind desktop */
+/* Gradient glow aura behind desktop - contained */
 .device-desktop::before {
   content: '';
   position: absolute;
-  inset: -20px;
+  top: 50%;
+  left: 50%;
+  width: calc(100% + 40px);
+  height: calc(100% + 40px);
+  transform: translate(-50%, -50%);
   background: conic-gradient(
     from 180deg at 50% 50%,
     rgba(20, 184, 166, 0.4) 0deg,
@@ -788,13 +801,13 @@ button:focus-visible {
 }
 
 @keyframes glow-rotate {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
 }
 
 .device-frame-desktop {
   position: relative;
-  width: 400px;
+  width: min(400px, 85vw);
   transform: rotateY(-3deg) rotateX(2deg);
   transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -815,7 +828,7 @@ button:focus-visible {
 }
 
 .device-desktop:hover .device-frame-desktop {
-  transform: rotateY(0deg) rotateX(0deg) scale(1.08);
+  transform: rotateY(0deg) rotateX(0deg) scale(1.05);
 }
 
 .device-desktop:hover::before {
@@ -824,7 +837,7 @@ button:focus-visible {
 
 /* Screenshot Containers */
 .screenshot-container {
-  overflow: visible;
+  overflow: hidden;
 }
 
 .screenshot-desktop {
@@ -848,7 +861,7 @@ button:focus-visible {
   height: 100%;
   object-fit: cover;
   object-position: top;
-  transition: opacity 0.5s ease, transform 0.5s ease;
+  transition: opacity 0.4s ease, transform 0.4s ease;
 }
 
 .screenshot-container img.transitioning {
@@ -859,6 +872,7 @@ button:focus-visible {
 /* Desktop Reflection - gradient light beneath */
 .device-reflection {
   width: 60%;
+  max-width: 280px;
   height: 40px;
   margin: 0 auto;
   margin-top: 15px;
@@ -890,11 +904,15 @@ button:focus-visible {
   transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Subtle glow on mobile too */
+/* Subtle glow on mobile too - contained */
 .device-frame-mobile::before {
   content: '';
   position: absolute;
-  inset: -15px;
+  top: 50%;
+  left: 50%;
+  width: calc(100% + 30px);
+  height: calc(100% + 30px);
+  transform: translate(-50%, -50%);
   background: radial-gradient(ellipse at center, rgba(249, 115, 22, 0.2) 0%, transparent 70%);
   filter: blur(25px);
   z-index: -1;
@@ -902,7 +920,7 @@ button:focus-visible {
 
 /* Interactive hover - mobile gets focus */
 .device-mobile:hover .device-frame-mobile {
-  transform: rotateY(0deg) rotateX(0deg) scale(1.15);
+  transform: rotateY(0deg) rotateX(0deg) scale(1.12);
 }
 
 .device-mobile:hover::before {
@@ -962,7 +980,7 @@ button:focus-visible {
     transform: translateY(0px);
   }
   50% {
-    transform: translateY(-12px);
+    transform: translateY(-10px);
   }
 }
 
@@ -971,31 +989,144 @@ button:focus-visible {
     transform: translateY(0px);
   }
   50% {
-    transform: translateY(-18px);
+    transform: translateY(-16px);
   }
 }
 
-/* Screenshot Navigation Dots */
-.screenshot-dot {
-  width: 8px;
-  height: 8px;
+/* =============================================================================
+   Enhanced Screenshot Navigation
+   ============================================================================= */
+
+.screenshot-nav {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+/* Screenshot caption/label */
+.screenshot-caption {
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.5);
+  text-align: center;
+  min-height: 1.5rem;
+  transition: color 0.3s ease;
+}
+
+/* Navigation container with progress */
+.screenshot-nav-controls {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+/* Arrow buttons */
+.screenshot-arrow {
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.2);
-  border: none;
-  padding: 0;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+.screenshot-arrow:hover {
+  background: rgba(20, 184, 166, 0.15);
+  border-color: rgba(20, 184, 166, 0.4);
+  color: #14b8a6;
+  transform: scale(1.1);
+}
+
+.screenshot-arrow:active {
+  transform: scale(0.95);
+}
+
+.screenshot-arrow svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* Dots container with progress bar */
+.screenshot-dots-container {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1.25rem;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 50px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Screenshot Navigation Dots - Enhanced */
+.screenshot-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
 .screenshot-dot:hover {
-  background: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.35);
   transform: scale(1.2);
 }
 
 .screenshot-dot.active {
-  background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
-  box-shadow: 0 0 12px rgba(20, 184, 166, 0.5);
-  transform: scale(1.2);
+  background: #14b8a6;
+  box-shadow: 0 0 16px rgba(20, 184, 166, 0.6);
+  transform: scale(1.3);
+}
+
+/* Progress ring around active dot */
+.screenshot-dot.active::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border: 2px solid rgba(20, 184, 166, 0.3);
+  border-radius: 50%;
+  animation: dot-ring-pulse 5s linear infinite;
+}
+
+@keyframes dot-ring-pulse {
+  0% {
+    transform: scale(0.8);
+    opacity: 1;
+    border-color: rgba(20, 184, 166, 0.5);
+  }
+  100% {
+    transform: scale(0.8);
+    opacity: 1;
+    border-color: rgba(20, 184, 166, 0.5);
+  }
+}
+
+/* Progress indicator line between dots */
+.screenshot-progress {
+  position: absolute;
+  bottom: -8px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 1px;
+  overflow: hidden;
+}
+
+.screenshot-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #14b8a6, #2dd4bf);
+  border-radius: 1px;
+  transition: width 0.3s ease;
 }
 
 /* Responsive Design */
@@ -1003,33 +1134,40 @@ button:focus-visible {
   .device-showcase {
     flex-direction: column;
     align-items: center;
-    gap: 2rem;
+    gap: 1.5rem;
     min-height: auto;
     padding: 1rem 0;
   }
 
   .device-desktop {
-    transform: scale(0.9);
+    transform: none;
   }
 
   .device-desktop::before {
     filter: blur(30px);
-    opacity: 0.5;
+    opacity: 0.4;
+    width: calc(100% + 20px);
+    height: calc(100% + 20px);
   }
 
   .device-frame-desktop {
-    width: 340px;
+    width: min(320px, 80vw);
     transform: none;
   }
 
   .device-mobile {
     margin-left: 0;
-    margin-top: -2rem;
+    margin-top: -1.5rem;
   }
 
   .device-frame-mobile {
     transform: none;
     width: 150px;
+  }
+
+  .device-frame-mobile::before {
+    width: calc(100% + 20px);
+    height: calc(100% + 20px);
   }
 
   .screenshot-mobile {
@@ -1044,59 +1182,105 @@ button:focus-visible {
   .device-reflection {
     display: none;
   }
+
+  /* Simplified navigation on mobile */
+  .screenshot-nav-controls {
+    gap: 1rem;
+  }
+
+  .screenshot-arrow {
+    width: 36px;
+    height: 36px;
+  }
+
+  .screenshot-arrow svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .screenshot-dots-container {
+    padding: 0.5rem 1rem;
+    gap: 0.5rem;
+  }
+
+  .screenshot-dot {
+    width: 8px;
+    height: 8px;
+  }
 }
 
 @media (max-width: 480px) {
   .device-desktop {
-    transform: scale(0.75);
+    transform: none;
+  }
+
+  .device-desktop::before {
+    opacity: 0.3;
   }
 
   .device-frame-desktop {
-    width: 320px;
+    width: min(280px, 75vw);
   }
 
   .device-mobile {
-    transform: scale(0.9);
+    transform: none;
   }
 
   .device-frame-mobile {
-    width: 140px;
+    width: 130px;
   }
 
   .screenshot-mobile {
-    height: 280px;
+    height: 260px;
+  }
+
+  .screenshot-arrow {
+    display: none;
   }
 }
 
-/* Glow effect on hover for the whole showcase */
-.device-showcase::before {
+/* Subtle glow effect on hover for the whole showcase */
+.device-showcase::after {
   content: '';
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 500px;
+  width: min(500px, 100%);
   height: 400px;
-  background: radial-gradient(ellipse, rgba(20, 184, 166, 0.08) 0%, transparent 70%);
+  background: radial-gradient(ellipse, rgba(20, 184, 166, 0.06) 0%, transparent 70%);
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.5s ease;
 }
 
-.device-showcase:hover::before {
+.device-showcase:hover::after {
   opacity: 1;
 }
 
-/* Auto-rotate indicator animation */
-.screenshot-dot.auto-active {
-  animation: dot-pulse 4s ease-in-out infinite;
+/* Touch hint for mobile */
+.touch-hint {
+  display: none;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.35);
+  margin-top: 0.5rem;
 }
 
-@keyframes dot-pulse {
-  0%, 100% {
-    box-shadow: 0 0 12px rgba(20, 184, 166, 0.5);
-  }
-  50% {
-    box-shadow: 0 0 20px rgba(20, 184, 166, 0.8);
+.touch-hint svg {
+  width: 16px;
+  height: 16px;
+  animation: swipe-hint 2s ease-in-out infinite;
+}
+
+@keyframes swipe-hint {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(5px); }
+}
+
+@media (max-width: 768px) {
+  .touch-hint {
+    display: flex;
   }
 }

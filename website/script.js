@@ -848,74 +848,60 @@ function initSmoothScroll() {
 // =============================================================================
 
 /**
- * Screenshot gallery with random mixing of desktop/mobile pairs
+ * Screenshot gallery with navigation, touch support, and captions
  */
 class ScreenshotShowcase {
   constructor() {
     this.desktopImg = document.getElementById('screenshot-desktop-img');
     this.mobileImg = document.getElementById('screenshot-mobile-img');
     this.dots = document.querySelectorAll('.screenshot-dot');
+    this.caption = document.getElementById('screenshot-caption');
+    this.prevBtn = document.getElementById('screenshot-prev');
+    this.nextBtn = document.getElementById('screenshot-next');
+    this.showcase = document.querySelector('.device-showcase');
 
     if (!this.desktopImg || !this.mobileImg) return;
 
-    // Screenshot paths
-    this.desktopScreenshots = [
-      'assets/screenshots/desktop/Screenshot_Desktop_1.png',
-      'assets/screenshots/desktop/Screenshot_Desktop_2.png',
-      'assets/screenshots/desktop/Screenshot_Desktop_3.png',
-      'assets/screenshots/desktop/Screenshot_Desktop_4.png',
-      'assets/screenshots/desktop/Screenshot_Desktop_5.png',
+    // Screenshot paths with captions
+    this.screenshots = [
+      {
+        desktop: 'assets/screenshots/desktop/Screenshot_Desktop_1.png',
+        mobile: 'assets/screenshots/mobile/Screenshot_Mobile_1.jpg',
+        caption: 'Dashboard & Device Discovery',
+      },
+      {
+        desktop: 'assets/screenshots/desktop/Screenshot_Desktop_2.png',
+        mobile: 'assets/screenshots/mobile/Screenshot_Mobile_2.jpg',
+        caption: 'Secure Device Pairing',
+      },
+      {
+        desktop: 'assets/screenshots/desktop/Screenshot_Desktop_3.png',
+        mobile: 'assets/screenshots/mobile/Screenshot_Mobile_3.jpg',
+        caption: 'Clipboard History & Sync',
+      },
+      {
+        desktop: 'assets/screenshots/desktop/Screenshot_Desktop_4.png',
+        mobile: 'assets/screenshots/mobile/Screenshot_Mobile_4.jpg',
+        caption: 'Connected Devices Overview',
+      },
+      {
+        desktop: 'assets/screenshots/desktop/Screenshot_Desktop_5.png',
+        mobile: 'assets/screenshots/mobile/Screenshot_Mobile_5.jpg',
+        caption: 'Settings & Preferences',
+      },
     ];
 
-    this.mobileScreenshots = [
-      'assets/screenshots/mobile/Screenshot_Mobile_1.jpg',
-      'assets/screenshots/mobile/Screenshot_Mobile_2.jpg',
-      'assets/screenshots/mobile/Screenshot_Mobile_3.jpg',
-      'assets/screenshots/mobile/Screenshot_Mobile_4.jpg',
-      'assets/screenshots/mobile/Screenshot_Mobile_5.jpg',
-    ];
-
-    // Create shuffled pairs for variety
-    this.pairs = this.createShuffledPairs();
     this.currentIndex = 0;
     this.autoRotateInterval = null;
     this.isPaused = false;
+    this.touchStartX = 0;
+    this.touchEndX = 0;
 
     this.init();
   }
 
-  /**
-   * Creates pairs of desktop+mobile screenshots with interesting mixing
-   * Instead of always matching 1-1, 2-2, we mix them up for visual variety
-   */
-  createShuffledPairs() {
-    const pairs = [];
-    const mobileOrder = [...Array(5).keys()]; // [0,1,2,3,4]
-
-    // Shuffle mobile order for interesting combinations
-    for (let i = mobileOrder.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [mobileOrder[i], mobileOrder[j]] = [mobileOrder[j], mobileOrder[i]];
-    }
-
-    for (let i = 0; i < 5; i++) {
-      pairs.push({
-        desktop: this.desktopScreenshots[i],
-        mobile: this.mobileScreenshots[mobileOrder[i]],
-      });
-    }
-
-    // Shuffle the final pairs array too
-    for (let i = pairs.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [pairs[i], pairs[j]] = [pairs[j], pairs[i]];
-    }
-
-    return pairs;
-  }
-
   init() {
-    // Show random starting pair
+    // Show first screenshot
     this.showPair(0);
 
     // Bind dot click events
@@ -926,25 +912,115 @@ class ScreenshotShowcase {
       });
     });
 
-    // Start auto-rotation
-    this.startAutoRotate();
+    // Arrow button events
+    if (this.prevBtn) {
+      this.prevBtn.addEventListener('click', () => {
+        this.prev();
+        this.resetAutoRotate();
+      });
+    }
 
-    // Pause on hover
-    const showcase = document.querySelector('.device-showcase');
-    if (showcase) {
-      showcase.addEventListener('mouseenter', () => {
+    if (this.nextBtn) {
+      this.nextBtn.addEventListener('click', () => {
+        this.next();
+        this.resetAutoRotate();
+      });
+    }
+
+    // Keyboard navigation
+    document.addEventListener('keydown', (e) => {
+      if (!this.isInViewport()) return;
+      if (e.key === 'ArrowLeft') {
+        this.prev();
+        this.resetAutoRotate();
+      } else if (e.key === 'ArrowRight') {
+        this.next();
+        this.resetAutoRotate();
+      }
+    });
+
+    // Touch/swipe support
+    if (this.showcase) {
+      this.showcase.addEventListener(
+        'touchstart',
+        (e) => {
+          this.touchStartX = e.changedTouches[0].screenX;
+        },
+        { passive: true },
+      );
+
+      this.showcase.addEventListener(
+        'touchend',
+        (e) => {
+          this.touchEndX = e.changedTouches[0].screenX;
+          this.handleSwipe();
+        },
+        { passive: true },
+      );
+
+      // Pause on hover/touch
+      this.showcase.addEventListener('mouseenter', () => {
         this.isPaused = true;
       });
-      showcase.addEventListener('mouseleave', () => {
+      this.showcase.addEventListener('mouseleave', () => {
         this.isPaused = false;
       });
+      this.showcase.addEventListener(
+        'touchstart',
+        () => {
+          this.isPaused = true;
+        },
+        { passive: true },
+      );
+      this.showcase.addEventListener(
+        'touchend',
+        () => {
+          setTimeout(() => {
+            this.isPaused = false;
+          }, 2000);
+        },
+        { passive: true },
+      );
+    }
+
+    // Start auto-rotation
+    this.startAutoRotate();
+  }
+
+  isInViewport() {
+    if (!this.showcase) return false;
+    const rect = this.showcase.getBoundingClientRect();
+    return rect.top < window.innerHeight && rect.bottom > 0;
+  }
+
+  handleSwipe() {
+    const swipeThreshold = 50;
+    const diff = this.touchStartX - this.touchEndX;
+
+    if (Math.abs(diff) > swipeThreshold) {
+      if (diff > 0) {
+        this.next();
+      } else {
+        this.prev();
+      }
+      this.resetAutoRotate();
     }
   }
 
-  showPair(index) {
-    if (index < 0 || index >= this.pairs.length) return;
+  prev() {
+    const prevIndex = (this.currentIndex - 1 + this.screenshots.length) % this.screenshots.length;
+    this.showPair(prevIndex);
+  }
 
-    const pair = this.pairs[index];
+  next() {
+    const nextIndex = (this.currentIndex + 1) % this.screenshots.length;
+    this.showPair(nextIndex);
+  }
+
+  showPair(index) {
+    if (index < 0 || index >= this.screenshots.length) return;
+
+    const screenshot = this.screenshots[index];
     this.currentIndex = index;
 
     // Smooth transition - fade out
@@ -953,28 +1029,31 @@ class ScreenshotShowcase {
 
     setTimeout(() => {
       // Update sources
-      this.desktopImg.src = pair.desktop;
-      this.mobileImg.src = pair.mobile;
+      this.desktopImg.src = screenshot.desktop;
+      this.mobileImg.src = screenshot.mobile;
+
+      // Update caption
+      if (this.caption) {
+        this.caption.textContent = screenshot.caption;
+      }
 
       // Fade in after a brief moment
       setTimeout(() => {
         this.desktopImg.classList.remove('transitioning');
         this.mobileImg.classList.remove('transitioning');
       }, 50);
-    }, 300);
+    }, 250);
 
     // Update dots
     this.dots.forEach((dot, i) => {
       dot.classList.toggle('active', i === index);
-      dot.classList.toggle('auto-active', i === index);
     });
   }
 
   startAutoRotate() {
     this.autoRotateInterval = setInterval(() => {
       if (!this.isPaused) {
-        const nextIndex = (this.currentIndex + 1) % this.pairs.length;
-        this.showPair(nextIndex);
+        this.next();
       }
     }, 5000); // Change every 5 seconds
   }
