@@ -2,6 +2,7 @@ import { store, type Toast, type View } from './state/store';
 import { eventManager } from './api/events';
 import * as commands from './api/commands';
 import { readText } from '@tauri-apps/plugin-clipboard-manager';
+import { getVersion } from '@tauri-apps/api/app';
 import { icon, type IconName } from './components/icons';
 import { $, escapeHtml, formatTime, truncate } from './utils/dom';
 import { getErrorMessage } from './utils/error';
@@ -23,6 +24,15 @@ class App {
   }
 
   async init(): Promise<void> {
+    // Fetch app version from Tauri
+    try {
+      const version = await getVersion();
+      store.set('appVersion', version);
+    } catch (error) {
+      console.error('Failed to get app version:', error);
+      store.set('appVersion', 'unknown');
+    }
+
     // Setup event listeners from backend
     await eventManager.setup();
     this.setupEventHandlers();
@@ -1197,7 +1207,7 @@ class App {
                 ${icon('clipboard', 20, 'text-white')}
               </div>
               <div>
-                <p class="text-sm font-semibold text-white">DecentPaste <span class="text-white/40 font-normal">v0.1.0</span></p>
+                <p class="text-sm font-semibold text-white">DecentPaste <span class="text-white/40 font-normal">v${store.get('appVersion') || '?'}</span></p>
                 <p class="text-xs text-white/40">Cross-platform P2P clipboard sharing</p>
               </div>
             </div>
@@ -1819,7 +1829,7 @@ class App {
                 Check again
               </button>
             </div>
-            <p class="text-xs text-white/40 mt-1">Current version: v0.1.0</p>
+            <p class="text-xs text-white/40 mt-1">Current version: v${store.get('appVersion') || '?'}</p>
           </div>
         `;
 

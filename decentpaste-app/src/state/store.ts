@@ -71,6 +71,9 @@ export interface AppState {
 
   // Clear history confirmation state
   showClearHistoryConfirm: boolean;
+
+  // App version (fetched from Tauri)
+  appVersion: string;
 }
 
 type StateListener<K extends keyof AppState> = (value: AppState[K]) => void;
@@ -119,6 +122,8 @@ class Store {
       showResetConfirmation: false,
       // Clear history confirmation state
       showClearHistoryConfirm: false,
+      // App version (fetched from Tauri on init)
+      appVersion: '',
     };
   }
 
