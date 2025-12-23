@@ -75,7 +75,6 @@ export interface AppSettings {
 // Device info
 export interface DeviceInfo {
   device_id: string;
-  device_name: string;
   peer_id: string | null;
 }
 

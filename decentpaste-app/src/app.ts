@@ -855,7 +855,7 @@ class App {
               <img src="${logoDark}" alt="DecentPaste Logo" class="w-12 h-12" />
               <div>
                 <h1 class="font-semibold text-white text-sm tracking-tight">DecentPaste</h1>
-                <p class="text-xs text-white/40">${state.deviceInfo?.device_name || 'Loading...'}</p>
+                <p class="text-xs text-white/40">${state.settings.device_name}</p>
               </div>
             </div>
             <!-- Lock Button with teal icon container styling -->
@@ -1291,8 +1291,6 @@ class App {
    */
   private renderOnboarding(): string {
     const step = store.get('onboardingStep') || 'device-name';
-    const deviceInfo = store.get('deviceInfo');
-    const defaultDeviceName = deviceInfo?.device_name || 'My Device';
 
     // Progress indicator
     const stepNumber = step === 'device-name' ? 1 : 2;
@@ -1314,7 +1312,7 @@ class App {
     let stepContent = '';
 
     if (step === 'device-name') {
-      const savedDeviceName = store.get('onboardingDeviceName') || defaultDeviceName;
+      const savedDeviceName = store.get('onboardingDeviceName') || 'My Device';
       stepContent = `
         <div class="text-center mb-6">
           <div class="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center glow-teal" style="background: linear-gradient(135deg, rgba(20, 184, 166, 0.2) 0%, rgba(13, 148, 136, 0.1) 100%); border: 1px solid rgba(20, 184, 166, 0.3);">

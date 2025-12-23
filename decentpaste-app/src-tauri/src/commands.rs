@@ -14,7 +14,6 @@ use tracing::debug;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeviceInfo {
     pub device_id: String,
-    pub device_name: String,
     pub peer_id: Option<String>,
 }
 
@@ -585,7 +584,6 @@ pub async fn get_device_info(state: State<'_, AppState>) -> Result<DeviceInfo> {
     if let Some(ref id) = *identity {
         Ok(DeviceInfo {
             device_id: id.device_id.clone(),
-            device_name: id.device_name.clone(),
             peer_id: None, // Will be set from network
         })
     } else {
