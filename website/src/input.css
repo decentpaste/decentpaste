@@ -747,47 +747,79 @@ button:focus-visible {
 }
 
 /* =============================================================================
-   Screenshot Showcase - Device Mockups
+   Screenshot Showcase - Floating Glow Design
    ============================================================================= */
 
 .device-showcase {
   display: flex;
   justify-content: center;
-  align-items: flex-end;
-  gap: 2rem;
+  align-items: center;
+  gap: 0;
   position: relative;
-  min-height: 400px;
-  perspective: 1000px;
+  min-height: 450px;
+  perspective: 1200px;
 }
 
-/* Desktop Device */
+/* Desktop Screenshot - Floating with Gradient Glow Aura */
 .device-desktop {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  animation: float-desktop 6s ease-in-out infinite;
   position: relative;
   z-index: 1;
+  animation: float-desktop 6s ease-in-out infinite;
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s ease;
+}
+
+/* Gradient glow aura behind desktop */
+.device-desktop::before {
+  content: '';
+  position: absolute;
+  inset: -20px;
+  background: conic-gradient(
+    from 180deg at 50% 50%,
+    rgba(20, 184, 166, 0.4) 0deg,
+    rgba(249, 115, 22, 0.3) 120deg,
+    rgba(20, 184, 166, 0.4) 240deg,
+    rgba(249, 115, 22, 0.3) 360deg
+  );
+  border-radius: 16px;
+  filter: blur(40px);
+  opacity: 0.6;
+  z-index: -1;
+  animation: glow-rotate 8s linear infinite;
+}
+
+@keyframes glow-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 .device-frame-desktop {
-  border-radius: 0;
-  overflow: visible;
-  width: 380px;
-  box-shadow:
-    0 25px 60px -12px rgba(0, 0, 0, 0.6),
-    0 0 80px -20px rgba(20, 184, 166, 0.15);
-  transform: rotateY(-5deg) rotateX(2deg);
+  position: relative;
+  width: 400px;
+  transform: rotateY(-3deg) rotateX(2deg);
   transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .device-frame-desktop img {
-  border-radius: 0;
   display: block;
+  width: 100%;
+  border-radius: 10px;
+  box-shadow:
+    0 30px 60px -15px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.1);
 }
 
-.device-showcase:hover .device-frame-desktop {
-  transform: rotateY(-2deg) rotateX(1deg);
+/* Interactive hover - desktop gets focus */
+.device-desktop:hover ~ .device-mobile {
+  transform: scale(0.9);
+  opacity: 0.7;
+}
+
+.device-desktop:hover .device-frame-desktop {
+  transform: rotateY(0deg) rotateX(0deg) scale(1.08);
+}
+
+.device-desktop:hover::before {
+  opacity: 0.9;
 }
 
 /* Screenshot Containers */
@@ -798,13 +830,17 @@ button:focus-visible {
 .screenshot-desktop {
   height: auto;
   background: transparent;
-  overflow: visible;
 }
 
 .screenshot-mobile {
   background: #0a0a0b;
-  border-radius: 20px;
-  height: 320px;
+  border-radius: 26px;
+  height: 340px;
+  overflow: hidden;
+}
+
+.screenshot-mobile img {
+  border-radius: 26px;
 }
 
 .screenshot-container img {
@@ -813,7 +849,6 @@ button:focus-visible {
   object-fit: cover;
   object-position: top;
   transition: opacity 0.5s ease, transform 0.5s ease;
-  display: block;
 }
 
 .screenshot-container img.transitioning {
@@ -821,68 +856,95 @@ button:focus-visible {
   transform: scale(1.02);
 }
 
-/* Desktop Reflection - subtle glow beneath */
+/* Desktop Reflection - gradient light beneath */
 .device-reflection {
-  width: 70%;
-  height: 30px;
+  width: 60%;
+  height: 40px;
   margin: 0 auto;
-  margin-top: 10px;
-  background: radial-gradient(ellipse at center, rgba(20, 184, 166, 0.15) 0%, transparent 70%);
-  filter: blur(8px);
+  margin-top: 15px;
+  background: radial-gradient(ellipse at center, rgba(20, 184, 166, 0.2) 0%, transparent 70%);
+  filter: blur(12px);
 }
 
-/* Mobile Device */
+/* Mobile Device - Sleek Phone Frame */
 .device-mobile {
   animation: float-mobile 5s ease-in-out infinite;
-  animation-delay: -1s;
+  animation-delay: -1.5s;
   position: relative;
   z-index: 2;
-  margin-left: -40px;
-  margin-bottom: 20px;
+  margin-left: -50px;
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s ease;
 }
 
 .device-frame-mobile {
-  background: linear-gradient(145deg, #1a1a1d 0%, #0d0d0f 100%);
-  border-radius: 28px;
-  padding: 8px;
-  box-shadow:
-    0 25px 50px -12px rgba(0, 0, 0, 0.6),
-    0 0 0 1px rgba(255, 255, 255, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
-  width: 160px;
-  transform: rotateY(8deg) rotateX(-2deg);
-  transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
+  background: linear-gradient(145deg, #2a2a2d 0%, #151517 100%);
+  border-radius: 36px;
+  padding: 10px;
+  box-shadow:
+    0 30px 60px -15px rgba(0, 0, 0, 0.7),
+    0 0 0 1px rgba(255, 255, 255, 0.1),
+    inset 0 1px 1px rgba(255, 255, 255, 0.1);
+  width: 175px;
+  transform: rotateY(5deg) rotateX(-2deg);
+  transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.device-showcase:hover .device-frame-mobile {
-  transform: rotateY(4deg) rotateX(-1deg);
+/* Subtle glow on mobile too */
+.device-frame-mobile::before {
+  content: '';
+  position: absolute;
+  inset: -15px;
+  background: radial-gradient(ellipse at center, rgba(249, 115, 22, 0.2) 0%, transparent 70%);
+  filter: blur(25px);
+  z-index: -1;
 }
 
-/* Phone Notch */
+/* Interactive hover - mobile gets focus */
+.device-mobile:hover .device-frame-mobile {
+  transform: rotateY(0deg) rotateX(0deg) scale(1.15);
+}
+
+.device-mobile:hover::before {
+  opacity: 0.9;
+}
+
+/* When mobile is hovered, shrink desktop using :has() */
+.device-showcase:has(.device-mobile:hover) .device-desktop {
+  transform: scale(0.9);
+  opacity: 0.7;
+}
+
+.device-showcase:has(.device-mobile:hover) .device-desktop::before {
+  opacity: 0.3;
+}
+
+/* Dynamic Island style notch */
 .phone-notch {
   position: absolute;
-  top: 12px;
+  top: 16px;
   left: 50%;
   transform: translateX(-50%);
-  width: 50px;
-  height: 18px;
-  background: #0a0a0b;
-  border-radius: 10px;
+  width: 70px;
+  height: 20px;
+  background: #000;
+  border-radius: 12px;
   z-index: 10;
+  box-shadow: inset 0 0 3px rgba(0, 0, 0, 0.8);
 }
 
+/* Camera dot in notch */
 .phone-notch::after {
   content: '';
   position: absolute;
   top: 50%;
-  right: 8px;
+  right: 12px;
   transform: translateY(-50%);
   width: 6px;
   height: 6px;
-  background: linear-gradient(135deg, #1a1a2e 0%, #0d0d15 100%);
+  background: radial-gradient(circle, #1a1a2e 40%, #0a0a0f 100%);
   border-radius: 50%;
-  box-shadow: inset 0 0 2px rgba(20, 184, 166, 0.3);
+  box-shadow: 0 0 3px rgba(20, 184, 166, 0.4);
 }
 
 /* Home Indicator */
@@ -941,47 +1003,68 @@ button:focus-visible {
   .device-showcase {
     flex-direction: column;
     align-items: center;
-    gap: 1rem;
+    gap: 2rem;
     min-height: auto;
+    padding: 1rem 0;
   }
 
   .device-desktop {
-    transform: scale(0.85);
-    margin-bottom: -1rem;
+    transform: scale(0.9);
+  }
+
+  .device-desktop::before {
+    filter: blur(30px);
+    opacity: 0.5;
   }
 
   .device-frame-desktop {
-    width: 320px;
+    width: 340px;
     transform: none;
   }
 
   .device-mobile {
     margin-left: 0;
-    margin-bottom: 0;
-    transform: scale(0.95);
+    margin-top: -2rem;
   }
 
   .device-frame-mobile {
     transform: none;
+    width: 150px;
+  }
+
+  .screenshot-mobile {
+    height: 300px;
   }
 
   .device-showcase:hover .device-frame-desktop,
   .device-showcase:hover .device-frame-mobile {
-    transform: none;
+    transform: scale(1.01);
+  }
+
+  .device-reflection {
+    display: none;
   }
 }
 
 @media (max-width: 480px) {
   .device-desktop {
-    transform: scale(0.7);
-  }
-
-  .device-mobile {
-    transform: scale(0.85);
+    transform: scale(0.75);
   }
 
   .device-frame-desktop {
-    width: 300px;
+    width: 320px;
+  }
+
+  .device-mobile {
+    transform: scale(0.9);
+  }
+
+  .device-frame-mobile {
+    width: 140px;
+  }
+
+  .screenshot-mobile {
+    height: 280px;
   }
 }
 
