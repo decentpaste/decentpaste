@@ -52,15 +52,16 @@ decentpaste-app/
 
 ## Key Files to Know
 
-| File                             | Purpose                                       |
-|----------------------------------|-----------------------------------------------|
-| `src-tauri/src/lib.rs`           | App startup, spawns network & clipboard tasks |
-| `src-tauri/src/commands.rs`      | All Tauri commands                            |
-| `src-tauri/src/vault/manager.rs` | VaultManager - encrypted storage lifecycle    |
-| `src-tauri/src/network/swarm.rs` | libp2p network manager                        |
+| File                             | Purpose                                         |
+|----------------------------------|-------------------------------------------------|
+| `src-tauri/src/lib.rs`           | App startup, spawns network & clipboard tasks   |
+| `src-tauri/src/commands.rs`      | All Tauri commands                              |
+| `src-tauri/src/state.rs`         | AppState + flush helper methods                 |
+| `src-tauri/src/vault/manager.rs` | VaultManager - encrypted storage lifecycle      |
+| `src-tauri/src/network/swarm.rs` | libp2p network manager                          |
 | `src/app.ts`                     | All frontend UI (incl. onboarding, lock screen) |
-| `src/api/types.ts`               | TypeScript interfaces                         |
-| `src/api/updater.ts`             | Auto-update check and install logic           |
+| `src/api/types.ts`               | TypeScript interfaces                           |
+| `src/api/updater.ts`             | Auto-update check and install logic             |
 
 ## How Clipboard Sync Works
 
@@ -116,41 +117,50 @@ User PIN (4-8 digits)
 
 ### Vault States (VaultStatus)
 
-| State | UI Shown | Next Action |
-|-------|----------|-------------|
+| State      | UI Shown          | Next Action      |
+|------------|-------------------|------------------|
 | `NotSetup` | Onboarding wizard | User creates PIN |
-| `Locked` | Lock screen | User enters PIN |
-| `Unlocked` | Main app | Normal usage |
+| `Locked`   | Lock screen       | User enters PIN  |
+| `Unlocked` | Main app          | Normal usage     |
 
 ### Key Vault Commands
 
-| Command | Purpose |
-|---------|---------|
-| `get_vault_status` | Check current vault state |
-| `setup_vault` | Create new vault during onboarding |
-| `unlock_vault` | Open vault with PIN |
-| `lock_vault` | Flush data and lock |
-| `reset_vault` | Destroy vault (factory reset) |
-| `flush_vault` | Force save to disk |
+| Command            | Purpose                            |
+|--------------------|------------------------------------|
+| `get_vault_status` | Check current vault state          |
+| `setup_vault`      | Create new vault during onboarding |
+| `unlock_vault`     | Open vault with PIN                |
+| `lock_vault`       | Flush data and lock                |
+| `reset_vault`      | Destroy vault (factory reset)      |
+| `flush_vault`      | Force save to disk                 |
 
 ### Data Storage Locations
 
-| Data | Location | Format |
-|------|----------|--------|
-| Paired peers + secrets | `vault.hold` | Encrypted |
-| Clipboard history | `vault.hold` | Encrypted |
-| Device identity + keys | `vault.hold` | Encrypted |
-| libp2p keypair | `vault.hold` | Encrypted |
-| Salt for Argon2 | `salt.bin` | Raw bytes |
-| App settings | `settings.json` | Plaintext JSON |
+| Data                   | Location        | Format         |
+|------------------------|-----------------|----------------|
+| Paired peers + secrets | `vault.hold`    | Encrypted      |
+| Clipboard history      | `vault.hold`    | Encrypted      |
+| Device identity + keys | `vault.hold`    | Encrypted      |
+| libp2p keypair         | `vault.hold`    | Encrypted      |
+| Salt for Argon2        | `salt.bin`      | Raw bytes      |
+| App settings           | `settings.json` | Plaintext JSON |
 
-### Flush Triggers
+### Flush-on-Write Pattern
 
-Data is saved to the encrypted vault on:
-1. **App backgrounded** (mobile) - `visibilitychange` handler
-2. **App exit** - `RunEvent::ExitRequested`
-3. **Manual lock** - User clicks lock button
-4. **Settings save** - When user updates preferences
+Data is persisted **immediately** after every mutation, ensuring no data loss on unexpected termination:
+
+| Mutation              | Method Called                     |
+|-----------------------|-----------------------------------|
+| Peer paired/unpaired  | `state.flush_paired_peers()`      |
+| Peer name updated     | `state.flush_paired_peers()`      |
+| Device name changed   | `state.flush_device_identity()`   |
+| Clipboard entry added | `state.flush_clipboard_history()` |
+| History cleared       | `state.flush_clipboard_history()` |
+
+**Safety net flushes** (redundant but defensive):
+- App backgrounded (mobile) → `flush_all_to_vault()`
+- App exit (all platforms) → `flush_all_to_vault()`
+- Manual lock → `flush_all_to_vault()`
 
 ## Persistent Identity
 
@@ -296,11 +306,11 @@ Both Android and iOS handle background clipboard sync similarly, but with platfo
 
 ### Platform Differences:
 
-| Aspect | Android | iOS |
-|--------|---------|-----|
-| Background execution | Foreground Service keeps app alive indefinitely | App suspended after ~30 seconds |
-| Network in background | Stays connected via wake lock | Connections drop when suspended |
-| Notification | Persistent "Syncing clipboard" notification | No persistent notification |
+| Aspect                | Android                                         | iOS                             |
+|-----------------------|-------------------------------------------------|---------------------------------|
+| Background execution  | Foreground Service keeps app alive indefinitely | App suspended after ~30 seconds |
+| Network in background | Stays connected via wake lock                   | Connections drop when suspended |
+| Notification          | Persistent "Syncing clipboard" notification     | No persistent notification      |
 
 ### Android-Specific:
 - **Foreground Service** (`ClipboardSyncService.kt`) starts when app launches

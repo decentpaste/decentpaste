@@ -95,7 +95,7 @@ decentpaste/
             └── storage/          # Persistence
                 ├── mod.rs
                 ├── config.rs     # App settings
-                └── peers.rs      # Paired peers storage
+                └── peers.rs      # Data types & directory init
 ```
 
 ---
@@ -338,14 +338,22 @@ Data operations:
 - `delete_salt()` - Removes salt file during vault destruction
 - Salt is unique per installation, stored in `salt.bin`
 
-#### Flush Triggers
+#### Flush-on-Write Pattern
 
-Data is automatically flushed to the encrypted vault on:
+Data is persisted immediately after every mutation (flush-on-write), ensuring no data loss even on unexpected termination (crashes, force quit, macOS Cmd+Q):
 
-1. **App backgrounded (mobile)** - `visibilitychange` event triggers flush
-2. **App exit** - `RunEvent::ExitRequested` triggers flush
-3. **Manual lock** - User clicks lock button → flush + clear key
-4. **Periodic saves** - After significant data changes
+| Mutation                  | Flush Method                          | Trigger   |
+|---------------------------|---------------------------------------|-----------|
+| Peer paired/unpaired      | `AppState::flush_paired_peers()`      | Immediate |
+| Peer name updated         | `AppState::flush_paired_peers()`      | Immediate |
+| Device name changed       | `AppState::flush_device_identity()`   | Immediate |
+| Clipboard entry added     | `AppState::flush_clipboard_history()` | Immediate |
+| Clipboard history cleared | `AppState::flush_clipboard_history()` | Immediate |
+
+**Safety Net Flushes** (redundant but defensive):
+- **App backgrounded (mobile)** - `flush_all_to_vault()` via `Focused(false)` event
+- **App exit (all platforms)** - `flush_all_to_vault()` via `ExitRequested` event
+- **Manual lock** - `flush_all_to_vault()` before clearing encryption key
 
 #### Security Properties
 
@@ -379,15 +387,16 @@ pub struct AppSettings {
 
 Note: On Android, a foreground service keeps the app alive indefinitely. On iOS, the app is suspended after ~30 seconds and network connections drop - clipboard queuing only works if content arrives before suspension.
 
-#### `peers.rs` - PairedPeer Types
+#### `peers.rs` - Types & Data Directory
 
-Defines paired device data structures:
+Defines data structures and directory management:
 
-- Peer ID, device name
-- Shared secret
-- Pairing timestamp, last seen
+- `DeviceIdentity` - Device ID, name, X25519 keypair
+- `PairedPeer` - Peer ID, device name, shared secret, timestamps
+- `init_data_dir()` - Initialize app data directory via Tauri
+- `get_data_dir()` - Get path to app data directory
 
-**Note**: Paired peers, device identity, and libp2p keypair are now stored in the encrypted vault (`vault.hold`), not in plaintext JSON files. The `peers.rs` module defines the types used by VaultManager.
+**Note**: All sensitive data (paired peers, device identity, libp2p keypair) is stored exclusively in the encrypted vault (`vault.hold`). No plaintext JSON files are used for sensitive data.
 
 ### 6. Commands (`src/commands.rs`)
 
