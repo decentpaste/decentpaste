@@ -15,12 +15,6 @@ pub fn hash_content(content: &str) -> String {
     hex::encode(hasher.finalize())
 }
 
-pub fn generate_shared_secret() -> Vec<u8> {
-    let mut secret = vec![0u8; 32];
-    OsRng.fill_bytes(&mut secret);
-    secret
-}
-
 pub fn encrypt_content(content: &[u8], shared_secret: &[u8]) -> Result<Vec<u8>> {
     if shared_secret.len() != 32 {
         return Err(DecentPasteError::Encryption(
@@ -74,17 +68,6 @@ pub fn decrypt_content(encrypted: &[u8], shared_secret: &[u8]) -> Result<Vec<u8>
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_encrypt_decrypt_roundtrip() {
-        let secret = generate_shared_secret();
-        let plaintext = b"Hello, World!";
-
-        let encrypted = encrypt_content(plaintext, &secret).unwrap();
-        let decrypted = decrypt_content(&encrypted, &secret).unwrap();
-
-        assert_eq!(plaintext.to_vec(), decrypted);
-    }
 
     #[test]
     fn test_hash_content() {

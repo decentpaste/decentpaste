@@ -2,14 +2,26 @@ import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import type {
   ClipboardBroadcastPayload,
   ClipboardEntry,
-  ConnectedPeer,
   DiscoveredPeer,
   NetworkStatus,
   PairingCompletePayload,
   PairingFailedPayload,
   PairingPinPayload,
   PairingRequestPayload,
+  PeerNameUpdatedPayload,
+  VaultStatus,
 } from './types';
+
+/** Payload for clipboard synced while app was in background (Android) */
+export interface ClipboardSyncedFromBackgroundPayload {
+  content: string;
+  fromDevice: string;
+}
+
+/** Payload for settings changed from system tray */
+export interface SettingsChangedPayload {
+  auto_sync_enabled?: boolean;
+}
 
 export type EventHandler<T> = (payload: T) => void;
 
@@ -17,8 +29,7 @@ interface EventListeners {
   networkStatus: EventHandler<NetworkStatus>[];
   peerDiscovered: EventHandler<DiscoveredPeer>[];
   peerLost: EventHandler<string>[];
-  peerConnected: EventHandler<ConnectedPeer>[];
-  peerDisconnected: EventHandler<string>[];
+  peerNameUpdated: EventHandler<PeerNameUpdatedPayload>[];
   pairingRequest: EventHandler<PairingRequestPayload>[];
   pairingPin: EventHandler<PairingPinPayload>[];
   pairingComplete: EventHandler<PairingCompletePayload>[];
@@ -26,7 +37,11 @@ interface EventListeners {
   clipboardReceived: EventHandler<ClipboardEntry>[];
   clipboardSent: EventHandler<ClipboardEntry>[];
   clipboardBroadcast: EventHandler<ClipboardBroadcastPayload>[];
+  clipboardSyncedFromBackground: EventHandler<ClipboardSyncedFromBackgroundPayload>[];
   networkError: EventHandler<string>[];
+  appMinimizedToTray: EventHandler<void>[];
+  vaultStatus: EventHandler<VaultStatus>[];
+  settingsChanged: EventHandler<SettingsChangedPayload>[];
 }
 
 class EventManager {
@@ -34,8 +49,7 @@ class EventManager {
     networkStatus: [],
     peerDiscovered: [],
     peerLost: [],
-    peerConnected: [],
-    peerDisconnected: [],
+    peerNameUpdated: [],
     pairingRequest: [],
     pairingPin: [],
     pairingComplete: [],
@@ -43,7 +57,11 @@ class EventManager {
     clipboardReceived: [],
     clipboardSent: [],
     clipboardBroadcast: [],
+    clipboardSyncedFromBackground: [],
     networkError: [],
+    appMinimizedToTray: [],
+    vaultStatus: [],
+    settingsChanged: [],
   };
 
   private unlistenFns: UnlistenFn[] = [];
@@ -59,11 +77,8 @@ class EventManager {
       listen<string>('peer-lost', (e) => {
         this.listeners.peerLost.forEach((fn) => fn(e.payload));
       }),
-      listen<ConnectedPeer>('peer-connected', (e) => {
-        this.listeners.peerConnected.forEach((fn) => fn(e.payload));
-      }),
-      listen<string>('peer-disconnected', (e) => {
-        this.listeners.peerDisconnected.forEach((fn) => fn(e.payload));
+      listen<PeerNameUpdatedPayload>('peer-name-updated', (e) => {
+        this.listeners.peerNameUpdated.forEach((fn) => fn(e.payload));
       }),
       listen<PairingRequestPayload>('pairing-request', (e) => {
         this.listeners.pairingRequest.forEach((fn) => fn(e.payload));
@@ -86,8 +101,20 @@ class EventManager {
       listen<ClipboardBroadcastPayload>('clipboard-broadcast', (e) => {
         this.listeners.clipboardBroadcast.forEach((fn) => fn(e.payload));
       }),
+      listen<ClipboardSyncedFromBackgroundPayload>('clipboard-synced-from-background', (e) => {
+        this.listeners.clipboardSyncedFromBackground.forEach((fn) => fn(e.payload));
+      }),
       listen<string>('network-error', (e) => {
         this.listeners.networkError.forEach((fn) => fn(e.payload));
+      }),
+      listen('app-minimized-to-tray', () => {
+        this.listeners.appMinimizedToTray.forEach((fn) => fn());
+      }),
+      listen<VaultStatus>('vault-status', (e) => {
+        this.listeners.vaultStatus.forEach((fn) => fn(e.payload));
+      }),
+      listen<SettingsChangedPayload>('settings-changed', (e) => {
+        this.listeners.settingsChanged.forEach((fn) => fn(e.payload));
       }),
     ]);
   }

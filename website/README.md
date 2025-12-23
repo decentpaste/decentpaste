@@ -47,6 +47,7 @@ This is a static site - just upload the files to any static hosting provider:
 4. Your site will be live at `https://username.github.io/repo/`
 
 Or use a separate branch:
+
 ```bash
 # Create gh-pages branch with website contents
 git subtree push --prefix website origin gh-pages
@@ -72,6 +73,7 @@ git subtree push --prefix website origin gh-pages
 ### Custom Domain
 
 After deploying, configure your DNS:
+
 - Add an `A` record pointing to your host's IP
 - Or add a `CNAME` record pointing to your host's domain
 
@@ -84,6 +86,10 @@ website/
 ├── script.js           # Platform detection, dark mode, interactions
 ├── assets/
 │   ├── logo.png        # App icon (512x512)
+│   ├── logo_light.svg  # SVG logo for light mode
+│   ├── logo_dark.svg   # SVG logo for dark mode
+│   ├── logo_white.svg  # White SVG logo variant
+│   ├── logo_black.svg  # Black SVG logo variant
 │   ├── favicon.ico     # Browser favicon
 │   ├── favicon-32x32.png
 │   └── apple-touch-icon.png
@@ -115,12 +121,16 @@ Modify the Tailwind config in `index.html`:
     theme: {
       extend: {
         colors: {
-          teal: { /* your colors */ },
-          orange: { /* your colors */ },
+          teal: {
+            /* your colors */
+          },
+          orange: {
+            /* your colors */
+          },
         },
       },
     },
-  }
+  };
 </script>
 ```
 

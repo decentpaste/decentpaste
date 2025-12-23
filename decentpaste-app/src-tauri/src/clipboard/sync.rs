@@ -118,10 +118,6 @@ impl SyncManager {
         true
     }
 
-    pub fn set_local_hash(&mut self, hash: String) {
-        self.local_hash = Some(hash);
-    }
-
     fn cleanup_expired(&mut self) {
         let now = Instant::now();
         self.recent_hashes
@@ -140,27 +136,5 @@ impl SyncManager {
 impl Default for SyncManager {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub enum ConflictResolution {
-    UseRemote,
-    KeepLocal,
-}
-
-pub fn resolve_conflict(local_timestamp: i64, remote_timestamp: i64) -> ConflictResolution {
-    let time_diff = (local_timestamp - remote_timestamp).abs();
-
-    if time_diff > 100 {
-        // Clear winner by timestamp
-        if remote_timestamp > local_timestamp {
-            ConflictResolution::UseRemote
-        } else {
-            ConflictResolution::KeepLocal
-        }
-    } else {
-        // Near-simultaneous, prefer local
-        ConflictResolution::KeepLocal
     }
 }

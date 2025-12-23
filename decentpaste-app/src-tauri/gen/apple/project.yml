@@ -1,6 +1,6 @@
 name: decentpaste-app
 options:
-  bundleIdPrefix: com.decentpaste.app
+  bundleIdPrefix: com.decentpaste.application
   deploymentTarget:
     iOS: 14.0
 fileGroups: [../../src]
@@ -11,7 +11,7 @@ settingGroups:
   app:
     base:
       PRODUCT_NAME: DecentPaste
-      PRODUCT_BUNDLE_IDENTIFIER: com.decentpaste.app
+      PRODUCT_BUNDLE_IDENTIFIER: com.decentpaste.application
 targetTemplates:
   app:
     type: application

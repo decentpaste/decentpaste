@@ -1,10 +1,10 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "DecentPaste",
-  "version": "0.1.0",
-  "identifier": "com.decentpaste.app",
+  "version": "0.3.0",
+  "identifier": "com.decentpaste.application",
   "build": {
-    "beforeDevCommand": "lsof -i:1420 -sTCP:LISTEN -t >/dev/null || TAURI_DEV_HOST=$(ipconfig getifaddr en0) yarn dev",
+    "beforeDevCommand": "yarn run dev",
     "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "yarn run build",
     "frontendDist": "../dist"
@@ -29,6 +29,16 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IENGNkZCMjlCRDRCMkMwQTkKUldTcHdMTFVtN0p2enpkRHpsOHo5bm5jVysyK29lVXNtNmpXVlhlRmpGNmNPaS9TMEUrVlZSU04K",
+      "endpoints": ["https://github.com/decentpaste/decentpaste/releases/latest/download/latest.json"],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

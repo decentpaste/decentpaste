@@ -66,7 +66,7 @@ class NetworkGraph {
     const wasTablet = oldWidth && oldWidth >= 640 && oldWidth < 1024;
     const isTablet = this.width >= 640 && this.width < 1024;
 
-    if (oldWidth && ((wasMobile !== isMobile) || (wasTablet !== isTablet))) {
+    if (oldWidth && (wasMobile !== isMobile || wasTablet !== isTablet)) {
       // Recreate graph for new breakpoint
       this.nodes = [];
       this.edges = [];
@@ -76,7 +76,7 @@ class NetworkGraph {
     } else if (this.nodes.length > 0) {
       // Just reposition existing nodes within bounds
       const margin = isMobile ? 40 : 60;
-      this.nodes.forEach(node => {
+      this.nodes.forEach((node) => {
         node.x = Math.max(margin, Math.min(this.width - margin, node.x));
         node.y = Math.max(margin, Math.min(this.height - margin, node.y));
         node.targetX = node.x;
@@ -85,8 +85,8 @@ class NetworkGraph {
     }
 
     // Update physics for screen size
-    this.physics.springLength = isMobile ? 100 : (isTablet ? 140 : 180);
-    this.physics.repulsion = isMobile ? 4000 : (isTablet ? 6000 : 8000);
+    this.physics.springLength = isMobile ? 100 : isTablet ? 140 : 180;
+    this.physics.repulsion = isMobile ? 4000 : isTablet ? 6000 : 8000;
   }
 
   createNodes() {
@@ -97,9 +97,9 @@ class NetworkGraph {
     const isTablet = this.width >= 640 && this.width < 1024;
 
     // Responsive settings
-    const nodeRadius = isMobile ? 24 : (isTablet ? 28 : 32);
+    const nodeRadius = isMobile ? 24 : isTablet ? 28 : 32;
     const baseRadius = Math.min(this.width * 0.35, this.height * 0.35);
-    const numNodes = isMobile ? 6 : (isTablet ? 7 : 8); // More nodes!
+    const numNodes = isMobile ? 6 : isTablet ? 7 : 8; // More nodes!
 
     // Create node pool with duplicates allowed
     const nodePool = [];
@@ -335,7 +335,7 @@ class NetworkGraph {
     }
 
     // Spring forces along edges
-    this.edges.forEach(edge => {
+    this.edges.forEach((edge) => {
       const dx = edge.target.x - edge.source.x;
       const dy = edge.target.y - edge.source.y;
       const dist = Math.sqrt(dx * dx + dy * dy) || 1;
@@ -356,7 +356,7 @@ class NetworkGraph {
 
     // Update positions
     const margin = this.width < 640 ? 40 : 60;
-    this.nodes.forEach(node => {
+    this.nodes.forEach((node) => {
       if (node.isDragging) return;
 
       // Apply friction
@@ -398,7 +398,7 @@ class NetworkGraph {
   }
 
   updateDataPackets() {
-    this.dataPackets = this.dataPackets.filter(packet => {
+    this.dataPackets = this.dataPackets.filter((packet) => {
       packet.progress += packet.speed;
       if (packet.progress >= 1) {
         // Trigger glow on receiving node
@@ -410,7 +410,7 @@ class NetworkGraph {
     });
 
     // Decay glow
-    this.nodes.forEach(node => {
+    this.nodes.forEach((node) => {
       node.glowIntensity *= 0.95;
     });
   }
@@ -423,7 +423,7 @@ class NetworkGraph {
     ctx.clearRect(0, 0, this.width, this.height);
 
     // Draw edges
-    this.edges.forEach(edge => {
+    this.edges.forEach((edge) => {
       const pulse = Math.sin(time * 2 + edge.pulseOffset) * 0.5 + 0.5;
       const opacity = edge.active ? 0.3 + pulse * 0.15 : 0.15;
 
@@ -446,7 +446,7 @@ class NetworkGraph {
     });
 
     // Draw data packets
-    this.dataPackets.forEach(packet => {
+    this.dataPackets.forEach((packet) => {
       const edge = packet.edge;
       const t = packet.reverse ? 1 - packet.progress : packet.progress;
       const x = edge.source.x + (edge.target.x - edge.source.x) * t;
@@ -470,7 +470,7 @@ class NetworkGraph {
     });
 
     // Draw nodes
-    this.nodes.forEach(node => {
+    this.nodes.forEach((node) => {
       const isHovered = node === this.hoveredNode || node === this.draggedNode;
       const pulse = Math.sin(time * 1.5 + node.pulsePhase) * 0.5 + 0.5;
       const scale = isHovered ? 1.15 : 1 + pulse * 0.03;
@@ -494,7 +494,7 @@ class NetworkGraph {
         0,
         node.x,
         node.y,
-        radius
+        radius,
       );
       bgGradient.addColorStop(0, 'rgba(45, 45, 50, 0.98)');
       bgGradient.addColorStop(1, 'rgba(30, 30, 35, 0.98)');
@@ -507,9 +507,7 @@ class NetworkGraph {
       // Border
       ctx.beginPath();
       ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
-      ctx.strokeStyle = isHovered
-        ? node.color
-        : `rgba(255, 255, 255, ${0.15 + pulse * 0.1})`;
+      ctx.strokeStyle = isHovered ? node.color : `rgba(255, 255, 255, ${0.15 + pulse * 0.1})`;
       ctx.lineWidth = isHovered ? 2.5 : 1.5;
       ctx.stroke();
 
@@ -544,48 +542,48 @@ class NetworkGraph {
       case 'laptop':
         // Laptop screen
         ctx.beginPath();
-        ctx.roundRect(x - size/2, y - size/2.5, size, size * 0.6, 2);
+        ctx.roundRect(x - size / 2, y - size / 2.5, size, size * 0.6, 2);
         ctx.stroke();
         // Laptop base
         ctx.beginPath();
-        ctx.moveTo(x - size/1.6, y + size/4);
-        ctx.lineTo(x + size/1.6, y + size/4);
+        ctx.moveTo(x - size / 1.6, y + size / 4);
+        ctx.lineTo(x + size / 1.6, y + size / 4);
         ctx.stroke();
         break;
 
       case 'desktop':
         // Monitor
         ctx.beginPath();
-        ctx.roundRect(x - size/2, y - size/2, size, size * 0.7, 2);
+        ctx.roundRect(x - size / 2, y - size / 2, size, size * 0.7, 2);
         ctx.stroke();
         // Stand
         ctx.beginPath();
         ctx.moveTo(x, y + size * 0.2);
         ctx.lineTo(x, y + size * 0.4);
-        ctx.moveTo(x - size/4, y + size * 0.4);
-        ctx.lineTo(x + size/4, y + size * 0.4);
+        ctx.moveTo(x - size / 4, y + size * 0.4);
+        ctx.lineTo(x + size / 4, y + size * 0.4);
         ctx.stroke();
         break;
 
       case 'phone':
         // Phone body
         ctx.beginPath();
-        ctx.roundRect(x - size/4, y - size/2, size/2, size, 3);
+        ctx.roundRect(x - size / 4, y - size / 2, size / 2, size, 3);
         ctx.stroke();
         // Home button / notch
         ctx.beginPath();
-        ctx.arc(x, y + size/3, 2, 0, Math.PI * 2);
+        ctx.arc(x, y + size / 3, 2, 0, Math.PI * 2);
         ctx.stroke();
         break;
 
       case 'tablet':
         // Tablet body
         ctx.beginPath();
-        ctx.roundRect(x - size/2.5, y - size/2, size * 0.8, size, 3);
+        ctx.roundRect(x - size / 2.5, y - size / 2, size * 0.8, size, 3);
         ctx.stroke();
         // Home button
         ctx.beginPath();
-        ctx.arc(x, y + size/3, 2, 0, Math.PI * 2);
+        ctx.arc(x, y + size / 3, 2, 0, Math.PI * 2);
         ctx.stroke();
         break;
     }
@@ -615,41 +613,8 @@ function initNetworkGraph() {
 }
 
 // =============================================================================
-// Platform Detection
+// Platform Detection (for highlighting user's platform card)
 // =============================================================================
-
-const platformConfig = {
-  windows: {
-    name: 'Windows',
-    icon: `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/></svg>`,
-    downloadUrl: 'https://github.com/decentpaste/decentpaste/releases/latest/download/DecentPaste_x64-setup.exe',
-  },
-  macos: {
-    name: 'macOS',
-    icon: `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>`,
-    downloadUrl: 'https://github.com/decentpaste/decentpaste/releases/latest/download/DecentPaste_x64.dmg',
-  },
-  linux: {
-    name: 'Linux',
-    icon: `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12.504 0c-.155 0-.315.008-.48.021-4.226.333-3.105 4.807-3.17 6.298-.076 1.092-.3 1.953-1.05 3.02-.885 1.051-2.127 2.75-2.716 4.521-.278.832-.41 1.684-.287 2.489a.424.424 0 00-.11.135c-.26.268-.45.6-.663.839-.199.199-.485.267-.797.4-.313.136-.658.269-.864.68-.09.189-.136.394-.132.602 0 .199.027.4.055.536.058.399.116.728.04.97-.249.68-.28 1.145-.106 1.484.174.334.535.47.94.601.81.2 1.91.135 2.774.6.926.466 1.866.67 2.616.47.526-.116.97-.464 1.208-.946.587-.003 1.23-.269 2.26-.334.699-.058 1.574.267 2.577.2.025.134.063.198.114.333l.003.003c.391.778 1.113 1.132 1.884 1.071.771-.06 1.592-.536 2.257-1.306.631-.765 1.683-1.084 2.378-1.503.348-.199.629-.469.649-.853.023-.4-.2-.811-.714-1.376v-.097l-.003-.003c-.17-.2-.25-.535-.338-.926-.085-.401-.182-.786-.492-1.046h-.003c-.059-.054-.123-.067-.188-.135a.357.357 0 00-.19-.064c.431-1.278.264-2.55-.173-3.694-.533-1.41-1.465-2.638-2.175-3.483-.796-1.005-1.576-1.957-1.56-3.368.026-2.152.236-6.133-3.544-6.139z"/></svg>`,
-    downloadUrl: 'https://github.com/decentpaste/decentpaste/releases/latest/download/DecentPaste_amd64.AppImage',
-  },
-  android: {
-    name: 'Android',
-    icon: `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-.9997s.4483-.9993.9993-.9993c.5511 0 .9993.4483.9993.9993.0001.5511-.4482.9997-.9993.9997m-11.046 0c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9993.4483.9993.9993 0 .5511-.4483.9997-.9993.9997m11.4045-6.02l1.9973-3.4592a.416.416 0 00-.1521-.5676.416.416 0 00-.5676.1521l-2.0223 3.503C15.5902 8.2439 13.8533 7.8508 12 7.8508s-3.5902.3931-5.1367 1.0989L4.841 5.4467a.4161.4161 0 00-.5677-.1521.4157.4157 0 00-.1521.5676l1.9973 3.4592C2.6889 11.1867.3432 14.6589 0 18.761h24c-.3435-4.1021-2.6892-7.5743-6.1185-9.4396"/></svg>`,
-    downloadUrl: 'https://github.com/decentpaste/decentpaste/releases/latest/download/DecentPaste.apk',
-  },
-  ios: {
-    name: 'iOS',
-    icon: `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>`,
-    downloadUrl: '#downloads',
-  },
-  unknown: {
-    name: 'Your Platform',
-    icon: `<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>`,
-    downloadUrl: '#downloads',
-  },
-};
 
 /**
  * Detect the user's operating system
@@ -659,10 +624,7 @@ function detectPlatform() {
   const platform = navigator.platform?.toLowerCase() || '';
 
   // iOS detection (must come before macOS - iPad can report as Mac)
-  if (
-    /ipad|iphone|ipod/.test(userAgent) ||
-    (platform === 'macintel' && navigator.maxTouchPoints > 1)
-  ) {
+  if (/ipad|iphone|ipod/.test(userAgent) || (platform === 'macintel' && navigator.maxTouchPoints > 1)) {
     return 'ios';
   }
 
@@ -686,30 +648,61 @@ function detectPlatform() {
     return 'linux';
   }
 
-  return 'unknown';
+  return null;
 }
 
 /**
- * Update the hero download button based on detected platform
+ * Highlight the download card for the user's platform
  */
-function updateHeroButton() {
+function highlightPlatformCard() {
   const platform = detectPlatform();
-  const config = platformConfig[platform];
+  if (!platform) return;
 
-  const btn = document.getElementById('primary-download');
-  const iconEl = document.getElementById('platform-icon');
-  const nameEl = document.getElementById('platform-name');
+  const downloadCard = document.getElementById(`download-${platform}`);
+  if (downloadCard) {
+    downloadCard.classList.add('highlighted');
+  }
+}
 
-  if (btn && config && iconEl && nameEl) {
-    iconEl.innerHTML = config.icon;
-    nameEl.textContent = config.name;
-    btn.href = config.downloadUrl;
+// =============================================================================
+// Dynamic Download Links (from static downloads.json generated by CI)
+// =============================================================================
 
-    // Highlight the matching download card
-    const downloadCard = document.getElementById(`download-${platform}`);
-    if (downloadCard) {
-      downloadCard.classList.add('highlighted');
+/**
+ * Fetch download URLs from downloads.json (generated by GitHub Actions on release)
+ * This avoids GitHub API rate limits entirely - just a simple static file fetch
+ */
+async function populateDownloadLinks() {
+  try {
+    const response = await fetch('downloads.json');
+    if (!response.ok) throw new Error('downloads.json not found');
+
+    const data = await response.json();
+
+    // Update version display
+    if (data.tag) {
+      const versionEl = document.getElementById('downloads-version');
+      if (versionEl) {
+        versionEl.textContent = `${data.tag} · Apache-2.0 License`;
+      }
     }
+
+    // Update download buttons
+    document.querySelectorAll('.download-format-btn[data-format]').forEach((btn) => {
+      const format = btn.getAttribute('data-format');
+      const url = data.assets?.[format];
+
+      if (url) {
+        btn.href = url;
+        btn.classList.remove('download-format-unavailable');
+      } else {
+        // Mark as unavailable if no URL for this format
+        btn.classList.add('download-format-unavailable');
+      }
+    });
+  } catch (error) {
+    console.warn('Could not load downloads.json:', error.message);
+    // Buttons keep their fallback href (GitHub releases page)
   }
 }
 
@@ -851,14 +844,244 @@ function initSmoothScroll() {
 }
 
 // =============================================================================
+// Screenshot Showcase
+// =============================================================================
+
+/**
+ * Screenshot gallery with navigation, touch support, and captions
+ */
+class ScreenshotShowcase {
+  constructor() {
+    this.desktopImg = document.getElementById('screenshot-desktop-img');
+    this.mobileImg = document.getElementById('screenshot-mobile-img');
+    this.dots = document.querySelectorAll('.screenshot-dot');
+    this.caption = document.getElementById('screenshot-caption');
+    this.prevBtn = document.getElementById('screenshot-prev');
+    this.nextBtn = document.getElementById('screenshot-next');
+    this.showcase = document.querySelector('.device-showcase');
+
+    if (!this.desktopImg || !this.mobileImg) return;
+
+    // Screenshot paths with captions
+    this.screenshots = [
+      {
+        desktop: 'assets/screenshots/desktop/Screenshot_Desktop_1.png',
+        mobile: 'assets/screenshots/mobile/Screenshot_Mobile_1.jpg',
+        caption: 'Dashboard & Device Discovery',
+      },
+      {
+        desktop: 'assets/screenshots/desktop/Screenshot_Desktop_2.png',
+        mobile: 'assets/screenshots/mobile/Screenshot_Mobile_2.jpg',
+        caption: 'Secure Device Pairing',
+      },
+      {
+        desktop: 'assets/screenshots/desktop/Screenshot_Desktop_3.png',
+        mobile: 'assets/screenshots/mobile/Screenshot_Mobile_3.jpg',
+        caption: 'Clipboard History & Sync',
+      },
+      {
+        desktop: 'assets/screenshots/desktop/Screenshot_Desktop_4.png',
+        mobile: 'assets/screenshots/mobile/Screenshot_Mobile_4.jpg',
+        caption: 'Connected Devices Overview',
+      },
+      {
+        desktop: 'assets/screenshots/desktop/Screenshot_Desktop_5.png',
+        mobile: 'assets/screenshots/mobile/Screenshot_Mobile_5.jpg',
+        caption: 'Settings & Preferences',
+      },
+    ];
+
+    this.currentIndex = 0;
+    this.autoRotateInterval = null;
+    this.isPaused = false;
+    this.touchStartX = 0;
+    this.touchEndX = 0;
+
+    this.init();
+  }
+
+  init() {
+    // Show first screenshot
+    this.showPair(0);
+
+    // Bind dot click events
+    this.dots.forEach((dot, index) => {
+      dot.addEventListener('click', () => {
+        this.showPair(index);
+        this.resetAutoRotate();
+      });
+    });
+
+    // Arrow button events
+    if (this.prevBtn) {
+      this.prevBtn.addEventListener('click', () => {
+        this.prev();
+        this.resetAutoRotate();
+      });
+    }
+
+    if (this.nextBtn) {
+      this.nextBtn.addEventListener('click', () => {
+        this.next();
+        this.resetAutoRotate();
+      });
+    }
+
+    // Keyboard navigation
+    document.addEventListener('keydown', (e) => {
+      if (!this.isInViewport()) return;
+      if (e.key === 'ArrowLeft') {
+        this.prev();
+        this.resetAutoRotate();
+      } else if (e.key === 'ArrowRight') {
+        this.next();
+        this.resetAutoRotate();
+      }
+    });
+
+    // Touch/swipe support
+    if (this.showcase) {
+      this.showcase.addEventListener(
+        'touchstart',
+        (e) => {
+          this.touchStartX = e.changedTouches[0].screenX;
+        },
+        { passive: true },
+      );
+
+      this.showcase.addEventListener(
+        'touchend',
+        (e) => {
+          this.touchEndX = e.changedTouches[0].screenX;
+          this.handleSwipe();
+        },
+        { passive: true },
+      );
+
+      // Pause on hover/touch
+      this.showcase.addEventListener('mouseenter', () => {
+        this.isPaused = true;
+      });
+      this.showcase.addEventListener('mouseleave', () => {
+        this.isPaused = false;
+      });
+      this.showcase.addEventListener(
+        'touchstart',
+        () => {
+          this.isPaused = true;
+        },
+        { passive: true },
+      );
+      this.showcase.addEventListener(
+        'touchend',
+        () => {
+          setTimeout(() => {
+            this.isPaused = false;
+          }, 2000);
+        },
+        { passive: true },
+      );
+    }
+
+    // Start auto-rotation
+    this.startAutoRotate();
+  }
+
+  isInViewport() {
+    if (!this.showcase) return false;
+    const rect = this.showcase.getBoundingClientRect();
+    return rect.top < window.innerHeight && rect.bottom > 0;
+  }
+
+  handleSwipe() {
+    const swipeThreshold = 50;
+    const diff = this.touchStartX - this.touchEndX;
+
+    if (Math.abs(diff) > swipeThreshold) {
+      if (diff > 0) {
+        this.next();
+      } else {
+        this.prev();
+      }
+      this.resetAutoRotate();
+    }
+  }
+
+  prev() {
+    const prevIndex = (this.currentIndex - 1 + this.screenshots.length) % this.screenshots.length;
+    this.showPair(prevIndex);
+  }
+
+  next() {
+    const nextIndex = (this.currentIndex + 1) % this.screenshots.length;
+    this.showPair(nextIndex);
+  }
+
+  showPair(index) {
+    if (index < 0 || index >= this.screenshots.length) return;
+
+    const screenshot = this.screenshots[index];
+    this.currentIndex = index;
+
+    // Smooth transition - fade out
+    this.desktopImg.classList.add('transitioning');
+    this.mobileImg.classList.add('transitioning');
+
+    setTimeout(() => {
+      // Update sources
+      this.desktopImg.src = screenshot.desktop;
+      this.mobileImg.src = screenshot.mobile;
+
+      // Update caption
+      if (this.caption) {
+        this.caption.textContent = screenshot.caption;
+      }
+
+      // Fade in after a brief moment
+      setTimeout(() => {
+        this.desktopImg.classList.remove('transitioning');
+        this.mobileImg.classList.remove('transitioning');
+      }, 50);
+    }, 250);
+
+    // Update dots
+    this.dots.forEach((dot, i) => {
+      dot.classList.toggle('active', i === index);
+    });
+  }
+
+  startAutoRotate() {
+    this.autoRotateInterval = setInterval(() => {
+      if (!this.isPaused) {
+        this.next();
+      }
+    }, 5000); // Change every 5 seconds
+  }
+
+  resetAutoRotate() {
+    clearInterval(this.autoRotateInterval);
+    this.startAutoRotate();
+  }
+}
+
+/**
+ * Initialize screenshot showcase
+ */
+function initScreenshotShowcase() {
+  new ScreenshotShowcase();
+}
+
+// =============================================================================
 // Initialization
 // =============================================================================
 
 document.addEventListener('DOMContentLoaded', () => {
   initNetworkGraph();
-  updateHeroButton();
+  highlightPlatformCard();
+  populateDownloadLinks();
   initMobileMenu();
   initNavbarScroll();
   initScrollAnimations();
   initSmoothScroll();
+  initScreenshotShowcase();
 });

@@ -6,9 +6,14 @@ import type {
   NetworkStatus,
   PairedPeer,
   PairingSession,
+  UpdateInfo,
+  UpdateProgress,
+  UpdateStatus,
+  VaultStatus,
 } from '../api/types';
 
-export type View = 'dashboard' | 'peers' | 'history' | 'settings';
+export type View = 'dashboard' | 'peers' | 'settings';
+export type OnboardingStep = 'device-name' | 'pin-setup' | null;
 
 export interface Toast {
   id: string;
@@ -43,6 +48,32 @@ export interface AppState {
 
   // Loading states
   isLoading: boolean;
+
+  // Window state
+  isWindowVisible: boolean;
+  isMinimizedToTray: boolean; // True only when explicitly minimized to system tray
+
+  // Update state
+  updateStatus: UpdateStatus;
+  updateInfo: UpdateInfo | null;
+  updateProgress: UpdateProgress | null;
+  updateError: string | null;
+
+  // Vault state
+  vaultStatus: VaultStatus;
+
+  // Onboarding state
+  onboardingStep: OnboardingStep;
+  onboardingDeviceName: string;
+
+  // Reset confirmation state
+  showResetConfirmation: boolean;
+
+  // Clear history confirmation state
+  showClearHistoryConfirm: boolean;
+
+  // App version (fetched from Tauri)
+  appVersion: string;
 }
 
 type StateListener<K extends keyof AppState> = (value: AppState[K]) => void;
@@ -50,6 +81,7 @@ type StateListener<K extends keyof AppState> = (value: AppState[K]) => void;
 class Store {
   private state: AppState;
   private listeners: Map<keyof AppState, Set<StateListener<any>>> = new Map();
+  private toastTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
 
   constructor() {
     this.state = {
@@ -66,12 +98,32 @@ class Store {
         device_name: 'My Device',
         auto_sync_enabled: true,
         clipboard_history_limit: 50,
-        clear_history_on_exit: false,
+        keep_history: true,
         show_notifications: true,
         clipboard_poll_interval_ms: 500,
+        auth_method: null,
+        hide_clipboard_content: false,
+        auto_lock_minutes: 15,
       },
       deviceInfo: null,
       isLoading: true,
+      isWindowVisible: true,
+      isMinimizedToTray: false,
+      updateStatus: 'idle',
+      updateInfo: null,
+      updateProgress: null,
+      updateError: null,
+      // Vault state
+      vaultStatus: 'NotSetup',
+      // Onboarding state
+      onboardingStep: null,
+      onboardingDeviceName: '',
+      // Reset confirmation state
+      showResetConfirmation: false,
+      // Clear history confirmation state
+      showClearHistoryConfirm: false,
+      // App version (fetched from Tauri on init)
+      appVersion: '',
     };
   }
 
@@ -120,14 +172,34 @@ class Store {
     this.update('toasts', (toasts) => [...toasts, toast]);
 
     if (duration > 0) {
-      setTimeout(() => {
+      const timerId = setTimeout(() => {
         this.removeToast(id);
       }, duration);
+      this.toastTimers.set(id, timerId);
     }
   }
 
   removeToast(id: string): void {
+    // Clear any pending timer for this toast
+    const timerId = this.toastTimers.get(id);
+    if (timerId) {
+      clearTimeout(timerId);
+      this.toastTimers.delete(id);
+    }
     this.update('toasts', (toasts) => toasts.filter((t) => t.id !== id));
+  }
+
+  /**
+   * Clears all toasts and their associated timers.
+   * Useful for cleanup when the app unmounts.
+   */
+  clearAllToasts(): void {
+    // Clear all pending timers
+    for (const timerId of this.toastTimers.values()) {
+      clearTimeout(timerId);
+    }
+    this.toastTimers.clear();
+    this.set('toasts', []);
   }
 
   addClipboardEntry(entry: ClipboardEntry): void {
@@ -169,6 +241,18 @@ class Store {
 
   removePairedPeer(peerId: string): void {
     this.update('pairedPeers', (peers) => peers.filter((p) => p.peer_id !== peerId));
+  }
+
+  updatePeerName(peerId: string, deviceName: string): void {
+    // Update in discovered peers
+    this.update('discoveredPeers', (peers) =>
+      peers.map((p) => (p.peer_id === peerId ? { ...p, device_name: deviceName } : p)),
+    );
+
+    // Update in paired peers
+    this.update('pairedPeers', (peers) =>
+      peers.map((p) => (p.peer_id === peerId ? { ...p, device_name: deviceName } : p)),
+    );
   }
 }
 

@@ -51,20 +51,30 @@ export interface PairingSession {
   created_at: string;
 }
 
+// Vault types
+export type VaultStatus = 'NotSetup' | 'Locked' | 'Unlocked';
+export type AuthMethod = 'pin';
+
 // Settings types
 export interface AppSettings {
   device_name: string;
   auto_sync_enabled: boolean;
   clipboard_history_limit: number;
-  clear_history_on_exit: boolean;
+  /** Whether to persist clipboard history across app restarts */
+  keep_history: boolean;
   show_notifications: boolean;
   clipboard_poll_interval_ms: number;
+  /** Preferred authentication method for vault access (currently only 'pin') */
+  auth_method: AuthMethod | null;
+  /** Whether to hide clipboard content in the UI (privacy mode) */
+  hide_clipboard_content: boolean;
+  /** Auto-lock timeout in minutes. 0 means never auto-lock */
+  auto_lock_minutes: number;
 }
 
 // Device info
 export interface DeviceInfo {
   device_id: string;
-  device_name: string;
   peer_id: string | null;
 }
 
@@ -96,3 +106,30 @@ export interface ClipboardBroadcastPayload {
   id: string;
   peerCount: number;
 }
+
+export interface PeerNameUpdatedPayload {
+  peerId: string;
+  deviceName: string;
+}
+
+// Update types
+export interface UpdateInfo {
+  version: string;
+  date: string | null;
+  body: string | null;
+}
+
+export interface UpdateProgress {
+  downloaded: number;
+  total: number | null;
+}
+
+export type UpdateStatus =
+  | 'idle'
+  | 'checking'
+  | 'available'
+  | 'downloading'
+  | 'ready'
+  | 'installing'
+  | 'up-to-date'
+  | 'error';

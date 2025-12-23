@@ -21,7 +21,7 @@ use super::behaviour::{
     PairingResponse as ReqPairingResponse,
 };
 use super::events::{ConnectedPeer, DiscoveredPeer, NetworkEvent, NetworkStatus};
-use super::protocol::{ClipboardMessage, PairingMessage, ProtocolMessage};
+use super::protocol::{ClipboardMessage, DeviceAnnounceMessage, PairingMessage, ProtocolMessage};
 
 #[derive(Debug)]
 pub enum NetworkCommand {
@@ -38,7 +38,7 @@ pub enum NetworkCommand {
         session_id: String,
         pin: String,
         device_name: String,
-        public_key: Vec<u8>,  // Our X25519 public key for ECDH
+        public_key: Vec<u8>, // Our X25519 public key for ECDH
     },
     /// Reject a pairing request
     RejectPairing {
@@ -59,6 +59,17 @@ pub enum NetworkCommand {
     GetPeers,
     /// Force reconnection to all discovered peers (used after app resume from background)
     ReconnectPeers,
+    /// Re-emit PeerDiscovered event for a specific peer (used after unpairing to make peer
+    /// appear in discovered list again)
+    RefreshPeer {
+        peer_id: String,
+    },
+    /// Broadcast device name to all peers on the network.
+    /// Used when device name is changed in settings.
+    /// NetworkManager will use its own local peer_id in the announcement.
+    AnnounceDeviceName {
+        device_name: String,
+    },
 }
 
 /// Tracks retry state for a peer connection
@@ -78,6 +89,8 @@ pub struct NetworkManager {
     pending_responses: HashMap<PeerId, ResponseChannel<ReqPairingResponse>>,
     /// Tracks peers that need connection retries
     pending_retries: HashMap<PeerId, PeerRetryState>,
+    /// Current device name (updated when settings change)
+    device_name: String,
 }
 
 impl NetworkManager {
@@ -85,6 +98,7 @@ impl NetworkManager {
         command_rx: mpsc::Receiver<NetworkCommand>,
         event_tx: mpsc::Sender<NetworkEvent>,
         local_key: libp2p::identity::Keypair,
+        device_name: String,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let local_peer_id = PeerId::from(local_key.public());
         info!("Local peer ID: {}", local_peer_id);
@@ -98,7 +112,7 @@ impl NetworkManager {
                 yamux::Config::default,
             )?
             .with_behaviour(|_key| {
-                DecentPasteBehaviour::new(local_peer_id, &local_key)
+                DecentPasteBehaviour::new(local_peer_id, &local_key, &device_name)
                     .expect("Failed to create behaviour")
             })?
             .with_swarm_config(|cfg| cfg.with_idle_connection_timeout(Duration::from_secs(60)))
@@ -112,6 +126,7 @@ impl NetworkManager {
             connected_peers: HashMap::new(),
             pending_responses: HashMap::new(),
             pending_retries: HashMap::new(),
+            device_name,
         })
     }
 
@@ -270,6 +285,44 @@ impl NetworkManager {
                                 .send(NetworkEvent::ClipboardReceived(clipboard_msg))
                                 .await;
                         }
+                        Ok(ProtocolMessage::DeviceAnnounce(announce_msg)) => {
+                            // Update discovered peer's device name when we receive an announcement
+                            debug!(
+                                "Received device announce from {}: {}",
+                                announce_msg.peer_id, announce_msg.device_name
+                            );
+
+                            // Always emit PeerNameUpdated so lib.rs can update both discovered
+                            // and paired peers
+                            let _ = self
+                                .event_tx
+                                .send(NetworkEvent::PeerNameUpdated {
+                                    peer_id: announce_msg.peer_id.clone(),
+                                    device_name: announce_msg.device_name.clone(),
+                                })
+                                .await;
+
+                            // Also update our local discovered_peers cache
+                            if let Ok(pid) = announce_msg.peer_id.parse::<PeerId>() {
+                                if let Some(discovered) = self.discovered_peers.get_mut(&pid) {
+                                    let old_name = discovered.device_name.clone();
+                                    discovered.device_name = Some(announce_msg.device_name.clone());
+
+                                    // Only emit PeerDiscovered if the name actually changed
+                                    if old_name != discovered.device_name {
+                                        debug!(
+                                            "Updated device name for peer {}: {:?} -> {:?}",
+                                            announce_msg.peer_id, old_name, discovered.device_name
+                                        );
+                                        // Re-emit PeerDiscovered so frontend gets the updated name
+                                        let _ = self
+                                            .event_tx
+                                            .send(NetworkEvent::PeerDiscovered(discovered.clone()))
+                                            .await;
+                                    }
+                                }
+                            }
+                        }
                         Ok(msg) => {
                             debug!("Received non-clipboard message via gossipsub: {:?}", msg);
                         }
@@ -280,6 +333,22 @@ impl NetworkManager {
                 }
                 gossipsub::Event::Subscribed { peer_id, topic } => {
                     info!("Peer {} subscribed to topic {}", peer_id, topic);
+
+                    // Announce our device name now that the peer is subscribed
+                    // This ensures they receive our current name
+                    let local_peer_id = self.swarm.local_peer_id().to_string();
+                    let announce_msg = DeviceAnnounceMessage {
+                        peer_id: local_peer_id,
+                        device_name: self.device_name.clone(),
+                        timestamp: Utc::now(),
+                    };
+                    let protocol_msg = ProtocolMessage::DeviceAnnounce(announce_msg);
+                    if let Err(e) = self.swarm.behaviour_mut().publish_clipboard(&protocol_msg) {
+                        debug!(
+                            "Failed to announce device name after peer subscribed: {}",
+                            e
+                        );
+                    }
                 }
                 gossipsub::Event::Unsubscribed { peer_id, topic } => {
                     info!("Peer {} unsubscribed from topic {}", peer_id, topic);
@@ -417,50 +486,48 @@ impl NetworkManager {
                             request_response::Message::Response { response, .. } => {
                                 debug!("Received pairing response from {}", peer);
                                 // Handle pairing response
-                                if let Ok(protocol_msg) =
+                                if let Ok(ProtocolMessage::Pairing(pairing_msg)) =
                                     ProtocolMessage::from_bytes(&response.message)
                                 {
-                                    if let ProtocolMessage::Pairing(pairing_msg) = protocol_msg {
-                                        // Process pairing message
-                                        match pairing_msg {
-                                            PairingMessage::Challenge(challenge) => {
-                                                let _ = self
-                                                    .event_tx
-                                                    .send(NetworkEvent::PairingPinReady {
-                                                        session_id: challenge.session_id,
-                                                        pin: challenge.pin,
-                                                        peer_device_name: challenge.device_name,
-                                                        peer_public_key: challenge.public_key,
-                                                    })
-                                                    .await;
-                                            }
-                                            PairingMessage::Confirm(confirm) => {
-                                                if confirm.success {
-                                                    if let Some(secret) = confirm.shared_secret {
-                                                        let _ = self
-                                                            .event_tx
-                                                            .send(NetworkEvent::PairingComplete {
-                                                                session_id: confirm.session_id,
-                                                                peer_id: peer.to_string(),
-                                                                device_name: "Unknown".to_string(),
-                                                                shared_secret: secret,
-                                                            })
-                                                            .await;
-                                                    }
-                                                } else {
+                                    // Process pairing message
+                                    match pairing_msg {
+                                        PairingMessage::Challenge(challenge) => {
+                                            let _ = self
+                                                .event_tx
+                                                .send(NetworkEvent::PairingPinReady {
+                                                    session_id: challenge.session_id,
+                                                    pin: challenge.pin,
+                                                    peer_device_name: challenge.device_name,
+                                                    peer_public_key: challenge.public_key,
+                                                })
+                                                .await;
+                                        }
+                                        PairingMessage::Confirm(confirm) => {
+                                            if confirm.success {
+                                                if let Some(secret) = confirm.shared_secret {
                                                     let _ = self
                                                         .event_tx
-                                                        .send(NetworkEvent::PairingFailed {
+                                                        .send(NetworkEvent::PairingComplete {
                                                             session_id: confirm.session_id,
-                                                            error: confirm.error.unwrap_or_else(
-                                                                || "Unknown error".to_string(),
-                                                            ),
+                                                            peer_id: peer.to_string(),
+                                                            device_name: "Unknown".to_string(),
+                                                            shared_secret: secret,
                                                         })
                                                         .await;
                                                 }
+                                            } else {
+                                                let _ = self
+                                                    .event_tx
+                                                    .send(NetworkEvent::PairingFailed {
+                                                        session_id: confirm.session_id,
+                                                        error: confirm.error.unwrap_or_else(|| {
+                                                            "Unknown error".to_string()
+                                                        }),
+                                                    })
+                                                    .await;
                                             }
-                                            _ => {}
                                         }
+                                        _ => {}
                                     }
                                 }
                             }
@@ -476,13 +543,43 @@ impl NetworkManager {
                 }
             }
 
-            SwarmEvent::Behaviour(super::behaviour::DecentPasteBehaviourEvent::Identify(event)) => {
-                if let identify::Event::Received { peer_id, info, .. } = event {
-                    debug!("Identified peer {}: {}", peer_id, info.agent_version);
+            SwarmEvent::Behaviour(super::behaviour::DecentPasteBehaviourEvent::Identify(
+                identify::Event::Received { peer_id, info, .. },
+            )) => {
+                debug!("Identified peer {}: {}", peer_id, info.agent_version);
 
-                    // Update device name from identify info
-                    if let Some(discovered) = self.discovered_peers.get_mut(&peer_id) {
-                        discovered.device_name = Some(info.agent_version);
+                // Parse device name from agent_version
+                // Format: "decentpaste/<version>/<device_name>"
+                let device_name = if info.agent_version.starts_with("decentpaste/") {
+                    // Split by '/' and take everything after the second '/'
+                    let parts: Vec<&str> = info.agent_version.splitn(3, '/').collect();
+                    if parts.len() >= 3 {
+                        Some(parts[2].to_string())
+                    } else {
+                        // Fallback to agent_version if format is unexpected
+                        Some(info.agent_version.clone())
+                    }
+                } else {
+                    // Not a decentpaste peer, use agent_version as-is
+                    Some(info.agent_version.clone())
+                };
+
+                // Update device name from identify info and emit update event
+                if let Some(discovered) = self.discovered_peers.get_mut(&peer_id) {
+                    let old_name = discovered.device_name.clone();
+                    discovered.device_name = device_name;
+
+                    // Only emit update if the name actually changed
+                    if old_name != discovered.device_name {
+                        debug!(
+                            "Updated device name for peer {}: {:?} -> {:?}",
+                            peer_id, old_name, discovered.device_name
+                        );
+                        // Re-emit PeerDiscovered so frontend gets the updated name
+                        let _ = self
+                            .event_tx
+                            .send(NetworkEvent::PeerDiscovered(discovered.clone()))
+                            .await;
                     }
                 }
             }
@@ -515,6 +612,9 @@ impl NetworkManager {
                     .event_tx
                     .send(NetworkEvent::PeerConnected(connected))
                     .await;
+
+                // Device name announcement is now done in gossipsub::Event::Subscribed
+                // This ensures the peer has subscribed to the topic before we try to announce
             }
 
             SwarmEvent::ConnectionClosed { peer_id, .. } => {
@@ -535,10 +635,7 @@ impl NetworkManager {
             }
 
             SwarmEvent::OutgoingConnectionError { peer_id, error, .. } => {
-                warn!(
-                    "Outgoing connection error to {:?}: {}",
-                    peer_id, error
-                );
+                warn!("Outgoing connection error to {:?}: {}", peer_id, error);
 
                 // Schedule retry if we have the peer's address and haven't exceeded max retries
                 if let Some(peer_id) = peer_id {
@@ -751,6 +848,45 @@ impl NetworkManager {
 
             NetworkCommand::StartListening | NetworkCommand::StopListening => {
                 // Already handled during initialization
+            }
+
+            NetworkCommand::RefreshPeer { peer_id } => {
+                // Re-emit PeerDiscovered event for a specific peer if it exists in our cache
+                // This is used after unpairing to make the peer appear in discovered list again
+                if let Ok(pid) = peer_id.parse::<PeerId>() {
+                    if let Some(peer) = self.discovered_peers.get(&pid) {
+                        debug!("Refreshing peer {} for re-discovery", peer_id);
+                        let _ = self
+                            .event_tx
+                            .send(NetworkEvent::PeerDiscovered(peer.clone()))
+                            .await;
+                    } else {
+                        debug!("Peer {} not in discovered cache, cannot refresh", peer_id);
+                    }
+                }
+            }
+
+            NetworkCommand::AnnounceDeviceName { device_name } => {
+                // Update our stored device name so we can announce it on new connections
+                self.device_name = device_name.clone();
+
+                // Broadcast device name to all peers via gossipsub
+                // Use our local peer_id so receiving peers can update their discovered list
+                let local_peer_id = self.swarm.local_peer_id().to_string();
+                let announce_msg = DeviceAnnounceMessage {
+                    peer_id: local_peer_id,
+                    device_name,
+                    timestamp: Utc::now(),
+                };
+                let protocol_msg = ProtocolMessage::DeviceAnnounce(announce_msg);
+                match self.swarm.behaviour_mut().publish_clipboard(&protocol_msg) {
+                    Ok(_) => {
+                        debug!("Broadcast device name announcement");
+                    }
+                    Err(e) => {
+                        warn!("Failed to broadcast device name announcement: {}", e);
+                    }
+                }
             }
         }
     }

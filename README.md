@@ -7,7 +7,7 @@
 [![libp2p](https://img.shields.io/badge/Powered%20by-libp2p-blue.svg)](https://libp2p.io)
 
 <p align="center">
-  <img src="website/assets/screenshot.png" alt="DecentPaste Screenshot" width="600">
+  <img src="website/assets/og-image.png" alt="DecentPaste Screenshot" width="600">
 </p>
 
 ## What is DecentPaste?

@@ -4,8 +4,12 @@ use uuid::Uuid;
 use x25519_dalek::{PublicKey, StaticSecret};
 
 use crate::error::Result;
-use crate::storage::{load_device_identity, load_settings, save_device_identity, DeviceIdentity};
+use crate::storage::DeviceIdentity;
 
+/// Generate a new device identity with X25519 keypair for ECDH key exchange.
+///
+/// This creates the identity in memory only. The caller is responsible for
+/// persisting it to the vault via `VaultManager::set_device_identity()`.
 pub fn generate_device_identity(device_name: &str) -> DeviceIdentity {
     // Generate a unique device ID
     let device_id = Uuid::new_v4().to_string();
@@ -23,21 +27,8 @@ pub fn generate_device_identity(device_name: &str) -> DeviceIdentity {
     }
 }
 
-pub fn get_or_create_identity() -> Result<DeviceIdentity> {
-    // Try to load existing identity
-    if let Some(identity) = load_device_identity()? {
-        return Ok(identity);
-    }
-
-    // Create new identity
-    let settings = load_settings()?;
-    let identity = generate_device_identity(&settings.device_name);
-
-    // Save it
-    save_device_identity(&identity)?;
-
-    Ok(identity)
-}
+// NOTE: get_or_create_identity() was removed as it used legacy plaintext storage.
+// Device identity is now created during vault setup and stored in the encrypted vault.
 
 /// Derive a shared secret using X25519 ECDH
 /// Takes our private key and the peer's public key, returns a 32-byte shared secret
@@ -94,18 +85,12 @@ mod tests {
         let bob = generate_device_identity("Bob");
 
         // Alice derives shared secret using her private key + Bob's public key
-        let alice_shared = derive_shared_secret(
-            alice.private_key.as_ref().unwrap(),
-            &bob.public_key,
-        )
-        .unwrap();
+        let alice_shared =
+            derive_shared_secret(alice.private_key.as_ref().unwrap(), &bob.public_key).unwrap();
 
         // Bob derives shared secret using his private key + Alice's public key
-        let bob_shared = derive_shared_secret(
-            bob.private_key.as_ref().unwrap(),
-            &alice.public_key,
-        )
-        .unwrap();
+        let bob_shared =
+            derive_shared_secret(bob.private_key.as_ref().unwrap(), &alice.public_key).unwrap();
 
         // Both should derive the same shared secret!
         assert_eq!(alice_shared, bob_shared);
@@ -118,17 +103,11 @@ mod tests {
         let bob = generate_device_identity("Bob");
         let charlie = generate_device_identity("Charlie");
 
-        let alice_bob = derive_shared_secret(
-            alice.private_key.as_ref().unwrap(),
-            &bob.public_key,
-        )
-        .unwrap();
+        let alice_bob =
+            derive_shared_secret(alice.private_key.as_ref().unwrap(), &bob.public_key).unwrap();
 
-        let alice_charlie = derive_shared_secret(
-            alice.private_key.as_ref().unwrap(),
-            &charlie.public_key,
-        )
-        .unwrap();
+        let alice_charlie =
+            derive_shared_secret(alice.private_key.as_ref().unwrap(), &charlie.public_key).unwrap();
 
         // Different peer pairs should have different shared secrets
         assert_ne!(alice_bob, alice_charlie);

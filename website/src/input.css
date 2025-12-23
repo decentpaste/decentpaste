@@ -1,0 +1,1286 @@
+@import 'tailwindcss';
+
+/* =============================================================================
+   Tailwind CSS v4 Theme Configuration
+   ============================================================================= */
+@theme {
+  /* Font family */
+  --font-sans:
+    'Inter', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
+    'Noto Color Emoji';
+
+  /* Letter spacing */
+  --tracking-tighter: -0.03em;
+  --tracking-tight: -0.02em;
+}
+
+/**
+ * DecentPaste Landing Page - Premium Dark Theme
+ * Inspired by LocalCan's sophisticated design
+ */
+
+/* =============================================================================
+   Base Styles
+   ============================================================================= */
+
+html {
+  scroll-behavior: smooth;
+  overflow-x: hidden;
+}
+
+body {
+  background-color: #0a0a0b;
+  color: #ffffff;
+  overflow-x: hidden;
+  position: relative;
+}
+
+/* =============================================================================
+   Network Graph
+   ============================================================================= */
+
+#network-graph-container {
+  z-index: 5;
+  pointer-events: none;
+  /* Fade out at bottom to blend with hero content */
+  mask-image: linear-gradient(to bottom, black 0%, black 60%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, black 0%, black 60%, transparent 100%);
+}
+
+#network-graph {
+  cursor: grab;
+  touch-action: none;
+  pointer-events: auto;
+}
+
+#network-graph:active {
+  cursor: grabbing;
+}
+
+/* Hero content should not block graph interaction outside text area */
+#hero > div:not(#network-graph-container) {
+  position: relative;
+  z-index: 10;
+  pointer-events: none;
+}
+
+/* Re-enable pointer events for interactive elements within hero */
+#hero a,
+#hero button,
+#hero .fade-in-up {
+  pointer-events: auto;
+}
+
+/* =============================================================================
+   Gradient Text Effect
+   ============================================================================= */
+
+.gradient-text {
+  background: linear-gradient(135deg, #14b8a6 0%, #2dd4bf 25%, #f97316 75%, #fb923c 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  background-size: 200% auto;
+  animation: gradient-shift 4s ease-in-out infinite;
+}
+
+@keyframes gradient-shift {
+  0%,
+  100% {
+    background-position: 0% center;
+  }
+  50% {
+    background-position: 100% center;
+  }
+}
+
+/* =============================================================================
+   CTA Buttons - Pill Shape with Gradients
+   ============================================================================= */
+
+.cta-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 1rem 2rem;
+  font-weight: 600;
+  font-size: 0.9375rem;
+  border-radius: 50px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  text-decoration: none;
+  position: relative;
+  overflow: hidden;
+}
+
+.cta-primary {
+  background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
+  color: white;
+  box-shadow: 0 4px 24px -4px rgba(20, 184, 166, 0.4);
+}
+
+.cta-primary:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 8px 32px -4px rgba(20, 184, 166, 0.5);
+}
+
+.cta-primary::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, transparent 50%);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.cta-primary:hover::before {
+  opacity: 1;
+}
+
+.cta-secondary {
+  background: rgba(255, 255, 255, 0.05);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(8px);
+}
+
+.cta-secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+}
+
+/* =============================================================================
+   Feature Cards
+   ============================================================================= */
+
+.feature-card {
+  padding: 1.5rem;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 1rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.feature-card:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
+  transform: translateY(-4px);
+}
+
+.feature-icon {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1rem;
+}
+
+/* =============================================================================
+   Download Cards
+   ============================================================================= */
+
+.download-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 1rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: visible;
+}
+
+.download-card:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.download-card.highlighted {
+  border-color: #14b8a6;
+  background: rgba(20, 184, 166, 0.05);
+}
+
+.download-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.6);
+  flex-shrink: 0;
+}
+
+.download-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: 50px;
+  text-decoration: none;
+  transition: all 0.3s;
+  white-space: nowrap;
+}
+
+.download-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 16px -4px rgba(20, 184, 166, 0.4);
+}
+
+.download-btn-secondary {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.download-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.15);
+  box-shadow: none;
+}
+
+.download-btn-disabled {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: 50px;
+  white-space: nowrap;
+  cursor: not-allowed;
+}
+
+/* Recommended badge for highlighted download */
+.download-card.highlighted::before {
+  content: 'Recommended';
+  position: absolute;
+  top: -0.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.25rem 0.75rem;
+  background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
+  color: white;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-radius: 50px;
+  white-space: nowrap;
+}
+
+/* =============================================================================
+   Expanded Download Cards with Multiple Formats
+   ============================================================================= */
+
+.download-card-expanded {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.5rem;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 1rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: visible;
+}
+
+.download-card-expanded:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.download-card-expanded.highlighted {
+  border-color: #14b8a6;
+  background: rgba(20, 184, 166, 0.05);
+}
+
+.download-card-expanded.highlighted::before {
+  content: 'Your Platform';
+  position: absolute;
+  top: -0.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.25rem 0.75rem;
+  background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
+  color: white;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-radius: 50px;
+  white-space: nowrap;
+  z-index: 10;
+}
+
+.download-card-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.download-formats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+/* Single-item formats should span full width */
+.download-formats-1 {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.download-formats-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 640px) {
+  .download-formats-3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .download-formats-3 .download-format-btn:last-child {
+    grid-column: span 2;
+  }
+}
+
+.download-format-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.75rem 0.5rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.75rem;
+  text-decoration: none;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  color: white;
+  text-align: center;
+}
+
+.download-format-btn:hover {
+  background: rgba(20, 184, 166, 0.1);
+  border-color: rgba(20, 184, 166, 0.3);
+  transform: translateY(-2px);
+}
+
+.download-format-btn:hover svg {
+  color: #14b8a6;
+}
+
+.download-format-btn svg {
+  color: rgba(255, 255, 255, 0.5);
+  transition: color 0.2s;
+}
+
+.download-format-btn .format-name {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: white;
+}
+
+.download-format-btn .format-desc {
+  font-size: 0.6875rem;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.download-format-btn.download-format-disabled,
+.download-format-btn.download-format-unavailable {
+  cursor: not-allowed;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.download-format-btn.download-format-disabled:hover,
+.download-format-btn.download-format-unavailable:hover {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.08);
+  transform: none;
+}
+
+/* Show "Coming Soon" text for unavailable formats */
+.download-format-btn.download-format-unavailable .format-desc::after {
+  content: ' · Coming Soon';
+}
+
+.download-format-btn.download-format-secondary {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.download-format-btn.download-format-secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+/* Highlight recommended format within card */
+.download-card-expanded.highlighted .download-format-btn:first-child {
+  background: rgba(20, 184, 166, 0.15);
+  border-color: rgba(20, 184, 166, 0.4);
+}
+
+.download-card-expanded.highlighted .download-format-btn:first-child svg {
+  color: #14b8a6;
+}
+
+/* =============================================================================
+   FAQ Accordion
+   ============================================================================= */
+
+.faq-item {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 1rem;
+  overflow: hidden;
+  transition: all 0.3s;
+}
+
+.faq-item:hover {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.faq-item.active {
+  border-color: rgba(20, 184, 166, 0.3);
+  background: rgba(20, 184, 166, 0.02);
+}
+
+.faq-question {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  background: transparent;
+  border: none;
+  color: white;
+  font-size: 1rem;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.faq-question:hover {
+  color: #14b8a6;
+}
+
+.faq-chevron {
+  flex-shrink: 0;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.faq-item.active .faq-chevron {
+  transform: rotate(180deg);
+  color: #14b8a6;
+}
+
+.faq-answer {
+  max-height: 0;
+  overflow: hidden;
+  transition:
+    max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    padding 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.faq-item.active .faq-answer {
+  max-height: 500px;
+}
+
+.faq-answer p {
+  padding: 0 1.5rem 1.25rem;
+  color: rgba(255, 255, 255, 0.5);
+  line-height: 1.7;
+  font-size: 0.9375rem;
+}
+
+/* =============================================================================
+   Scroll Indicator Animation
+   ============================================================================= */
+
+@keyframes scroll-indicator {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(6px);
+    opacity: 0.5;
+  }
+}
+
+.animate-scroll-indicator {
+  animation: scroll-indicator 1.5s ease-in-out infinite;
+}
+
+/* =============================================================================
+   Floating Animation for Background Orbs
+   ============================================================================= */
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(30px, -30px) scale(1.05);
+  }
+  66% {
+    transform: translate(-20px, 20px) scale(0.95);
+  }
+}
+
+.animate-float {
+  animation: float 20s ease-in-out infinite;
+}
+
+.animate-float-delayed {
+  animation: float 25s ease-in-out infinite;
+  animation-delay: -10s;
+}
+
+/* =============================================================================
+   Fade In Up Animation
+   ============================================================================= */
+
+.fade-in-up {
+  opacity: 0;
+  transform: translateY(30px);
+  transition:
+    opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.fade-in-up.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Staggered delays */
+.fade-in-up[style*='animation-delay: 0.1s']:not(.visible) {
+  transition-delay: 0.1s;
+}
+
+.fade-in-up[style*='animation-delay: 0.15s']:not(.visible) {
+  transition-delay: 0.15s;
+}
+
+.fade-in-up[style*='animation-delay: 0.2s']:not(.visible) {
+  transition-delay: 0.2s;
+}
+
+.fade-in-up[style*='animation-delay: 0.3s']:not(.visible) {
+  transition-delay: 0.3s;
+}
+
+.fade-in-up[style*='animation-delay: 0.4s']:not(.visible) {
+  transition-delay: 0.4s;
+}
+
+.fade-in-up[style*='animation-delay: 0.5s']:not(.visible) {
+  transition-delay: 0.5s;
+}
+
+/* Reset delay after animation */
+.fade-in-up.visible {
+  transition-delay: 0s !important;
+}
+
+/* =============================================================================
+   Navbar Background on Scroll
+   ============================================================================= */
+
+#navbar.scrolled {
+  background: rgba(10, 10, 11, 0.8);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* =============================================================================
+   Custom Scrollbar
+   ============================================================================= */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+
+/* =============================================================================
+   Selection
+   ============================================================================= */
+
+::selection {
+  background-color: rgba(20, 184, 166, 0.4);
+  color: white;
+}
+
+/* =============================================================================
+   Accessibility - Screen Reader Only
+   ============================================================================= */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* =============================================================================
+   Focus Styles
+   ============================================================================= */
+
+a:focus-visible,
+button:focus-visible {
+  outline: 2px solid #14b8a6;
+  outline-offset: 2px;
+}
+
+/* =============================================================================
+   Mobile Menu Animation
+   ============================================================================= */
+
+#mobile-menu {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#mobile-menu.hidden {
+  opacity: 0;
+  transform: translateY(-10px);
+  pointer-events: none;
+}
+
+#mobile-menu:not(.hidden) {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* =============================================================================
+   Reduced Motion
+   ============================================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  html {
+    scroll-behavior: auto;
+  }
+
+  .fade-in-up {
+    opacity: 1;
+    transform: none;
+  }
+
+  .animate-float,
+  .animate-float-delayed {
+    animation: none;
+  }
+
+  .gradient-text {
+    animation: none;
+  }
+}
+
+/* =============================================================================
+   Print Styles
+   ============================================================================= */
+
+@media print {
+  nav,
+  #mobile-menu,
+  .animate-float,
+  .animate-float-delayed {
+    display: none !important;
+  }
+
+  .fade-in-up {
+    opacity: 1;
+    transform: none;
+  }
+
+  body {
+    color: black;
+    background: white;
+  }
+
+  .gradient-text {
+    -webkit-text-fill-color: #0d9488;
+  }
+}
+
+/* =============================================================================
+   Screenshot Showcase - Enhanced Floating Glow Design
+   ============================================================================= */
+
+/* Section container - prevents overflow */
+#screenshots {
+  overflow: hidden;
+}
+
+.device-showcase {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0;
+  position: relative;
+  min-height: 480px;
+  perspective: 1200px;
+  overflow: visible;
+}
+
+/* Desktop Screenshot - Floating with Gradient Glow Aura */
+.device-desktop {
+  position: relative;
+  z-index: 1;
+  animation: float-desktop 6s ease-in-out infinite;
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s ease;
+}
+
+/* Gradient glow aura behind desktop - contained */
+.device-desktop::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: calc(100% + 40px);
+  height: calc(100% + 40px);
+  transform: translate(-50%, -50%);
+  background: conic-gradient(
+    from 180deg at 50% 50%,
+    rgba(20, 184, 166, 0.4) 0deg,
+    rgba(249, 115, 22, 0.3) 120deg,
+    rgba(20, 184, 166, 0.4) 240deg,
+    rgba(249, 115, 22, 0.3) 360deg
+  );
+  border-radius: 16px;
+  filter: blur(40px);
+  opacity: 0.6;
+  z-index: -1;
+  animation: glow-rotate 8s linear infinite;
+}
+
+@keyframes glow-rotate {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+.device-frame-desktop {
+  position: relative;
+  width: min(400px, 85vw);
+  transform: rotateY(-3deg) rotateX(2deg);
+  transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.device-frame-desktop img {
+  display: block;
+  width: 100%;
+  border-radius: 10px;
+  box-shadow:
+    0 30px 60px -15px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+/* Interactive hover - desktop gets focus */
+.device-desktop:hover ~ .device-mobile {
+  transform: scale(0.9);
+  opacity: 0.7;
+}
+
+.device-desktop:hover .device-frame-desktop {
+  transform: rotateY(0deg) rotateX(0deg) scale(1.05);
+}
+
+.device-desktop:hover::before {
+  opacity: 0.9;
+}
+
+/* Screenshot Containers */
+.screenshot-container {
+  overflow: hidden;
+}
+
+.screenshot-desktop {
+  height: auto;
+  background: transparent;
+}
+
+.screenshot-mobile {
+  background: #0a0a0b;
+  border-radius: 26px;
+  height: 340px;
+  overflow: hidden;
+}
+
+.screenshot-mobile img {
+  border-radius: 26px;
+}
+
+.screenshot-container img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
+.screenshot-container img.transitioning {
+  opacity: 0;
+  transform: scale(1.02);
+}
+
+/* Desktop Reflection - gradient light beneath */
+.device-reflection {
+  width: 60%;
+  max-width: 280px;
+  height: 40px;
+  margin: 0 auto;
+  margin-top: 15px;
+  background: radial-gradient(ellipse at center, rgba(20, 184, 166, 0.2) 0%, transparent 70%);
+  filter: blur(12px);
+}
+
+/* Mobile Device - Sleek Phone Frame */
+.device-mobile {
+  animation: float-mobile 5s ease-in-out infinite;
+  animation-delay: -1.5s;
+  position: relative;
+  z-index: 2;
+  margin-left: -50px;
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s ease;
+}
+
+.device-frame-mobile {
+  position: relative;
+  background: linear-gradient(145deg, #2a2a2d 0%, #151517 100%);
+  border-radius: 36px;
+  padding: 10px;
+  box-shadow:
+    0 30px 60px -15px rgba(0, 0, 0, 0.7),
+    0 0 0 1px rgba(255, 255, 255, 0.1),
+    inset 0 1px 1px rgba(255, 255, 255, 0.1);
+  width: 175px;
+  transform: rotateY(5deg) rotateX(-2deg);
+  transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Subtle glow on mobile too - contained */
+.device-frame-mobile::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: calc(100% + 30px);
+  height: calc(100% + 30px);
+  transform: translate(-50%, -50%);
+  background: radial-gradient(ellipse at center, rgba(249, 115, 22, 0.2) 0%, transparent 70%);
+  filter: blur(25px);
+  z-index: -1;
+}
+
+/* Interactive hover - mobile gets focus */
+.device-mobile:hover .device-frame-mobile {
+  transform: rotateY(0deg) rotateX(0deg) scale(1.12);
+}
+
+.device-mobile:hover::before {
+  opacity: 0.9;
+}
+
+/* When mobile is hovered, shrink desktop using :has() */
+.device-showcase:has(.device-mobile:hover) .device-desktop {
+  transform: scale(0.9);
+  opacity: 0.7;
+}
+
+.device-showcase:has(.device-mobile:hover) .device-desktop::before {
+  opacity: 0.3;
+}
+
+/* Dynamic Island style notch */
+.phone-notch {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 70px;
+  height: 20px;
+  background: #000;
+  border-radius: 12px;
+  z-index: 10;
+  box-shadow: inset 0 0 3px rgba(0, 0, 0, 0.8);
+}
+
+/* Camera dot in notch */
+.phone-notch::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  width: 6px;
+  height: 6px;
+  background: radial-gradient(circle, #1a1a2e 40%, #0a0a0f 100%);
+  border-radius: 50%;
+  box-shadow: 0 0 3px rgba(20, 184, 166, 0.4);
+}
+
+/* Home Indicator */
+.phone-home-indicator {
+  width: 80px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+  margin: 8px auto 4px;
+}
+
+/* Float Animations */
+@keyframes float-desktop {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes float-mobile {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-16px);
+  }
+}
+
+/* =============================================================================
+   Enhanced Screenshot Navigation
+   ============================================================================= */
+
+.screenshot-nav {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+/* Screenshot caption/label */
+.screenshot-caption {
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.5);
+  text-align: center;
+  min-height: 1.5rem;
+  transition: color 0.3s ease;
+}
+
+/* Navigation container with progress */
+.screenshot-nav-controls {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+/* Arrow buttons */
+.screenshot-arrow {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.screenshot-arrow:hover {
+  background: rgba(20, 184, 166, 0.15);
+  border-color: rgba(20, 184, 166, 0.4);
+  color: #14b8a6;
+  transform: scale(1.1);
+}
+
+.screenshot-arrow:active {
+  transform: scale(0.95);
+}
+
+.screenshot-arrow svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* Dots container with progress bar */
+.screenshot-dots-container {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1.25rem;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 50px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Screenshot Navigation Dots - Enhanced */
+.screenshot-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+.screenshot-dot:hover {
+  background: rgba(255, 255, 255, 0.35);
+  transform: scale(1.2);
+}
+
+.screenshot-dot.active {
+  background: #14b8a6;
+  box-shadow: 0 0 16px rgba(20, 184, 166, 0.6);
+  transform: scale(1.3);
+}
+
+/* Progress ring around active dot */
+.screenshot-dot.active::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border: 2px solid rgba(20, 184, 166, 0.3);
+  border-radius: 50%;
+  animation: dot-ring-pulse 5s linear infinite;
+}
+
+@keyframes dot-ring-pulse {
+  0% {
+    transform: scale(0.8);
+    opacity: 1;
+    border-color: rgba(20, 184, 166, 0.5);
+  }
+  100% {
+    transform: scale(0.8);
+    opacity: 1;
+    border-color: rgba(20, 184, 166, 0.5);
+  }
+}
+
+/* Progress indicator line between dots */
+.screenshot-progress {
+  position: absolute;
+  bottom: -8px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 1px;
+  overflow: hidden;
+}
+
+.screenshot-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #14b8a6, #2dd4bf);
+  border-radius: 1px;
+  transition: width 0.3s ease;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .device-showcase {
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+    min-height: auto;
+    padding: 1rem 0;
+  }
+
+  .device-desktop {
+    transform: none;
+  }
+
+  .device-desktop::before {
+    filter: blur(30px);
+    opacity: 0.4;
+    width: calc(100% + 20px);
+    height: calc(100% + 20px);
+  }
+
+  .device-frame-desktop {
+    width: min(320px, 80vw);
+    transform: none;
+  }
+
+  .device-mobile {
+    margin-left: 0;
+    margin-top: -1.5rem;
+  }
+
+  .device-frame-mobile {
+    transform: none;
+    width: 150px;
+  }
+
+  .device-frame-mobile::before {
+    width: calc(100% + 20px);
+    height: calc(100% + 20px);
+  }
+
+  .screenshot-mobile {
+    height: 300px;
+  }
+
+  .device-showcase:hover .device-frame-desktop,
+  .device-showcase:hover .device-frame-mobile {
+    transform: scale(1.01);
+  }
+
+  .device-reflection {
+    display: none;
+  }
+
+  /* Simplified navigation on mobile */
+  .screenshot-nav-controls {
+    gap: 1rem;
+  }
+
+  .screenshot-arrow {
+    width: 36px;
+    height: 36px;
+  }
+
+  .screenshot-arrow svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .screenshot-dots-container {
+    padding: 0.5rem 1rem;
+    gap: 0.5rem;
+  }
+
+  .screenshot-dot {
+    width: 8px;
+    height: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .device-desktop {
+    transform: none;
+  }
+
+  .device-desktop::before {
+    opacity: 0.3;
+  }
+
+  .device-frame-desktop {
+    width: min(280px, 75vw);
+  }
+
+  .device-mobile {
+    transform: none;
+  }
+
+  .device-frame-mobile {
+    width: 130px;
+  }
+
+  .screenshot-mobile {
+    height: 260px;
+  }
+
+  .screenshot-arrow {
+    display: none;
+  }
+}
+
+/* Subtle glow effect on hover for the whole showcase */
+.device-showcase::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(500px, 100%);
+  height: 400px;
+  background: radial-gradient(ellipse, rgba(20, 184, 166, 0.06) 0%, transparent 70%);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+
+.device-showcase:hover::after {
+  opacity: 1;
+}
+
+/* Touch hint for mobile */
+.touch-hint {
+  display: none;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.35);
+  margin-top: 0.5rem;
+}
+
+.touch-hint svg {
+  width: 16px;
+  height: 16px;
+  animation: swipe-hint 2s ease-in-out infinite;
+}
+
+@keyframes swipe-hint {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(5px); }
+}
+
+@media (max-width: 768px) {
+  .touch-hint {
+    display: flex;
+  }
+}

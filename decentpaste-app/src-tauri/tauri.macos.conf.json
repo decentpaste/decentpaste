@@ -1,0 +1,9 @@
+{
+  "bundle": {
+    "createUpdaterArtifacts": true,
+    "macOS": {
+      "minimumSystemVersion": "13.0",
+      "signingIdentity": "B222E29DDA1B4124CA6E1B0A486E7C07003429C4"
+    }
+  }
+}

@@ -1,18 +1,18 @@
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, State};
-use tokio::sync::mpsc;
+use tauri::AppHandle;
+use tauri::State;
 
-use crate::clipboard::{ClipboardEntry, SyncManager};
+use crate::clipboard::ClipboardEntry;
 use crate::error::{DecentPasteError, Result};
 use crate::network::{DiscoveredPeer, NetworkCommand, NetworkStatus};
 use crate::security::{generate_pin, PairingSession, PairingState};
 use crate::state::AppState;
 use crate::storage::{save_settings, AppSettings, PairedPeer};
+use tracing::{debug, warn};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeviceInfo {
     pub device_id: String,
-    pub device_name: String,
     pub peer_id: Option<String>,
 }
 
@@ -58,6 +58,60 @@ pub async fn reconnect_peers(state: State<'_, AppState>) -> Result<()> {
     Ok(())
 }
 
+/// Response from process_pending_clipboard
+#[derive(Debug, Clone, Serialize)]
+pub struct PendingClipboardResponse {
+    pub content: String,
+    pub from_device: String,
+}
+
+/// Process any pending clipboard content that was received while app was in background.
+/// Call this when the app becomes visible on mobile (from visibilitychange event).
+/// Returns the pending clipboard content if any was waiting.
+#[tauri::command]
+pub async fn process_pending_clipboard(
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Option<PendingClipboardResponse>> {
+    use tracing::info;
+
+    // Mark as foreground
+    {
+        let mut fg = state.is_foreground.write().await;
+        *fg = true;
+    }
+
+    // Take pending clipboard if any
+    let pending = {
+        let mut p = state.pending_clipboard.write().await;
+        p.take()
+    };
+
+    if let Some(pending) = pending {
+        info!(
+            "Processing pending clipboard from {} ({} chars)",
+            pending.from_device,
+            pending.content.len()
+        );
+
+        // Try to copy to clipboard
+        if let Err(e) =
+            crate::clipboard::monitor::set_clipboard_content(&app_handle, &pending.content)
+        {
+            tracing::error!("Failed to set pending clipboard: {}", e);
+            return Err(DecentPasteError::Clipboard(e.to_string()));
+        }
+
+        info!("Pending clipboard copied successfully");
+        Ok(Some(PendingClipboardResponse {
+            content: pending.content,
+            from_device: pending.from_device,
+        }))
+    } else {
+        Ok(None)
+    }
+}
+
 // Peer management
 #[tauri::command]
 pub async fn get_discovered_peers(state: State<'_, AppState>) -> Result<Vec<DiscoveredPeer>> {
@@ -81,12 +135,54 @@ pub async fn get_paired_peers(state: State<'_, AppState>) -> Result<Vec<PairedPe
 }
 
 #[tauri::command]
-pub async fn remove_paired_peer(state: State<'_, AppState>, peer_id: String) -> Result<()> {
-    let mut peers = state.paired_peers.write().await;
-    peers.retain(|p| p.peer_id != peer_id);
+pub async fn remove_paired_peer(
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+    peer_id: String,
+) -> Result<()> {
+    use crate::network::DiscoveredPeer;
+    use chrono::Utc;
+    use tauri::Emitter;
 
-    // Save to storage
-    crate::storage::save_paired_peers(&peers)?;
+    // Get the peer info before removing (we'll use it to re-emit as discovered)
+    let peer_info = {
+        let peers = state.paired_peers.read().await;
+        peers
+            .iter()
+            .find(|p| p.peer_id == peer_id)
+            .map(|p| (p.peer_id.clone(), p.device_name.clone()))
+    };
+
+    // Remove from paired list and flush to vault immediately
+    {
+        let mut peers = state.paired_peers.write().await;
+        peers.retain(|p| p.peer_id != peer_id);
+    }
+    // Flush-on-write: persist immediately to prevent data loss
+    state.flush_paired_peers().await?;
+
+    // Emit directly using the info we have from the paired peer
+    // This ensures the peer appears in discovered list with correct device name
+    if let Some((pid, device_name)) = peer_info {
+        let discovered = DiscoveredPeer {
+            peer_id: pid.clone(),
+            device_name: Some(device_name),
+            addresses: vec![], // We don't have addresses, but that's okay for display
+            discovered_at: Utc::now(),
+            is_paired: false,
+        };
+
+        // Add to discovered peers state
+        {
+            let mut peers = state.discovered_peers.write().await;
+            if !peers.iter().any(|p| p.peer_id == pid) {
+                peers.push(discovered.clone());
+            }
+        }
+
+        // Emit to frontend
+        let _ = app_handle.emit("peer-discovered", discovered);
+    }
 
     Ok(())
 }
@@ -194,7 +290,7 @@ pub async fn respond_to_pairing(
                 let device_identity = state.device_identity.read().await;
                 let identity = device_identity
                     .as_ref()
-                    .ok_or_else(|| DecentPasteError::NotInitialized)?;
+                    .ok_or(DecentPasteError::NotInitialized)?;
 
                 if tx
                     .send(NetworkCommand::SendPairingChallenge {
@@ -202,7 +298,7 @@ pub async fn respond_to_pairing(
                         session_id: session_id.clone(),
                         pin: pin.clone(),
                         device_name: identity.device_name.clone(),
-                        public_key: identity.public_key.clone(),  // Our X25519 public key for ECDH
+                        public_key: identity.public_key.clone(), // Our X25519 public key for ECDH
                     })
                     .await
                     .is_err()
@@ -266,7 +362,7 @@ pub async fn confirm_pairing(
         let device_identity = state.device_identity.read().await;
         let identity = device_identity
             .as_ref()
-            .ok_or_else(|| DecentPasteError::NotInitialized)?;
+            .ok_or(DecentPasteError::NotInitialized)?;
 
         // Get the peer's public key from the session
         let peer_public_key = {
@@ -284,9 +380,13 @@ pub async fn confirm_pairing(
             .as_ref()
             .ok_or_else(|| DecentPasteError::Pairing("Private key not found".into()))?;
 
-        let shared_secret = crate::security::derive_shared_secret(our_private_key, &peer_public_key)?;
+        let shared_secret =
+            crate::security::derive_shared_secret(our_private_key, &peer_public_key)?;
 
-        tracing::debug!("Initiator derived shared secret via ECDH, sending confirm to peer {}", peer_id);
+        tracing::debug!(
+            "Initiator derived shared secret via ECDH, sending confirm to peer {}",
+            peer_id
+        );
 
         let tx = state.network_command_tx.read().await;
         if let Some(tx) = tx.as_ref() {
@@ -294,7 +394,7 @@ pub async fn confirm_pairing(
                 peer_id: peer_id.clone(),
                 session_id: session_id.clone(),
                 success: true,
-                shared_secret: Some(shared_secret),  // Send for verification (responder will also derive)
+                shared_secret: Some(shared_secret), // Send for verification (responder will also derive)
                 device_name: identity.device_name.clone(),
             })
             .await
@@ -336,7 +436,7 @@ pub async fn get_clipboard_history(
 #[tauri::command]
 pub async fn set_clipboard(app_handle: AppHandle, content: String) -> Result<()> {
     crate::clipboard::monitor::set_clipboard_content(&app_handle, &content)
-        .map_err(|e| DecentPasteError::Clipboard(e))
+        .map_err(DecentPasteError::Clipboard)
 }
 
 /// Manually share clipboard content with paired peers.
@@ -367,7 +467,7 @@ pub async fn share_clipboard_content(
     let device_identity = state.device_identity.read().await;
     let identity = device_identity
         .as_ref()
-        .ok_or_else(|| DecentPasteError::NotInitialized)?;
+        .ok_or(DecentPasteError::NotInitialized)?;
 
     // Check if we have any paired peers
     let paired_peers = state.paired_peers.read().await;
@@ -417,8 +517,12 @@ pub async fn share_clipboard_content(
 
 #[tauri::command]
 pub async fn clear_clipboard_history(state: State<'_, AppState>) -> Result<()> {
-    let mut history = state.clipboard_history.write().await;
-    history.clear();
+    {
+        let mut history = state.clipboard_history.write().await;
+        history.clear();
+    }
+    // Flush-on-write: persist cleared history to vault immediately
+    state.flush_clipboard_history().await?;
     Ok(())
 }
 
@@ -431,9 +535,52 @@ pub async fn get_settings(state: State<'_, AppState>) -> Result<AppSettings> {
 
 #[tauri::command]
 pub async fn update_settings(state: State<'_, AppState>, settings: AppSettings) -> Result<()> {
+    // Check if device name changed
+    let old_device_name = {
+        let current = state.settings.read().await;
+        current.device_name.clone()
+    };
+    let name_changed = old_device_name != settings.device_name;
+
     save_settings(&settings)?;
-    let mut current = state.settings.write().await;
-    *current = settings;
+
+    // Update state
+    {
+        let mut current = state.settings.write().await;
+        *current = settings.clone();
+    }
+
+    // If device name changed, broadcast the new name to all peers
+    if name_changed {
+        debug!(
+            "Device name changed from '{}' to '{}', broadcasting update",
+            old_device_name, settings.device_name
+        );
+
+        // Update the device identity in memory
+        {
+            let mut identity = state.device_identity.write().await;
+            if let Some(ref mut id) = *identity {
+                id.device_name = settings.device_name.clone();
+            }
+        }
+
+        // Flush-on-write: persist identity to vault immediately
+        if let Err(e) = state.flush_device_identity().await {
+            warn!("Failed to flush device identity to vault: {}", e);
+        }
+
+        // Broadcast the name change to all peers
+        let tx = state.network_command_tx.read().await;
+        if let Some(tx) = tx.as_ref() {
+            let _ = tx
+                .send(NetworkCommand::AnnounceDeviceName {
+                    device_name: settings.device_name,
+                })
+                .await;
+        }
+    }
+
     Ok(())
 }
 
@@ -444,7 +591,6 @@ pub async fn get_device_info(state: State<'_, AppState>) -> Result<DeviceInfo> {
     if let Some(ref id) = *identity {
         Ok(DeviceInfo {
             device_id: id.device_id.clone(),
-            device_name: id.device_name.clone(),
             peer_id: None, // Will be set from network
         })
     } else {
@@ -461,4 +607,269 @@ pub async fn get_pairing_sessions(state: State<'_, AppState>) -> Result<Vec<Pair
         .filter(|s| !s.is_expired())
         .cloned()
         .collect())
+}
+
+// ============================================================================
+// Vault Commands - Secure storage authentication and management
+// ============================================================================
+
+use crate::vault::{VaultManager, VaultStatus};
+use tauri::Emitter;
+
+/// Get the current vault status.
+///
+/// Returns whether the vault is:
+/// - NotSetup: First-time user, needs onboarding
+/// - Locked: Vault exists but requires PIN to unlock
+/// - Unlocked: Vault is open and data is accessible
+#[tauri::command]
+pub async fn get_vault_status(state: State<'_, AppState>) -> Result<VaultStatus> {
+    // First check if vault file exists
+    let vault_exists = VaultManager::exists().unwrap_or(false);
+
+    if !vault_exists {
+        // No vault file - user needs to set up
+        let mut status = state.vault_status.write().await;
+        *status = VaultStatus::NotSetup;
+        return Ok(VaultStatus::NotSetup);
+    }
+
+    // Vault exists - check if it's unlocked
+    let manager = state.vault_manager.read().await;
+    if manager.as_ref().is_some_and(|m| m.is_open()) {
+        Ok(VaultStatus::Unlocked)
+    } else {
+        Ok(VaultStatus::Locked)
+    }
+}
+
+/// Set up a new vault during first-time onboarding.
+///
+/// This creates an encrypted Stronghold vault protected by the user's PIN.
+/// The PIN is transformed via Argon2id into an encryption key.
+/// After setup, network services are started automatically.
+///
+/// # Arguments
+/// * `device_name` - The user's chosen device name
+/// * `pin` - The user's chosen PIN (4-8 digits)
+/// * `auth_method` - Auth method (currently only "pin" is supported)
+#[tauri::command]
+pub async fn setup_vault(
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+    device_name: String,
+    pin: String,
+    auth_method: String,
+) -> Result<()> {
+    use tracing::info;
+
+    // Validate PIN length (4-8 digits)
+    if pin.len() < 4 || pin.len() > 8 || !pin.chars().all(|c| c.is_ascii_digit()) {
+        return Err(DecentPasteError::InvalidInput(
+            "PIN must be 4-8 digits".into(),
+        ));
+    }
+
+    info!("Setting up new vault for device: {}", device_name);
+
+    // Create the vault
+    let mut manager = VaultManager::new();
+    manager.create(&pin)?;
+
+    // Create device identity with X25519 keypair for ECDH
+    let identity = crate::security::generate_device_identity(&device_name);
+    manager.set_device_identity(&identity)?;
+
+    // Generate and store libp2p keypair
+    let keypair = libp2p::identity::Keypair::generate_ed25519();
+    manager.set_libp2p_keypair(&keypair)?;
+
+    // Flush to ensure data is persisted
+    manager.flush()?;
+
+    // Update app state
+    {
+        let mut vault_manager = state.vault_manager.write().await;
+        *vault_manager = Some(manager);
+    }
+    {
+        let mut vault_status = state.vault_status.write().await;
+        *vault_status = VaultStatus::Unlocked;
+    }
+    {
+        let mut device_identity = state.device_identity.write().await;
+        *device_identity = Some(identity);
+    }
+
+    // Update settings with auth method
+    {
+        let mut settings = state.settings.write().await;
+        settings.device_name = device_name;
+        settings.auth_method = Some(auth_method);
+        save_settings(&settings)?;
+    }
+
+    // Emit vault status change
+    let _ = app_handle.emit("vault-status", VaultStatus::Unlocked);
+
+    // Start network and clipboard services now that vault is unlocked
+    if let Err(e) = crate::start_network_services(app_handle.clone()).await {
+        tracing::error!("Failed to start network services: {}", e);
+        // Don't fail the vault setup - services can be started later
+    }
+
+    info!("Vault setup completed successfully");
+    Ok(())
+}
+
+/// Unlock an existing vault with the user's PIN.
+///
+/// On success, loads all encrypted data from the vault into app state
+/// and starts network/clipboard services.
+#[tauri::command]
+pub async fn unlock_vault(
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+    pin: String,
+) -> Result<()> {
+    use tracing::info;
+
+    info!("Attempting to unlock vault");
+
+    // Try to open the vault with the provided PIN
+    let mut manager = VaultManager::new();
+    manager.open(&pin)?;
+
+    // Load data from vault into app state
+    if let Ok(Some(identity)) = manager.get_device_identity() {
+        let mut device_identity = state.device_identity.write().await;
+        *device_identity = Some(identity);
+    }
+
+    if let Ok(peers) = manager.get_paired_peers() {
+        let mut paired_peers = state.paired_peers.write().await;
+        *paired_peers = peers;
+    }
+
+    if let Ok(history) = manager.get_clipboard_history() {
+        let mut clipboard_history = state.clipboard_history.write().await;
+        *clipboard_history = history;
+    }
+
+    // Update vault state
+    {
+        let mut vault_manager = state.vault_manager.write().await;
+        *vault_manager = Some(manager);
+    }
+    {
+        let mut vault_status = state.vault_status.write().await;
+        *vault_status = VaultStatus::Unlocked;
+    }
+
+    // Emit vault status change
+    let _ = app_handle.emit("vault-status", VaultStatus::Unlocked);
+
+    // Start network and clipboard services now that vault is unlocked
+    if let Err(e) = crate::start_network_services(app_handle.clone()).await {
+        tracing::error!("Failed to start network services: {}", e);
+        // Don't fail the unlock - services can be started later
+    }
+
+    info!("Vault unlocked successfully");
+    Ok(())
+}
+
+/// Lock the vault, flushing all data and clearing keys from memory.
+///
+/// After locking, the user must enter their PIN to access data again.
+#[tauri::command]
+pub async fn lock_vault(app_handle: AppHandle, state: State<'_, AppState>) -> Result<()> {
+    use tracing::info;
+
+    info!("Locking vault");
+
+    // Flush current state to vault before locking (safety net - data should already be persisted)
+    let _ = state.flush_all_to_vault().await;
+
+    // Lock the vault (clears encryption key from memory)
+    {
+        let mut manager = state.vault_manager.write().await;
+        if let Some(ref mut m) = *manager {
+            m.lock()?;
+        }
+        *manager = None;
+    }
+
+    // Update status
+    {
+        let mut vault_status = state.vault_status.write().await;
+        *vault_status = VaultStatus::Locked;
+    }
+
+    // Emit vault status change
+    let _ = app_handle.emit("vault-status", VaultStatus::Locked);
+
+    info!("Vault locked successfully");
+    Ok(())
+}
+
+/// Reset the vault, destroying all encrypted data.
+///
+/// This is a destructive operation that:
+/// 1. Deletes the vault file
+/// 2. Deletes the salt file
+/// 3. Clears all app state
+///
+/// After reset, the user must go through onboarding again.
+#[tauri::command]
+pub async fn reset_vault(app_handle: AppHandle, state: State<'_, AppState>) -> Result<()> {
+    use tracing::{info, warn};
+
+    warn!("Resetting vault - all encrypted data will be lost!");
+
+    // Destroy the vault
+    {
+        let mut manager = state.vault_manager.write().await;
+        if let Some(ref mut m) = *manager {
+            m.destroy()?;
+        } else {
+            // No manager in memory, create one just to destroy files
+            let mut temp_manager = VaultManager::new();
+            temp_manager.destroy()?;
+        }
+        *manager = None;
+    }
+
+    // Clear app state
+    {
+        let mut device_identity = state.device_identity.write().await;
+        *device_identity = None;
+    }
+    {
+        let mut paired_peers = state.paired_peers.write().await;
+        paired_peers.clear();
+    }
+    {
+        let mut clipboard_history = state.clipboard_history.write().await;
+        clipboard_history.clear();
+    }
+    {
+        let mut vault_status = state.vault_status.write().await;
+        *vault_status = VaultStatus::NotSetup;
+    }
+
+    // Emit vault status change
+    let _ = app_handle.emit("vault-status", VaultStatus::NotSetup);
+
+    info!("Vault reset completed");
+    Ok(())
+}
+
+/// Flush current app state to the vault.
+///
+/// Saves clipboard history and paired peers to the encrypted vault.
+/// With flush-on-write pattern, this is mainly a safety net.
+#[tauri::command]
+pub async fn flush_vault(state: State<'_, AppState>) -> Result<()> {
+    state.flush_all_to_vault().await
 }

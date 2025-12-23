@@ -6,6 +6,9 @@ pub enum ProtocolMessage {
     Pairing(PairingMessage),
     Clipboard(ClipboardMessage),
     Heartbeat(HeartbeatMessage),
+    /// Announces device name to all peers on the network.
+    /// Used when device name is changed in settings.
+    DeviceAnnounce(DeviceAnnounceMessage),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -28,8 +31,8 @@ pub struct PairingRequest {
 pub struct PairingChallenge {
     pub session_id: String,
     pub pin: String,
-    pub device_name: String,  // Responder's device name
-    pub public_key: Vec<u8>,  // Responder's X25519 public key for ECDH
+    pub device_name: String, // Responder's device name
+    pub public_key: Vec<u8>, // Responder's X25519 public key for ECDH
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -61,6 +64,16 @@ pub struct ClipboardMessage {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HeartbeatMessage {
     pub device_id: String,
+    pub timestamp: DateTime<Utc>,
+}
+
+/// Broadcast message to announce device name to all peers.
+/// This allows peers to update their discovered devices list when
+/// a device's name changes in settings.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeviceAnnounceMessage {
+    pub peer_id: String,
+    pub device_name: String,
     pub timestamp: DateTime<Utc>,
 }
 
