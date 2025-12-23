@@ -844,6 +844,155 @@ function initSmoothScroll() {
 }
 
 // =============================================================================
+// Screenshot Showcase
+// =============================================================================
+
+/**
+ * Screenshot gallery with random mixing of desktop/mobile pairs
+ */
+class ScreenshotShowcase {
+  constructor() {
+    this.desktopImg = document.getElementById('screenshot-desktop-img');
+    this.mobileImg = document.getElementById('screenshot-mobile-img');
+    this.dots = document.querySelectorAll('.screenshot-dot');
+
+    if (!this.desktopImg || !this.mobileImg) return;
+
+    // Screenshot paths
+    this.desktopScreenshots = [
+      'assets/screenshots/desktop/Screenshot_Desktop_1.png',
+      'assets/screenshots/desktop/Screenshot_Desktop_2.png',
+      'assets/screenshots/desktop/Screenshot_Desktop_3.png',
+      'assets/screenshots/desktop/Screenshot_Desktop_4.png',
+      'assets/screenshots/desktop/Screenshot_Desktop_5.png',
+    ];
+
+    this.mobileScreenshots = [
+      'assets/screenshots/mobile/Screenshot_Mobile_1.jpg',
+      'assets/screenshots/mobile/Screenshot_Mobile_2.jpg',
+      'assets/screenshots/mobile/Screenshot_Mobile_3.jpg',
+      'assets/screenshots/mobile/Screenshot_Mobile_4.jpg',
+      'assets/screenshots/mobile/Screenshot_Mobile_5.jpg',
+    ];
+
+    // Create shuffled pairs for variety
+    this.pairs = this.createShuffledPairs();
+    this.currentIndex = 0;
+    this.autoRotateInterval = null;
+    this.isPaused = false;
+
+    this.init();
+  }
+
+  /**
+   * Creates pairs of desktop+mobile screenshots with interesting mixing
+   * Instead of always matching 1-1, 2-2, we mix them up for visual variety
+   */
+  createShuffledPairs() {
+    const pairs = [];
+    const mobileOrder = [...Array(5).keys()]; // [0,1,2,3,4]
+
+    // Shuffle mobile order for interesting combinations
+    for (let i = mobileOrder.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [mobileOrder[i], mobileOrder[j]] = [mobileOrder[j], mobileOrder[i]];
+    }
+
+    for (let i = 0; i < 5; i++) {
+      pairs.push({
+        desktop: this.desktopScreenshots[i],
+        mobile: this.mobileScreenshots[mobileOrder[i]],
+      });
+    }
+
+    // Shuffle the final pairs array too
+    for (let i = pairs.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pairs[i], pairs[j]] = [pairs[j], pairs[i]];
+    }
+
+    return pairs;
+  }
+
+  init() {
+    // Show random starting pair
+    this.showPair(0);
+
+    // Bind dot click events
+    this.dots.forEach((dot, index) => {
+      dot.addEventListener('click', () => {
+        this.showPair(index);
+        this.resetAutoRotate();
+      });
+    });
+
+    // Start auto-rotation
+    this.startAutoRotate();
+
+    // Pause on hover
+    const showcase = document.querySelector('.device-showcase');
+    if (showcase) {
+      showcase.addEventListener('mouseenter', () => {
+        this.isPaused = true;
+      });
+      showcase.addEventListener('mouseleave', () => {
+        this.isPaused = false;
+      });
+    }
+  }
+
+  showPair(index) {
+    if (index < 0 || index >= this.pairs.length) return;
+
+    const pair = this.pairs[index];
+    this.currentIndex = index;
+
+    // Smooth transition - fade out
+    this.desktopImg.classList.add('transitioning');
+    this.mobileImg.classList.add('transitioning');
+
+    setTimeout(() => {
+      // Update sources
+      this.desktopImg.src = pair.desktop;
+      this.mobileImg.src = pair.mobile;
+
+      // Fade in after a brief moment
+      setTimeout(() => {
+        this.desktopImg.classList.remove('transitioning');
+        this.mobileImg.classList.remove('transitioning');
+      }, 50);
+    }, 300);
+
+    // Update dots
+    this.dots.forEach((dot, i) => {
+      dot.classList.toggle('active', i === index);
+      dot.classList.toggle('auto-active', i === index);
+    });
+  }
+
+  startAutoRotate() {
+    this.autoRotateInterval = setInterval(() => {
+      if (!this.isPaused) {
+        const nextIndex = (this.currentIndex + 1) % this.pairs.length;
+        this.showPair(nextIndex);
+      }
+    }, 5000); // Change every 5 seconds
+  }
+
+  resetAutoRotate() {
+    clearInterval(this.autoRotateInterval);
+    this.startAutoRotate();
+  }
+}
+
+/**
+ * Initialize screenshot showcase
+ */
+function initScreenshotShowcase() {
+  new ScreenshotShowcase();
+}
+
+// =============================================================================
 // Initialization
 // =============================================================================
 
@@ -855,4 +1004,5 @@ document.addEventListener('DOMContentLoaded', () => {
   initNavbarScroll();
   initScrollAnimations();
   initSmoothScroll();
+  initScreenshotShowcase();
 });

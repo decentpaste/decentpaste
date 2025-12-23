@@ -745,3 +745,275 @@ button:focus-visible {
     -webkit-text-fill-color: #0d9488;
   }
 }
+
+/* =============================================================================
+   Screenshot Showcase - Device Mockups
+   ============================================================================= */
+
+.device-showcase {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 2rem;
+  position: relative;
+  min-height: 400px;
+  perspective: 1000px;
+}
+
+/* Desktop Device */
+.device-desktop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: float-desktop 6s ease-in-out infinite;
+  position: relative;
+  z-index: 1;
+}
+
+.device-frame-desktop {
+  border-radius: 0;
+  overflow: visible;
+  width: 380px;
+  box-shadow:
+    0 25px 60px -12px rgba(0, 0, 0, 0.6),
+    0 0 80px -20px rgba(20, 184, 166, 0.15);
+  transform: rotateY(-5deg) rotateX(2deg);
+  transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.device-frame-desktop img {
+  border-radius: 0;
+  display: block;
+}
+
+.device-showcase:hover .device-frame-desktop {
+  transform: rotateY(-2deg) rotateX(1deg);
+}
+
+/* Screenshot Containers */
+.screenshot-container {
+  overflow: visible;
+}
+
+.screenshot-desktop {
+  height: auto;
+  background: transparent;
+  overflow: visible;
+}
+
+.screenshot-mobile {
+  background: #0a0a0b;
+  border-radius: 20px;
+  height: 320px;
+}
+
+.screenshot-container img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+  transition: opacity 0.5s ease, transform 0.5s ease;
+  display: block;
+}
+
+.screenshot-container img.transitioning {
+  opacity: 0;
+  transform: scale(1.02);
+}
+
+/* Desktop Reflection - subtle glow beneath */
+.device-reflection {
+  width: 70%;
+  height: 30px;
+  margin: 0 auto;
+  margin-top: 10px;
+  background: radial-gradient(ellipse at center, rgba(20, 184, 166, 0.15) 0%, transparent 70%);
+  filter: blur(8px);
+}
+
+/* Mobile Device */
+.device-mobile {
+  animation: float-mobile 5s ease-in-out infinite;
+  animation-delay: -1s;
+  position: relative;
+  z-index: 2;
+  margin-left: -40px;
+  margin-bottom: 20px;
+}
+
+.device-frame-mobile {
+  background: linear-gradient(145deg, #1a1a1d 0%, #0d0d0f 100%);
+  border-radius: 28px;
+  padding: 8px;
+  box-shadow:
+    0 25px 50px -12px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  width: 160px;
+  transform: rotateY(8deg) rotateX(-2deg);
+  transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+.device-showcase:hover .device-frame-mobile {
+  transform: rotateY(4deg) rotateX(-1deg);
+}
+
+/* Phone Notch */
+.phone-notch {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 50px;
+  height: 18px;
+  background: #0a0a0b;
+  border-radius: 10px;
+  z-index: 10;
+}
+
+.phone-notch::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  width: 6px;
+  height: 6px;
+  background: linear-gradient(135deg, #1a1a2e 0%, #0d0d15 100%);
+  border-radius: 50%;
+  box-shadow: inset 0 0 2px rgba(20, 184, 166, 0.3);
+}
+
+/* Home Indicator */
+.phone-home-indicator {
+  width: 80px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+  margin: 8px auto 4px;
+}
+
+/* Float Animations */
+@keyframes float-desktop {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
+@keyframes float-mobile {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-18px);
+  }
+}
+
+/* Screenshot Navigation Dots */
+.screenshot-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.screenshot-dot:hover {
+  background: rgba(255, 255, 255, 0.4);
+  transform: scale(1.2);
+}
+
+.screenshot-dot.active {
+  background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
+  box-shadow: 0 0 12px rgba(20, 184, 166, 0.5);
+  transform: scale(1.2);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .device-showcase {
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    min-height: auto;
+  }
+
+  .device-desktop {
+    transform: scale(0.85);
+    margin-bottom: -1rem;
+  }
+
+  .device-frame-desktop {
+    width: 320px;
+    transform: none;
+  }
+
+  .device-mobile {
+    margin-left: 0;
+    margin-bottom: 0;
+    transform: scale(0.95);
+  }
+
+  .device-frame-mobile {
+    transform: none;
+  }
+
+  .device-showcase:hover .device-frame-desktop,
+  .device-showcase:hover .device-frame-mobile {
+    transform: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .device-desktop {
+    transform: scale(0.7);
+  }
+
+  .device-mobile {
+    transform: scale(0.85);
+  }
+
+  .device-frame-desktop {
+    width: 300px;
+  }
+}
+
+/* Glow effect on hover for the whole showcase */
+.device-showcase::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 500px;
+  height: 400px;
+  background: radial-gradient(ellipse, rgba(20, 184, 166, 0.08) 0%, transparent 70%);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+
+.device-showcase:hover::before {
+  opacity: 1;
+}
+
+/* Auto-rotate indicator animation */
+.screenshot-dot.auto-active {
+  animation: dot-pulse 4s ease-in-out infinite;
+}
+
+@keyframes dot-pulse {
+  0%, 100% {
+    box-shadow: 0 0 12px rgba(20, 184, 166, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(20, 184, 166, 0.8);
+  }
+}
