@@ -745,3 +745,358 @@ button:focus-visible {
     -webkit-text-fill-color: #0d9488;
   }
 }
+
+/* =============================================================================
+   Screenshot Showcase - Floating Glow Design
+   ============================================================================= */
+
+.device-showcase {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0;
+  position: relative;
+  min-height: 450px;
+  perspective: 1200px;
+}
+
+/* Desktop Screenshot - Floating with Gradient Glow Aura */
+.device-desktop {
+  position: relative;
+  z-index: 1;
+  animation: float-desktop 6s ease-in-out infinite;
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s ease;
+}
+
+/* Gradient glow aura behind desktop */
+.device-desktop::before {
+  content: '';
+  position: absolute;
+  inset: -20px;
+  background: conic-gradient(
+    from 180deg at 50% 50%,
+    rgba(20, 184, 166, 0.4) 0deg,
+    rgba(249, 115, 22, 0.3) 120deg,
+    rgba(20, 184, 166, 0.4) 240deg,
+    rgba(249, 115, 22, 0.3) 360deg
+  );
+  border-radius: 16px;
+  filter: blur(40px);
+  opacity: 0.6;
+  z-index: -1;
+  animation: glow-rotate 8s linear infinite;
+}
+
+@keyframes glow-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.device-frame-desktop {
+  position: relative;
+  width: 400px;
+  transform: rotateY(-3deg) rotateX(2deg);
+  transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.device-frame-desktop img {
+  display: block;
+  width: 100%;
+  border-radius: 10px;
+  box-shadow:
+    0 30px 60px -15px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+/* Interactive hover - desktop gets focus */
+.device-desktop:hover ~ .device-mobile {
+  transform: scale(0.9);
+  opacity: 0.7;
+}
+
+.device-desktop:hover .device-frame-desktop {
+  transform: rotateY(0deg) rotateX(0deg) scale(1.08);
+}
+
+.device-desktop:hover::before {
+  opacity: 0.9;
+}
+
+/* Screenshot Containers */
+.screenshot-container {
+  overflow: visible;
+}
+
+.screenshot-desktop {
+  height: auto;
+  background: transparent;
+}
+
+.screenshot-mobile {
+  background: #0a0a0b;
+  border-radius: 26px;
+  height: 340px;
+  overflow: hidden;
+}
+
+.screenshot-mobile img {
+  border-radius: 26px;
+}
+
+.screenshot-container img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+.screenshot-container img.transitioning {
+  opacity: 0;
+  transform: scale(1.02);
+}
+
+/* Desktop Reflection - gradient light beneath */
+.device-reflection {
+  width: 60%;
+  height: 40px;
+  margin: 0 auto;
+  margin-top: 15px;
+  background: radial-gradient(ellipse at center, rgba(20, 184, 166, 0.2) 0%, transparent 70%);
+  filter: blur(12px);
+}
+
+/* Mobile Device - Sleek Phone Frame */
+.device-mobile {
+  animation: float-mobile 5s ease-in-out infinite;
+  animation-delay: -1.5s;
+  position: relative;
+  z-index: 2;
+  margin-left: -50px;
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s ease;
+}
+
+.device-frame-mobile {
+  position: relative;
+  background: linear-gradient(145deg, #2a2a2d 0%, #151517 100%);
+  border-radius: 36px;
+  padding: 10px;
+  box-shadow:
+    0 30px 60px -15px rgba(0, 0, 0, 0.7),
+    0 0 0 1px rgba(255, 255, 255, 0.1),
+    inset 0 1px 1px rgba(255, 255, 255, 0.1);
+  width: 175px;
+  transform: rotateY(5deg) rotateX(-2deg);
+  transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Subtle glow on mobile too */
+.device-frame-mobile::before {
+  content: '';
+  position: absolute;
+  inset: -15px;
+  background: radial-gradient(ellipse at center, rgba(249, 115, 22, 0.2) 0%, transparent 70%);
+  filter: blur(25px);
+  z-index: -1;
+}
+
+/* Interactive hover - mobile gets focus */
+.device-mobile:hover .device-frame-mobile {
+  transform: rotateY(0deg) rotateX(0deg) scale(1.15);
+}
+
+.device-mobile:hover::before {
+  opacity: 0.9;
+}
+
+/* When mobile is hovered, shrink desktop using :has() */
+.device-showcase:has(.device-mobile:hover) .device-desktop {
+  transform: scale(0.9);
+  opacity: 0.7;
+}
+
+.device-showcase:has(.device-mobile:hover) .device-desktop::before {
+  opacity: 0.3;
+}
+
+/* Dynamic Island style notch */
+.phone-notch {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 70px;
+  height: 20px;
+  background: #000;
+  border-radius: 12px;
+  z-index: 10;
+  box-shadow: inset 0 0 3px rgba(0, 0, 0, 0.8);
+}
+
+/* Camera dot in notch */
+.phone-notch::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  width: 6px;
+  height: 6px;
+  background: radial-gradient(circle, #1a1a2e 40%, #0a0a0f 100%);
+  border-radius: 50%;
+  box-shadow: 0 0 3px rgba(20, 184, 166, 0.4);
+}
+
+/* Home Indicator */
+.phone-home-indicator {
+  width: 80px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+  margin: 8px auto 4px;
+}
+
+/* Float Animations */
+@keyframes float-desktop {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
+@keyframes float-mobile {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-18px);
+  }
+}
+
+/* Screenshot Navigation Dots */
+.screenshot-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.screenshot-dot:hover {
+  background: rgba(255, 255, 255, 0.4);
+  transform: scale(1.2);
+}
+
+.screenshot-dot.active {
+  background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
+  box-shadow: 0 0 12px rgba(20, 184, 166, 0.5);
+  transform: scale(1.2);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .device-showcase {
+    flex-direction: column;
+    align-items: center;
+    gap: 2rem;
+    min-height: auto;
+    padding: 1rem 0;
+  }
+
+  .device-desktop {
+    transform: scale(0.9);
+  }
+
+  .device-desktop::before {
+    filter: blur(30px);
+    opacity: 0.5;
+  }
+
+  .device-frame-desktop {
+    width: 340px;
+    transform: none;
+  }
+
+  .device-mobile {
+    margin-left: 0;
+    margin-top: -2rem;
+  }
+
+  .device-frame-mobile {
+    transform: none;
+    width: 150px;
+  }
+
+  .screenshot-mobile {
+    height: 300px;
+  }
+
+  .device-showcase:hover .device-frame-desktop,
+  .device-showcase:hover .device-frame-mobile {
+    transform: scale(1.01);
+  }
+
+  .device-reflection {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .device-desktop {
+    transform: scale(0.75);
+  }
+
+  .device-frame-desktop {
+    width: 320px;
+  }
+
+  .device-mobile {
+    transform: scale(0.9);
+  }
+
+  .device-frame-mobile {
+    width: 140px;
+  }
+
+  .screenshot-mobile {
+    height: 280px;
+  }
+}
+
+/* Glow effect on hover for the whole showcase */
+.device-showcase::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 500px;
+  height: 400px;
+  background: radial-gradient(ellipse, rgba(20, 184, 166, 0.08) 0%, transparent 70%);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+
+.device-showcase:hover::before {
+  opacity: 1;
+}
+
+/* Auto-rotate indicator animation */
+.screenshot-dot.auto-active {
+  animation: dot-pulse 4s ease-in-out infinite;
+}
+
+@keyframes dot-pulse {
+  0%, 100% {
+    box-shadow: 0 0 12px rgba(20, 184, 166, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(20, 184, 166, 0.8);
+  }
+}
