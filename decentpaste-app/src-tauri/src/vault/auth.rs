@@ -11,10 +11,11 @@ use serde::{Deserialize, Serialize};
 /// - `NotSetup` → `Unlocked` (after first-time setup with PIN)
 /// - `Unlocked` → `Locked` (when user locks or app backgrounds)
 /// - `Locked` → `Unlocked` (after successful PIN auth)
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub enum VaultStatus {
     /// Vault has not been created yet (first-time user)
+    #[default]
     NotSetup,
     /// Vault exists but is locked (requires authentication)
     Locked,
@@ -22,24 +23,13 @@ pub enum VaultStatus {
     Unlocked,
 }
 
-impl Default for VaultStatus {
-    fn default() -> Self {
-        Self::NotSetup
-    }
-}
-
 /// Authentication method preference for unlocking the vault.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AuthMethod {
     /// PIN-based authentication (4-8 digits)
+    #[default]
     Pin,
-}
-
-impl Default for AuthMethod {
-    fn default() -> Self {
-        Self::Pin
-    }
 }
 
 impl std::fmt::Display for VaultStatus {

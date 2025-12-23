@@ -57,7 +57,7 @@ pub fn get_or_create_salt() -> Result<[u8; SALT_SIZE]> {
     OsRng.fill_bytes(&mut salt);
 
     // Save to disk
-    std::fs::write(&path, &salt)?;
+    std::fs::write(&path, salt)?;
 
     // Set restrictive permissions on Unix (salt is sensitive)
     #[cfg(unix)]

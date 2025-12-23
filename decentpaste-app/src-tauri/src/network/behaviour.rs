@@ -166,12 +166,9 @@ impl DecentPasteBehaviour {
         message: &ProtocolMessage,
     ) -> Result<gossipsub::MessageId, gossipsub::PublishError> {
         let topic = gossipsub::IdentTopic::new(GOSSIPSUB_TOPIC);
-        let data = message.to_bytes().map_err(|e| {
-            gossipsub::PublishError::TransformFailed(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                e,
-            ))
-        })?;
+        let data = message
+            .to_bytes()
+            .map_err(|e| gossipsub::PublishError::TransformFailed(std::io::Error::other(e)))?;
         self.gossipsub.publish(topic, data)
     }
 }

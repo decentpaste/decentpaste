@@ -17,7 +17,9 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use clipboard::{ClipboardChange, ClipboardEntry, ClipboardMonitor, SyncManager};
 use network::{ClipboardMessage, NetworkCommand, NetworkEvent, NetworkManager};
-use state::{AppState, PendingClipboard};
+use state::AppState;
+#[cfg(any(target_os = "android", target_os = "ios"))]
+use state::PendingClipboard;
 use storage::{init_data_dir, load_settings};
 use vault::{VaultManager, VaultStatus};
 
@@ -199,92 +201,52 @@ pub fn run() {
                     });
                 }
 
+                // Mobile: Flush vault when app goes to background (safety net)
+                // NOTE: With flush-on-write pattern, data should already be persisted.
+                // This is a safety net in case any mutation was missed.
                 #[cfg(any(target_os = "android", target_os = "ios"))]
                 tauri::RunEvent::WindowEvent {
                     event: tauri::WindowEvent::Focused(false),
                     ..
                 } => {
-                    info!("App lost focus (going to background) - flushing vault");
-                    let state = app_handle.state::<AppState>();
-                    let is_foreground = state.is_foreground.clone();
-                    let vault_manager = state.vault_manager.clone();
-                    let settings = state.settings.clone();
-                    let clipboard_history = state.clipboard_history.clone();
-                    let paired_peers = state.paired_peers.clone();
+                    info!("App lost focus (going to background) - safety flush");
+                    let app_handle_clone = app_handle.clone();
 
                     tauri::async_runtime::spawn(async move {
+                        let state = app_handle_clone.state::<AppState>();
+
                         // Mark as background
                         {
-                            let mut fg = is_foreground.write().await;
+                            let mut fg = state.is_foreground.write().await;
                             *fg = false;
                         }
 
-                        // Flush vault data before going to background
-                        let manager = vault_manager.read().await;
-                        if let Some(ref manager) = *manager {
-                            // Check if we should save clipboard history
-                            let keep_history = settings.read().await.keep_history;
-                            if keep_history {
-                                let history = clipboard_history.read().await;
-                                if let Err(e) = manager.set_clipboard_history(&history) {
-                                    error!("Failed to flush clipboard history: {}", e);
-                                }
-                            }
-
-                            // Always save paired peers
-                            let peers = paired_peers.read().await;
-                            if let Err(e) = manager.set_paired_peers(&peers) {
-                                error!("Failed to flush paired peers: {}", e);
-                            }
-
-                            // Commit to disk
-                            if let Err(e) = manager.flush() {
-                                error!("Failed to flush vault to disk: {}", e);
-                            } else {
-                                info!("Vault flushed before backgrounding");
-                            }
+                        // Safety net flush - data should already be persisted via flush-on-write
+                        if let Err(e) = state.flush_all_to_vault().await {
+                            error!("Failed to flush vault on background: {}", e);
+                        } else {
+                            info!("Vault safety-flushed before backgrounding");
                         }
                     });
                 }
 
-                // Flush vault on app exit (desktop)
+                // Desktop & Mobile: Flush vault on app exit (safety net)
+                // NOTE: With flush-on-write pattern, data should already be persisted.
+                // This blocking flush ensures any missed mutations are saved before exit.
+                // Works on: macOS, Windows, Linux, iOS, Android
                 tauri::RunEvent::ExitRequested { .. } => {
-                    info!("App exit requested - flushing vault");
-                    let state = app_handle.state::<AppState>();
-
-                    // Use blocking runtime for synchronous shutdown
-                    let vault_manager = state.vault_manager.clone();
-                    let settings = state.settings.clone();
-                    let clipboard_history = state.clipboard_history.clone();
-                    let paired_peers = state.paired_peers.clone();
+                    info!("App exit requested - safety flush");
+                    let app_handle_clone = app_handle.clone();
 
                     // Spawn blocking task to ensure flush completes before exit
                     std::thread::spawn(move || {
                         let rt = tokio::runtime::Runtime::new().unwrap();
                         rt.block_on(async {
-                            let manager = vault_manager.read().await;
-                            if let Some(ref manager) = *manager {
-                                // Check if we should save clipboard history
-                                let keep_history = settings.read().await.keep_history;
-                                if keep_history {
-                                    let history = clipboard_history.read().await;
-                                    if let Err(e) = manager.set_clipboard_history(&history) {
-                                        error!("Failed to flush clipboard history on exit: {}", e);
-                                    }
-                                }
-
-                                // Always save paired peers
-                                let peers = paired_peers.read().await;
-                                if let Err(e) = manager.set_paired_peers(&peers) {
-                                    error!("Failed to flush paired peers on exit: {}", e);
-                                }
-
-                                // Commit to disk
-                                if let Err(e) = manager.flush() {
-                                    error!("Failed to flush vault on exit: {}", e);
-                                } else {
-                                    info!("Vault flushed before exit");
-                                }
+                            let state = app_handle_clone.state::<AppState>();
+                            if let Err(e) = state.flush_all_to_vault().await {
+                                error!("Failed to flush vault on exit: {}", e);
+                            } else {
+                                info!("Vault safety-flushed before exit");
                             }
                         });
                     })
@@ -325,7 +287,7 @@ async fn initialize_app(
     // Update state and emit event
     {
         let mut status = state.vault_status.write().await;
-        *status = vault_status.clone();
+        *status = vault_status;
     }
     let _ = app_handle.emit("vault-status", &vault_status);
 
@@ -560,18 +522,12 @@ pub async fn start_network_services(
                         }
                     }
 
-                    // Update paired peers and save if changed
+                    // Update paired peers (release lock before flushing to avoid deadlock)
                     let updated_paired = {
                         let mut peers = state.paired_peers.write().await;
                         if let Some(peer) = peers.iter_mut().find(|p| p.peer_id == peer_id) {
                             if peer.device_name != device_name {
                                 peer.device_name = device_name.clone();
-                                // Save updated paired peers to vault
-                                let vault_manager = state.vault_manager.read().await;
-                                if let Some(ref manager) = *vault_manager {
-                                    let _ = manager.set_paired_peers(&peers);
-                                    let _ = manager.flush();
-                                }
                                 true
                             } else {
                                 false
@@ -580,6 +536,13 @@ pub async fn start_network_services(
                             false
                         }
                     };
+
+                    // Flush-on-write: persist paired peers immediately
+                    if updated_paired {
+                        if let Err(e) = state.flush_paired_peers().await {
+                            warn!("Failed to flush paired peers after name update: {}", e);
+                        }
+                    }
 
                     // Emit event for frontend to update
                     let _ = app_handle_network.emit(
@@ -808,16 +771,21 @@ pub async fn start_network_services(
                         last_seen: Some(Utc::now()),
                     };
 
-                    {
+                    // Add to paired peers (release lock before flushing to avoid deadlock)
+                    let added = {
                         let mut peers = state.paired_peers.write().await;
                         if !peers.iter().any(|p| p.peer_id == peer_id) {
                             peers.push(paired_peer);
-                            // Save to vault instead of plaintext
-                            let vault_manager = state.vault_manager.read().await;
-                            if let Some(ref manager) = *vault_manager {
-                                let _ = manager.set_paired_peers(&peers);
-                                let _ = manager.flush();
-                            }
+                            true
+                        } else {
+                            false
+                        }
+                    };
+
+                    // Flush-on-write: persist paired peers immediately
+                    if added {
+                        if let Err(e) = state.flush_paired_peers().await {
+                            warn!("Failed to flush paired peers: {}", e);
                         }
                     }
 

@@ -1,8 +1,6 @@
 use chrono::{DateTime, Utc};
-use rand::prelude::*;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum PairingState {
@@ -39,11 +37,6 @@ impl PairingSession {
         }
     }
 
-    pub fn with_pin(mut self, pin: String) -> Self {
-        self.pin = Some(pin);
-        self
-    }
-
     pub fn with_peer_name(mut self, name: String) -> Self {
         self.peer_name = Some(name);
         self
@@ -66,17 +59,6 @@ pub fn generate_pin() -> String {
     format!("{:06}", pin)
 }
 
-pub fn create_pin_hash(pin: &str) -> Vec<u8> {
-    let mut hasher = Sha256::new();
-    hasher.update(pin.as_bytes());
-    hasher.finalize().to_vec()
-}
-
-pub fn verify_pin_hash(pin: &str, expected_hash: &[u8]) -> bool {
-    let computed_hash = create_pin_hash(pin);
-    computed_hash == expected_hash
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -86,13 +68,5 @@ mod tests {
         let pin = generate_pin();
         assert_eq!(pin.len(), 6);
         assert!(pin.chars().all(|c| c.is_ascii_digit()));
-    }
-
-    #[test]
-    fn test_pin_hash_verification() {
-        let pin = "123456";
-        let hash = create_pin_hash(pin);
-        assert!(verify_pin_hash(pin, &hash));
-        assert!(!verify_pin_hash("654321", &hash));
     }
 }

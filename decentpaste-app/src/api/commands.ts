@@ -165,8 +165,9 @@ export async function resetVault(): Promise<void> {
 }
 
 /**
- * Flush current app state to the vault.
- * Called before backgrounding on mobile or periodically to prevent data loss.
+ * Flush current app state to the vault (safety net).
+ * With flush-on-write pattern, data is already persisted on mutation.
+ * This is called before backgrounding on mobile as an extra safety measure.
  */
 export async function flushVault(): Promise<void> {
   return invoke('flush_vault');

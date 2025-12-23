@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 use tauri::State;
-use tokio::sync::mpsc;
 
 use crate::clipboard::ClipboardEntry;
 use crate::error::{DecentPasteError, Result};
@@ -9,7 +8,7 @@ use crate::network::{DiscoveredPeer, NetworkCommand, NetworkStatus};
 use crate::security::{generate_pin, PairingSession, PairingState};
 use crate::state::AppState;
 use crate::storage::{save_settings, AppSettings, PairedPeer};
-use tracing::debug;
+use tracing::{debug, warn};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeviceInfo {
@@ -154,12 +153,13 @@ pub async fn remove_paired_peer(
             .map(|p| (p.peer_id.clone(), p.device_name.clone()))
     };
 
-    // Remove from paired list
+    // Remove from paired list and flush to vault immediately
     {
         let mut peers = state.paired_peers.write().await;
         peers.retain(|p| p.peer_id != peer_id);
-        crate::storage::save_paired_peers(&peers)?;
     }
+    // Flush-on-write: persist immediately to prevent data loss
+    state.flush_paired_peers().await?;
 
     // Emit directly using the info we have from the paired peer
     // This ensures the peer appears in discovered list with correct device name
@@ -290,7 +290,7 @@ pub async fn respond_to_pairing(
                 let device_identity = state.device_identity.read().await;
                 let identity = device_identity
                     .as_ref()
-                    .ok_or_else(|| DecentPasteError::NotInitialized)?;
+                    .ok_or(DecentPasteError::NotInitialized)?;
 
                 if tx
                     .send(NetworkCommand::SendPairingChallenge {
@@ -362,7 +362,7 @@ pub async fn confirm_pairing(
         let device_identity = state.device_identity.read().await;
         let identity = device_identity
             .as_ref()
-            .ok_or_else(|| DecentPasteError::NotInitialized)?;
+            .ok_or(DecentPasteError::NotInitialized)?;
 
         // Get the peer's public key from the session
         let peer_public_key = {
@@ -436,7 +436,7 @@ pub async fn get_clipboard_history(
 #[tauri::command]
 pub async fn set_clipboard(app_handle: AppHandle, content: String) -> Result<()> {
     crate::clipboard::monitor::set_clipboard_content(&app_handle, &content)
-        .map_err(|e| DecentPasteError::Clipboard(e))
+        .map_err(DecentPasteError::Clipboard)
 }
 
 /// Manually share clipboard content with paired peers.
@@ -467,7 +467,7 @@ pub async fn share_clipboard_content(
     let device_identity = state.device_identity.read().await;
     let identity = device_identity
         .as_ref()
-        .ok_or_else(|| DecentPasteError::NotInitialized)?;
+        .ok_or(DecentPasteError::NotInitialized)?;
 
     // Check if we have any paired peers
     let paired_peers = state.paired_peers.read().await;
@@ -517,8 +517,12 @@ pub async fn share_clipboard_content(
 
 #[tauri::command]
 pub async fn clear_clipboard_history(state: State<'_, AppState>) -> Result<()> {
-    let mut history = state.clipboard_history.write().await;
-    history.clear();
+    {
+        let mut history = state.clipboard_history.write().await;
+        history.clear();
+    }
+    // Flush-on-write: persist cleared history to vault immediately
+    state.flush_clipboard_history().await?;
     Ok(())
 }
 
@@ -553,14 +557,17 @@ pub async fn update_settings(state: State<'_, AppState>, settings: AppSettings) 
             old_device_name, settings.device_name
         );
 
-        // Also update the device identity
+        // Update the device identity in memory
         {
             let mut identity = state.device_identity.write().await;
             if let Some(ref mut id) = *identity {
                 id.device_name = settings.device_name.clone();
-                // Save updated identity (ignore errors as settings already saved)
-                let _ = crate::storage::save_device_identity(id);
             }
+        }
+
+        // Flush-on-write: persist identity to vault immediately
+        if let Err(e) = state.flush_device_identity().await {
+            warn!("Failed to flush device identity to vault: {}", e);
         }
 
         // Broadcast the name change to all peers
@@ -629,7 +636,7 @@ pub async fn get_vault_status(state: State<'_, AppState>) -> Result<VaultStatus>
 
     // Vault exists - check if it's unlocked
     let manager = state.vault_manager.read().await;
-    if manager.as_ref().map_or(false, |m| m.is_open()) {
+    if manager.as_ref().is_some_and(|m| m.is_open()) {
         Ok(VaultStatus::Unlocked)
     } else {
         Ok(VaultStatus::Locked)
@@ -781,25 +788,8 @@ pub async fn lock_vault(app_handle: AppHandle, state: State<'_, AppState>) -> Re
 
     info!("Locking vault");
 
-    // Flush current state to vault before locking
-    {
-        let manager = state.vault_manager.read().await;
-        if let Some(ref manager) = *manager {
-            // Save clipboard history if keep_history is enabled
-            let settings = state.settings.read().await;
-            if settings.keep_history {
-                let history = state.clipboard_history.read().await;
-                let _ = manager.set_clipboard_history(&history);
-            }
-
-            // Save paired peers
-            let peers = state.paired_peers.read().await;
-            let _ = manager.set_paired_peers(&peers);
-
-            // Flush to disk
-            let _ = manager.flush();
-        }
-    }
+    // Flush current state to vault before locking (safety net - data should already be persisted)
+    let _ = state.flush_all_to_vault().await;
 
     // Lock the vault (clears encryption key from memory)
     {
@@ -878,30 +868,8 @@ pub async fn reset_vault(app_handle: AppHandle, state: State<'_, AppState>) -> R
 /// Flush current app state to the vault.
 ///
 /// Saves clipboard history and paired peers to the encrypted vault.
-/// Called before backgrounding on mobile or periodically to prevent data loss.
+/// With flush-on-write pattern, this is mainly a safety net.
 #[tauri::command]
 pub async fn flush_vault(state: State<'_, AppState>) -> Result<()> {
-    use tracing::debug;
-
-    let manager = state.vault_manager.read().await;
-    if let Some(ref manager) = *manager {
-        // Save clipboard history if keep_history is enabled
-        let settings = state.settings.read().await;
-        if settings.keep_history {
-            let history = state.clipboard_history.read().await;
-            manager.set_clipboard_history(&history)?;
-        }
-
-        // Save paired peers
-        let peers = state.paired_peers.read().await;
-        manager.set_paired_peers(&peers)?;
-
-        // Flush to disk
-        manager.flush()?;
-        debug!("Vault flushed successfully");
-        Ok(())
-    } else {
-        // Vault not open, nothing to flush
-        Ok(())
-    }
+    state.flush_all_to_vault().await
 }
