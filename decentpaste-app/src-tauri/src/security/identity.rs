@@ -1,5 +1,5 @@
 use chrono::Utc;
-use rand::rngs::OsRng;
+use aes_gcm::aead::OsRng;
 use uuid::Uuid;
 use x25519_dalek::{PublicKey, StaticSecret};
 
