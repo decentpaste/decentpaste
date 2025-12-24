@@ -76,6 +76,7 @@ Custom skills available via slash commands:
 
 - `/bump-version` - Updates version across all config files (package.json, Cargo.toml, tauri.conf.json, downloads.json)
 - `/android-release` - Builds, signs, and prepares Android APK/AAB for release
+- `/github-release` - Creates a GitHub release with auto-generated release notes from commits since the last tag
 
 ## Project Structure
 
