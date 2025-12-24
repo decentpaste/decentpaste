@@ -297,63 +297,46 @@ All UI is in `src/app.ts`. Key methods:
 
 ## Mobile Background Sync (Android & iOS)
 
-Both Android and iOS handle background clipboard sync similarly, but with platform-specific mechanisms.
+Both Android and iOS handle background clipboard sync identically.
 
 ### How it works (both platforms):
-1. When clipboard received in background → **silently queued** (no notification spam)
-2. When app opens → clipboard is automatically copied
-3. **Pairing requests** show notifications (essential - has timeout, requires user action)
+1. When app is backgrounded → network connections drop (OS suspends app)
+2. When app resumes → automatically reconnects to peers via `reconnect_peers`
+3. Clipboard only syncs when app is in foreground
+4. **Pairing requests** show notifications (requires user action, has timeout)
 
-### Platform Differences:
+### Platform Behavior (identical):
 
-| Aspect                | Android                                         | iOS                             |
-|-----------------------|-------------------------------------------------|---------------------------------|
-| Background execution  | Foreground Service keeps app alive indefinitely | App suspended after ~30 seconds |
-| Network in background | Stays connected via wake lock                   | Connections drop when suspended |
-| Notification          | Persistent "Syncing clipboard" notification     | No persistent notification      |
-
-### Android-Specific:
-- **Foreground Service** (`ClipboardSyncService.kt`) starts when app launches
-- Shows persistent notification: "Syncing clipboard in background"
-- Keeps libp2p network connections alive via wake lock
-- Permissions: `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_DATA_SYNC`, `POST_NOTIFICATIONS`, `WAKE_LOCK`
-
-### iOS-Specific:
-- No foreground service (iOS doesn't allow Android-style persistent background execution)
-- Network connections drop when app is suspended
-- When app resumes, automatically reconnects to peers
-- Background clipboard queuing works if clipboard arrives before app suspension
+| Aspect                | Android & iOS                    |
+|-----------------------|----------------------------------|
+| Background execution  | App suspended by OS              |
+| Network in background | Connections drop when suspended  |
+| Clipboard sync        | Only when app is in foreground   |
+| Pairing notifications | Yes (requires immediate action)  |
 
 ### Key files:
 - `src-tauri/src/lib.rs` - Rust-side background detection and pending clipboard handling
 - `src-tauri/src/state.rs` - `PendingClipboard` struct and `is_foreground` tracking
-- Android: `src-tauri/gen/android/app/src/main/java/com/decentpaste/application/ClipboardSyncService.kt`
+- `src/main.ts` - Visibility change listener that triggers `reconnect_peers`
+- Android: `src-tauri/gen/android/app/src/main/java/com/decentpaste/application/MainActivity.kt`
 - iOS: Uses standard Tauri lifecycle events (no native Swift code needed)
 
-### Clipboard Background Limitation (both platforms):
-Mobile OSes block clipboard access in background. When clipboard arrives while app is backgrounded:
-1. Content is silently queued in `AppState.pending_clipboard` (no notification)
-2. When app becomes visible, frontend calls `processPendingClipboard()` command
-3. Rust copies the pending content to clipboard and returns it
-4. Frontend shows toast: "Clipboard synced from {device}"
-
-**Pairing requests** are the exception - they DO show notifications because they require immediate user action and have a 5-minute timeout.
+### Permissions:
+- **Android**: `INTERNET`, `POST_NOTIFICATIONS` (for pairing requests only)
+- **iOS**: No special permissions needed
 
 ### Commands:
+- `reconnect_peers` - Called when app becomes visible to re-establish connections
 - `process_pending_clipboard` - Called by frontend when app becomes visible
   - Returns: `{ content: string, from_device: string }` or `null`
   - Copies pending clipboard and clears the queue
-
-### Events:
-- `clipboard-synced-from-background` - Emitted when pending clipboard is copied on resume
-  - Payload: `{ content: string, fromDevice: string }`
 
 ## Current Limitations
 
 - **Text only** - No image/file support yet
 - **Local network only** - mDNS doesn't work across networks
 - **Mobile clipboard (outgoing)** - Auto-monitoring disabled on Android/iOS; use "Share Clipboard" button
-- **Mobile clipboard (incoming)** - Can receive in background (Android: via foreground service; iOS: limited ~30s window), actual copy happens on resume due to OS restrictions
+- **Mobile clipboard (incoming)** - Only syncs when app is in foreground; connections drop when backgrounded
 
 ## Testing
 

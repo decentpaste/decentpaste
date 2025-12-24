@@ -381,11 +381,11 @@ pub struct AppSettings {
 }
 ```
 
-**Mobile Background Notifications (Android & iOS):**
-- **Clipboard sync**: Always silent - content is queued and copied when app resumes (no notification spam)
-- **Pairing requests**: Always show notification when backgrounded (requires user action, has timeout)
+**Mobile Background Behavior (Android & iOS):**
+- **Clipboard sync**: Only works when app is in foreground; connections drop when backgrounded
+- **Pairing requests**: Show notification when backgrounded (requires user action, has timeout)
 
-Note: On Android, a foreground service keeps the app alive indefinitely. On iOS, the app is suspended after ~30 seconds and network connections drop - clipboard queuing only works if content arrives before suspension.
+Note: Both Android and iOS suspend the app when backgrounded, dropping network connections. When the app resumes, it automatically reconnects to peers.
 
 #### `peers.rs` - Types & Data Directory
 
@@ -692,10 +692,11 @@ yarn build
 
 1. **Text-only clipboard**: Currently only supports text. Images/files could be added.
 2. **Local network only**: Uses mDNS, so devices must be on same network. Internet relay could be added.
-3. **Mobile clipboard**: On Android/iOS, automatic clipboard monitoring is not supported. Users must manually share
-   content using the "Share" button. Receiving clipboard from desktop works automatically (silently queued in background,
-   copied when app opens).
-4. **Device name in identify**: The identify protocol includes device name in `agent_version` field, which is
+3. **Mobile clipboard (outgoing)**: On Android/iOS, automatic clipboard monitoring is not supported. Users must manually
+   share content using the "Share" button.
+4. **Mobile clipboard (incoming)**: Clipboard only syncs when the app is in foreground. Network connections drop when
+   the app is backgrounded (same behavior on both Android and iOS).
+5. **Device name in identify**: The identify protocol includes device name in `agent_version` field, which is
    cosmetic (for human readability) but not ideal. Custom TXT records in mDNS would be better but more complex.
 
 ---
