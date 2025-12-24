@@ -1049,6 +1049,7 @@ class App {
               ${icon('refreshCw', 14)}
             </button>
           </div>
+          ${discoveredPeers.length > 0 ? `<p class="text-xs text-white/40 mb-2">Keep the app open on both devices to pair</p>` : ''}
           <div id="discovered-peers" class="space-y-2">
             ${discoveredPeers.length > 0 ? discoveredPeers.map((peer) => this.renderDiscoveredPeer(peer)).join('') : this.renderEmptyState('No devices found', 'Searching on local network...')}
           </div>
@@ -1713,7 +1714,8 @@ class App {
             ${icon('loader', 48, 'text-teal-400 animate-spin')}
           </div>
           <h3 class="text-lg font-semibold text-white mb-2 tracking-tight">Pairing...</h3>
-          <p class="text-white/50 mb-6">Waiting for ${safePeerName || 'device'} to respond</p>
+          <p class="text-white/50 mb-4">Waiting for ${safePeerName || 'device'} to respond</p>
+          <p class="text-xs text-white/30 mb-6">Make sure the app is open on the other device</p>
           <button id="btn-cancel-pairing" class="btn-secondary" style="touch-action: manipulation">
             Cancel
           </button>

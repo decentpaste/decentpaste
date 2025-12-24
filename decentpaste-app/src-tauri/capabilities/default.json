@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability for the main window",
+  "description": "Core capabilities for all platforms",
   "windows": ["main"],
   "permissions": [
     "core:default",
@@ -17,7 +17,6 @@
     "clipboard-manager:allow-read-text",
     "clipboard-manager:allow-write-text",
     "clipboard-manager:allow-clear",
-    "notification:default",
     "updater:default",
     "process:allow-restart",
     "stronghold:default"

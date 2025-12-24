@@ -1,8 +1,7 @@
 use aes_gcm::{
-    aead::{Aead, KeyInit, OsRng},
+    aead::{rand_core::RngCore, Aead, KeyInit, OsRng},
     Aes256Gcm, Nonce,
 };
-use rand::RngCore;
 use sha2::{Digest, Sha256};
 
 use crate::error::{DecentPasteError, Result};

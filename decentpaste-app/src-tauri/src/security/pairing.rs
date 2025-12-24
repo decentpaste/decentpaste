@@ -54,8 +54,8 @@ impl PairingSession {
 }
 
 pub fn generate_pin() -> String {
-    let mut rng = rand::thread_rng();
-    let pin: u32 = rng.gen_range(0..1_000_000);
+    let mut rng = rand::rng();
+    let pin: u32 = rng.random_range(0..1_000_000);
     format!("{:06}", pin)
 }
 

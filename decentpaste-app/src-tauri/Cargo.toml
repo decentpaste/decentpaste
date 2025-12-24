@@ -1,6 +1,6 @@
 [package]
 name = "decentpaste-app"
-version = "0.3.0"
+version = "0.3.2"
 description = "Cross-platform clipboard sharing over P2P network"
 authors = ["you"]
 edition = "2021"
@@ -17,10 +17,10 @@ tauri-build = { version = "2", features = [] }
 # Tauri
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-opener = "2"
-tauri-plugin-notification = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 tauri-plugin-stronghold = "2"
+tauri-plugin-clipboard-manager = "2"
 iota_stronghold = "2.1"  # For accessing snapshot encryption work factor
 
 # Serialization
@@ -43,13 +43,10 @@ libp2p = { version = "0.56", features = [
     "macros",
 ] }
 
-# Clipboard (cross-platform including mobile)
-tauri-plugin-clipboard-manager = "2"
-
 # Cryptography
 aes-gcm = "0.10"
 argon2 = "0.5"
-rand = "0.8"
+rand = "0.9"
 sha2 = "0.10"
 hex = "0.4"
 x25519-dalek = { version = "2", features = ["static_secrets"] }
@@ -68,3 +65,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # Async utilities
 futures = "0.3"
 async-trait = "0.1"
+
+# Desktop-only plugins (notifications don't work on mobile - network dies when backgrounded)
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-notification = "2"

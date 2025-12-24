@@ -4,7 +4,6 @@
 //! with Argon2id to derive the vault encryption key from the user's PIN.
 //! The salt is stored in `salt.bin` and persists across app restarts.
 
-use rand::rngs::OsRng;
 use rand::RngCore;
 use std::path::PathBuf;
 
@@ -54,7 +53,7 @@ pub fn get_or_create_salt() -> Result<[u8; SALT_SIZE]> {
 
     // Generate new cryptographically secure salt
     let mut salt = [0u8; SALT_SIZE];
-    OsRng.fill_bytes(&mut salt);
+    rand::rng().fill_bytes(&mut salt);
 
     // Save to disk
     std::fs::write(&path, salt)?;

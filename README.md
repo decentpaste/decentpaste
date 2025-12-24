@@ -105,7 +105,9 @@ yarn tauri build
 
 ### Mobile Usage
 
-On Android and iOS, automatic clipboard monitoring is disabled due to platform restrictions. Use the **"Share Clipboard"** button on the Dashboard to manually send clipboard content to paired devices.
+On Android and iOS:
+- **Clipboard sharing**: Automatic monitoring is disabled. Use the **"Share Clipboard"** button to manually send content.
+- **Pairing**: Keep the app open on both devices during pairing (background connections are not supported).
 
 ## Security
 
