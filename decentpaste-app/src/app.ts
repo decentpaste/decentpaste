@@ -42,6 +42,15 @@ class App {
       const vaultStatus = await commands.getVaultStatus();
       store.set('vaultStatus', vaultStatus);
 
+      // Always load settings (stored in plain JSON, not encrypted vault)
+      // This ensures device name is available for the lock screen
+      try {
+        const settings = await commands.getSettings();
+        store.set('settings', settings);
+      } catch (settingsError) {
+        console.error('Failed to load settings:', settingsError);
+      }
+
       // Only load full app data if vault is unlocked
       if (vaultStatus === 'Unlocked') {
         await this.loadInitialData();
@@ -644,12 +653,15 @@ class App {
     eventManager.on('clipboardReceived', (entry) => {
       store.addClipboardEntry(entry);
 
-      // Use native notification ONLY when minimized to system tray
-      // Otherwise use in-app toast (or skip if window just not focused)
-      if (store.get('isMinimizedToTray')) {
-        notifyClipboardReceived(entry.origin_device_name);
-      } else {
-        store.addToast(`Clipboard received from ${entry.origin_device_name}`, 'success');
+      // Only show notifications if enabled in settings
+      if (store.get('settings').show_notifications) {
+        // Use native notification ONLY when minimized to system tray
+        // Otherwise use in-app toast (or skip if window just not focused)
+        if (store.get('isMinimizedToTray')) {
+          notifyClipboardReceived(entry.origin_device_name);
+        } else {
+          store.addToast(`Clipboard received from ${entry.origin_device_name}`, 'success');
+        }
       }
     });
 
