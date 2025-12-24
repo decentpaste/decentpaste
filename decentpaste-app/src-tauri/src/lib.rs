@@ -582,31 +582,10 @@ pub async fn start_network_services(
                     sessions.retain(|s| !s.is_expired());
                     sessions.push(session);
 
-                    // Show notification for pairing request when app is backgrounded (mobile)
-                    // This is essential - pairing has a timeout and requires user action
-                    #[cfg(any(target_os = "android", target_os = "ios"))]
-                    {
-                        let is_foreground = *state.is_foreground.read().await;
-                        if !is_foreground {
-                            use tauri_plugin_notification::NotificationExt;
-                            info!(
-                                "App in background, showing notification for pairing request from {}",
-                                request.device_name
-                            );
-                            if let Err(e) = app_handle_network
-                                .notification()
-                                .builder()
-                                .title("Pairing Request")
-                                .body(&format!(
-                                    "{} wants to pair with this device",
-                                    request.device_name
-                                ))
-                                .show()
-                            {
-                                error!("Failed to show pairing notification: {}", e);
-                            }
-                        }
-                    }
+                    // Note: Background pairing notifications are not possible on mobile.
+                    // Mobile platforms (iOS/Android) terminate network connections when
+                    // the app is backgrounded, so pairing requests cannot be received.
+                    // Users must keep the app open on both devices during pairing.
 
                     let _ = app_handle_network.emit(
                         "pairing-request",

@@ -383,9 +383,9 @@ pub struct AppSettings {
 
 **Mobile Background Behavior (Android & iOS):**
 - **Clipboard sync**: Only works when app is in foreground; connections drop when backgrounded
-- **Pairing requests**: Show notification when backgrounded (requires user action, has timeout)
+- **Pairing requests**: Require the app to be open on both devices (no background notifications possible)
 
-Note: Both Android and iOS suspend the app when backgrounded, dropping network connections. When the app resumes, it automatically reconnects to peers.
+Note: Both Android and iOS terminate network connections when the app is backgrounded. This is a fundamental platform limitation that cannot be worked around without a central relay server (which would defeat the decentralized architecture). When the app resumes, it automatically reconnects to peers.
 
 #### `peers.rs` - Types & Data Directory
 
