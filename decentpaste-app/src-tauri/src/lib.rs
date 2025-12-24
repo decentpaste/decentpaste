@@ -47,12 +47,18 @@ pub fn run() {
         warn!("Failed to set Stronghold work factor: {:?}", e);
     }
 
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
-        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_process::init());
+
+    // Notification plugin is desktop-only (mobile can't receive notifications
+    // when backgrounded because network connections are terminated)
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    let builder = builder.plugin(tauri_plugin_notification::init());
+
+    builder
         // Stronghold plugin - password callback returns bytes for encryption key
         // Note: We handle our own Argon2 key derivation in VaultManager,
         // so this callback is mainly for the JS API compatibility

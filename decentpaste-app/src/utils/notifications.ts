@@ -1,8 +1,15 @@
 /**
- * Native OS notification utilities
+ * Native OS notification utilities (desktop-only)
  *
  * Uses tauri-plugin-notification for system-level notifications
- * that work even when the app window is hidden (minimized to tray)
+ * that work when the app window is hidden (minimized to tray).
+ *
+ * On mobile (Android/iOS), notifications are disabled because:
+ * - Network connections are terminated when app is backgrounded
+ * - No events can be received to trigger notifications
+ * - System tray doesn't exist on mobile
+ *
+ * All functions fail gracefully on mobile (silent no-op).
  */
 
 import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
