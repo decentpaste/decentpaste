@@ -190,9 +190,9 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed technical documentation.
 - [ ] Image and file clipboard support
 - [ ] Internet relay for cross-network sync
 - [ ] OS keychain integration for secret storage
-- [ ] Persistent clipboard history
+- [x] Persistent clipboard history
 - [ ] Browser extension
-- [ ] System tray improvements
+- [x] System tray improvements
 
 ## Contributing
 
