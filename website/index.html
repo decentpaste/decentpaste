@@ -13,8 +13,14 @@
       content="clipboard sync, universal clipboard, cross-platform clipboard, clipboard sharing, P2P clipboard, encrypted clipboard, Windows Mac clipboard, clipboard manager, AirDrop clipboard, local network sync"
     />
     <meta name="author" content="DecentPaste" />
-    <meta name="robots" content="index, follow" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
     <meta name="theme-color" content="#0a0a0b" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="DecentPaste" />
+    <meta name="mobile-web-app-capable" content="yes" />
 
     <!-- Canonical URL -->
     <link rel="canonical" href="https://decentpaste.com/" />
@@ -50,12 +56,29 @@
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
 
     <!-- Fonts - matching app typography (Outfit + Plus Jakarta Sans) -->
+    <!-- Preconnect to Google Fonts CDN for faster font loading -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Preload critical font files for LCP optimization -->
     <link
-      href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap"
-      rel="stylesheet"
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@700;800&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap"
     />
+    <!-- Load fonts with print media trick for non-blocking loading -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@700;800&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
+    />
+    <!-- Fallback for browsers with JS disabled -->
+    <noscript>
+      <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@700;800&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap"
+        rel="stylesheet"
+      />
+    </noscript>
 
     <!-- Built Tailwind CSS (includes custom styles) -->
     <link rel="stylesheet" href="dist/output.css" />
@@ -158,24 +181,6 @@
         ]
       }
     </script>
-    <script src="https://cdn.amplitude.com/script/c49d6e4694d1749e2dad284c37a60c51.js"></script>
-    <script>
-      window.amplitude.add(window.sessionReplay.plugin({ sampleRate: 1 }));
-      window.amplitude.init('c49d6e4694d1749e2dad284c37a60c51', {
-        fetchRemoteConfig: true,
-        autocapture: {
-          attribution: true,
-          fileDownloads: true,
-          formInteractions: true,
-          pageViews: true,
-          sessions: true,
-          elementInteractions: true,
-          networkTracking: true,
-          webVitals: true,
-          frustrationInteractions: true,
-        },
-      });
-    </script>
   </head>
   <body class="font-sans antialiased bg-[#0a0a0b] text-white overflow-x-hidden">
     <!-- Skip to main content link for accessibility -->
@@ -216,6 +221,8 @@
               class="h-12 w-12 transition-transform duration-300 group-hover:scale-110"
               width="48"
               height="48"
+              fetchpriority="high"
+              decoding="async"
             />
             <span class="font-bold text-xl tracking-tight">DecentPaste</span>
           </a>
@@ -310,7 +317,12 @@
           id="network-graph-container"
           class="absolute inset-x-0 top-20 h-[45vh] md:h-[50vh] overflow-hidden pointer-events-none"
         >
-          <canvas id="network-graph" class="w-full h-full pointer-events-auto"></canvas>
+          <canvas
+            id="network-graph"
+            class="w-full h-full pointer-events-auto"
+            role="img"
+            aria-label="Interactive visualization showing devices connected in a peer-to-peer network with animated data packets"
+          ></canvas>
         </div>
 
         <div class="max-w-5xl mx-auto px-6 lg:px-8 py-32 text-center relative z-10">
@@ -383,7 +395,7 @@
 
           <!-- Trust Indicators -->
           <div
-            class="flex flex-wrap justify-center gap-8 text-sm text-white/40 fade-in-up"
+            class="flex flex-wrap justify-center gap-8 text-sm text-white/60 fade-in-up"
             style="animation-delay: 0.4s"
           >
             <div class="flex items-center gap-2">
@@ -726,7 +738,7 @@
             >
               Beautiful on<br /><span class="text-white/50">every screen.</span>
             </h2>
-            <p class="text-white/40 text-lg max-w-xl mx-auto fade-in-up" style="animation-delay: 0.15s">
+            <p class="text-white/60 text-lg max-w-xl mx-auto fade-in-up" style="animation-delay: 0.15s">
               The same seamless experience across desktop and mobile
             </p>
           </div>
@@ -738,7 +750,7 @@
               <div class="device-frame device-frame-desktop">
                 <!-- Screenshot Container -->
                 <div class="screenshot-container screenshot-desktop">
-                  <img id="screenshot-desktop-img" src="" alt="DecentPaste desktop application screenshot" loading="lazy" />
+                  <img id="screenshot-desktop-img" src="" alt="DecentPaste desktop application screenshot" loading="lazy" decoding="async" />
                 </div>
               </div>
               <!-- Desktop Reflection/Shadow -->
@@ -752,7 +764,7 @@
                 <div class="phone-notch"></div>
                 <!-- Screenshot Container -->
                 <div class="screenshot-container screenshot-mobile">
-                  <img id="screenshot-mobile-img" src="" alt="DecentPaste mobile application screenshot" loading="lazy" />
+                  <img id="screenshot-mobile-img" src="" alt="DecentPaste mobile application screenshot" loading="lazy" decoding="async" />
                 </div>
                 <!-- Home Indicator -->
                 <div class="phone-home-indicator"></div>
@@ -815,7 +827,7 @@
             >
               Get DecentPaste<br /><span class="text-white/50">for your platform.</span>
             </h2>
-            <p id="downloads-version" class="text-white/40 text-sm fade-in-up" style="animation-delay: 0.15s">
+            <p id="downloads-version" class="text-white/60 text-sm fade-in-up" style="animation-delay: 0.15s">
               Latest Release &middot; Apache-2.0 License
             </p>
           </div>
@@ -1263,12 +1275,12 @@
         <div class="flex flex-col items-center gap-6">
           <!-- Logo -->
           <a href="/" class="flex items-center gap-3 hover:opacity-80 transition-opacity">
-            <img src="assets/logo_dark.svg" alt="DecentPaste logo" class="h-10 w-10" width="40" height="40" />
+            <img src="assets/logo_dark.svg" alt="DecentPaste logo" class="h-10 w-10" width="40" height="40" loading="lazy" decoding="async" />
             <span class="font-semibold">DecentPaste</span>
           </a>
 
           <!-- Links -->
-          <div class="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-white/40">
+          <div class="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-white/60">
             <a
               href="https://github.com/decentpaste/decentpaste"
               target="_blank"
@@ -1310,5 +1322,34 @@
 
     <!-- Scripts -->
     <script src="script.js"></script>
+
+    <!-- Analytics - loaded async after page content (non-blocking) -->
+    <script>
+      // Defer Amplitude loading until after page is interactive
+      window.addEventListener('load', function() {
+        // Load Amplitude script asynchronously
+        var script = document.createElement('script');
+        script.src = 'https://cdn.amplitude.com/script/c49d6e4694d1749e2dad284c37a60c51.js';
+        script.async = true;
+        script.onload = function() {
+          if (window.amplitude) {
+            // Use lower sample rate for session replay to reduce overhead
+            window.amplitude.add(window.sessionReplay.plugin({ sampleRate: 0.1 }));
+            window.amplitude.init('c49d6e4694d1749e2dad284c37a60c51', {
+              fetchRemoteConfig: true,
+              autocapture: {
+                attribution: true,
+                fileDownloads: true,
+                formInteractions: true,
+                pageViews: true,
+                sessions: true,
+                elementInteractions: true,
+              },
+            });
+          }
+        };
+        document.body.appendChild(script);
+      });
+    </script>
   </body>
 </html>

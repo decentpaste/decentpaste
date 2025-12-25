@@ -652,7 +652,7 @@ body::after {
 
 .faq-answer p {
   padding: 0 1.5rem 1.25rem;
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(255, 255, 255, 0.7);
   line-height: 1.7;
   font-size: 0.9375rem;
 }
@@ -981,6 +981,83 @@ button:focus-visible {
 }
 
 /* =============================================================================
+   Mobile Performance Optimizations
+   ============================================================================= */
+
+/* Disable expensive effects on mobile for better performance */
+@media (max-width: 768px) {
+  /* Disable rotating gradient glow - major battery saver */
+  .device-desktop::before {
+    animation: none;
+    opacity: 0.4;
+  }
+
+  /* Simplify backdrop-blur on mobile nav (expensive on some devices) */
+  #navbar.scrolled {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  #mobile-menu {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  /* Reduce glow intensity */
+  .device-frame-mobile::before {
+    opacity: 0.3;
+  }
+
+  /* Simplify noise overlay (can cause repaints) */
+  body::before {
+    opacity: 0.015;
+  }
+
+  /* Disable conic gradient rotation */
+  @keyframes glow-rotate {
+    from, to { transform: translate(-50%, -50%); }
+  }
+
+  /* Reduce floating animation intensity */
+  @keyframes float-desktop {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-5px); }
+  }
+
+  @keyframes float-mobile {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-8px); }
+  }
+}
+
+/* Further optimizations for very small screens */
+@media (max-width: 480px) {
+  /* Disable floating animations entirely on small screens */
+  .animate-float,
+  .animate-float-delayed {
+    animation: none;
+  }
+
+  /* Disable device floating animations */
+  .device-desktop,
+  .device-mobile {
+    animation: none;
+  }
+
+  /* Reduce glows further */
+  .device-desktop::before,
+  .device-frame-mobile::before {
+    opacity: 0.2;
+    filter: blur(20px);
+  }
+
+  /* Disable grid pattern overlay */
+  body::after {
+    display: none;
+  }
+}
+
+/* =============================================================================
    Print Styles
    ============================================================================= */
 
@@ -1266,7 +1343,7 @@ button:focus-visible {
 /* Screenshot caption/label */
 .screenshot-caption {
   font-size: 0.875rem;
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(255, 255, 255, 0.7);
   text-align: center;
   min-height: 1.5rem;
   transition: color 0.3s ease;
