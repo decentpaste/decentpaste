@@ -875,6 +875,12 @@ nav,
 .clipboard-item:nth-child(8) { animation-delay: 0.16s; }
 .clipboard-item:nth-child(n+9) { animation-delay: 0.18s; }
 
+/* Disable stagger animations after initial render to prevent replay on updates */
+.no-stagger .clipboard-item,
+.no-stagger .stagger-item {
+  animation: none;
+}
+
 /* Enhanced clipboard item with left accent border */
 .clipboard-item-local {
   border-left: 2px solid rgba(20, 184, 166, 0.5);

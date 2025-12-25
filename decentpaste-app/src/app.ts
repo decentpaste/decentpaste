@@ -817,12 +817,92 @@ class App {
       this.renderUpdateSection();
     });
     store.subscribe('updateProgress', () => this.renderUpdateSection());
-    // Re-render when settings change (for sync toggle and hide clipboard toggle)
-    store.subscribe('settings', () => this.render());
+    // Targeted settings updates - only update what actually depends on settings
+    store.subscribe('settings', () => this.handleSettingsChange());
+  }
+
+  /**
+   * Handle settings changes with targeted updates instead of full re-render.
+   * Only updates the specific UI elements that depend on settings.
+   */
+  private handleSettingsChange(): void {
+    const view = store.get('currentView');
+    const settings = store.get('settings');
+
+    if (view === 'dashboard') {
+      // Update the sync toggle card appearance
+      const syncToggle = $('#dashboard-sync-toggle');
+      if (syncToggle) {
+        const syncEnabled = settings.auto_sync_enabled;
+        const iconContainer = syncToggle.querySelector('div > div:first-child') as HTMLElement;
+        if (iconContainer) {
+          iconContainer.className = syncEnabled ? 'icon-container-teal' : 'icon-container-orange';
+          // Safe: icon() returns controlled SVG from Lucide library, not user input
+          iconContainer.innerHTML = icon(syncEnabled ? 'refreshCw' : 'wifiOff', 18);
+        }
+        const statusText = syncToggle.querySelector('p.text-xs');
+        if (statusText) {
+          statusText.textContent = syncEnabled ? 'On' : 'Off';
+        }
+      }
+
+      // Update visibility toggle button appearance
+      const visibilityBtn = $('#btn-toggle-visibility') as HTMLElement;
+      if (visibilityBtn) {
+        const hideContent = settings.hide_clipboard_content;
+        visibilityBtn.className = `flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all ${hideContent ? 'bg-teal-500/15 text-teal-400 border border-teal-500/30' : 'bg-white/5 text-white/50 border border-white/10 hover:bg-white/10 hover:text-white/70'}`;
+        // Safe: icon() returns controlled SVG from Lucide library, not user input
+        visibilityBtn.innerHTML = `${icon(hideContent ? 'eye' : 'eyeOff', 12)}<span>${hideContent ? 'Hidden' : 'Visible'}</span>`;
+        visibilityBtn.title = hideContent ? 'Show content' : 'Hide content';
+      }
+
+      // Update clipboard items content visibility (without re-rendering entire list)
+      this.updateClipboardContentVisibility();
+    } else if (view === 'settings') {
+      // Settings view updates itself via input change handlers
+      // Only need to update if navigating to settings with stale data
+    }
+  }
+
+  /**
+   * Post-render setup: disable stagger animations after they complete
+   * to prevent replay on subsequent updates.
+   */
+  private postRender(): void {
+    const container = $('#clipboard-history-list');
+    if (container && !container.classList.contains('no-stagger')) {
+      // Let initial animations play, then disable for future updates
+      setTimeout(() => container.classList.add('no-stagger'), 400);
+    }
+  }
+
+  /**
+   * Update clipboard item content visibility without full re-render.
+   */
+  private updateClipboardContentVisibility(): void {
+    const hideContent = store.get('settings').hide_clipboard_content;
+    const history = store.get('clipboardHistory');
+    const container = $('#clipboard-history-list');
+
+    if (!container) return;
+
+    const items = container.querySelectorAll('.clipboard-item');
+    items.forEach((item, index) => {
+      const contentEl = item.querySelector('p.text-sm');
+      if (contentEl && history[index]) {
+        const content = history[index].content;
+        contentEl.textContent = hideContent ? '••••••••••••••••' : truncate(content, 120);
+        contentEl.classList.toggle('select-none', hideContent);
+        contentEl.classList.toggle('font-mono', hideContent);
+      }
+    });
   }
 
   private render(): void {
     const state = store.getState();
+
+    // Schedule post-render setup after DOM updates
+    queueMicrotask(() => this.postRender());
 
     if (state.isLoading) {
       this.root.innerHTML = `
@@ -1779,10 +1859,22 @@ class App {
       // Update the full clipboard history list
       const container = $('#clipboard-history-list');
       if (container) {
+        // Check if this is an update (container already has no-stagger class)
+        const isUpdate = container.classList.contains('no-stagger');
+
         container.innerHTML =
           history.length > 0
             ? history.map((item) => this.renderClipboardItem(item, hideContent)).join('')
             : this.renderEmptyState('No clipboard items yet', 'Copy something to get started');
+
+        // If this is an update, immediately re-add no-stagger to prevent animations
+        // If this is initial render, add no-stagger after animations complete
+        if (isUpdate) {
+          container.classList.add('no-stagger');
+        } else {
+          // First render: let animations play, then disable for future updates
+          setTimeout(() => container.classList.add('no-stagger'), 400);
+        }
       }
     }
   }
