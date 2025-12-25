@@ -141,11 +141,9 @@
         </svg>
 
         <!-- Text Content -->
-        <div style="display: flex; flex-direction: column; align-items: flex-start;">
+        <div style="display: flex; flex-direction: column; align-items: flex-start">
           <!-- App Name -->
-          <div style="font-size: 52px; font-weight: 800; color: #ffffff; letter-spacing: -0.03em">
-            DecentPaste
-          </div>
+          <div style="font-size: 52px; font-weight: 800; color: #ffffff; letter-spacing: -0.03em">DecentPaste</div>
 
           <!-- Tagline -->
           <div
@@ -161,7 +159,7 @@
           </div>
 
           <!-- Feature badges -->
-          <div style="display: flex; gap: 10px; margin-top: 28px; flex-wrap: wrap;">
+          <div style="display: flex; gap: 10px; margin-top: 28px; flex-wrap: wrap">
             <div
               style="
                 display: flex;
@@ -241,7 +239,9 @@
         <li>Click "Generate" and download the PNG</li>
         <li>Upload to Play Console as your Feature Graphic</li>
       </ol>
-      <p style="color: #fb923c;"><strong>Note:</strong> This template removes the website URL per Google Play guidelines.</p>
+      <p style="color: #fb923c">
+        <strong>Note:</strong> This template removes the website URL per Google Play guidelines.
+      </p>
     </div>
 
     <script>
@@ -380,33 +380,36 @@
 </div>`;
 
       function copyJSX() {
-        navigator.clipboard.writeText(jsxCode).then(() => {
-          const btn = document.querySelector('.copy-btn');
-          btn.textContent = '✅ Copied JSX!';
-          btn.style.background = 'linear-gradient(135deg, #22c55e, #16a34a)';
+        navigator.clipboard
+          .writeText(jsxCode)
+          .then(() => {
+            const btn = document.querySelector('.copy-btn');
+            btn.textContent = '✅ Copied JSX!';
+            btn.style.background = 'linear-gradient(135deg, #22c55e, #16a34a)';
 
-          setTimeout(() => {
-            btn.textContent = '📋 Copy JSX to Clipboard';
-            btn.style.background = 'linear-gradient(135deg, #14b8a6, #0d9488)';
-          }, 2000);
-        }).catch(err => {
-          // Fallback
-          const textarea = document.createElement('textarea');
-          textarea.value = jsxCode;
-          document.body.appendChild(textarea);
-          textarea.select();
-          document.execCommand('copy');
-          document.body.removeChild(textarea);
+            setTimeout(() => {
+              btn.textContent = '📋 Copy JSX to Clipboard';
+              btn.style.background = 'linear-gradient(135deg, #14b8a6, #0d9488)';
+            }, 2000);
+          })
+          .catch((err) => {
+            // Fallback
+            const textarea = document.createElement('textarea');
+            textarea.value = jsxCode;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
 
-          const btn = document.querySelector('.copy-btn');
-          btn.textContent = '✅ Copied JSX!';
-          btn.style.background = 'linear-gradient(135deg, #22c55e, #16a34a)';
+            const btn = document.querySelector('.copy-btn');
+            btn.textContent = '✅ Copied JSX!';
+            btn.style.background = 'linear-gradient(135deg, #22c55e, #16a34a)';
 
-          setTimeout(() => {
-            btn.textContent = '📋 Copy JSX to Clipboard';
-            btn.style.background = 'linear-gradient(135deg, #14b8a6, #0d9488)';
-          }, 2000);
-        });
+            setTimeout(() => {
+              btn.textContent = '📋 Copy JSX to Clipboard';
+              btn.style.background = 'linear-gradient(135deg, #14b8a6, #0d9488)';
+            }, 2000);
+          });
       }
     </script>
   </body>

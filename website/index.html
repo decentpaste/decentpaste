@@ -70,7 +70,7 @@
       href="https://fonts.googleapis.com/css2?family=Outfit:wght@700;800&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap"
       rel="stylesheet"
       media="print"
-      onload="this.media='all'"
+      onload="this.media = 'all'"
     />
     <!-- Fallback for browsers with JS disabled -->
     <noscript>
@@ -724,13 +724,19 @@
       <!-- Screenshots Showcase Section -->
       <section id="screenshots" class="py-32 relative overflow-hidden" aria-labelledby="screenshots-heading">
         <!-- Decorative glow orbs for this section -->
-        <div class="absolute top-1/2 left-1/4 w-[400px] h-[400px] bg-teal-500/10 rounded-full blur-[100px] -translate-y-1/2 pointer-events-none"></div>
-        <div class="absolute top-1/3 right-1/4 w-[300px] h-[300px] bg-orange-500/8 rounded-full blur-[80px] pointer-events-none"></div>
+        <div
+          class="absolute top-1/2 left-1/4 w-[400px] h-[400px] bg-teal-500/10 rounded-full blur-[100px] -translate-y-1/2 pointer-events-none"
+        ></div>
+        <div
+          class="absolute top-1/3 right-1/4 w-[300px] h-[300px] bg-orange-500/8 rounded-full blur-[80px] pointer-events-none"
+        ></div>
 
         <div class="max-w-6xl mx-auto px-6 lg:px-8">
           <!-- Section Header -->
           <div class="text-center mb-16">
-            <p class="text-teal-400 text-sm font-semibold tracking-widest uppercase mb-4 fade-in-up">See It In Action</p>
+            <p class="text-teal-400 text-sm font-semibold tracking-widest uppercase mb-4 fade-in-up">
+              See It In Action
+            </p>
             <h2
               id="screenshots-heading"
               class="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tighter mb-6 fade-in-up"
@@ -750,7 +756,13 @@
               <div class="device-frame device-frame-desktop">
                 <!-- Screenshot Container -->
                 <div class="screenshot-container screenshot-desktop">
-                  <img id="screenshot-desktop-img" src="" alt="DecentPaste desktop application screenshot" loading="lazy" decoding="async" />
+                  <img
+                    id="screenshot-desktop-img"
+                    src=""
+                    alt="DecentPaste desktop application screenshot"
+                    loading="lazy"
+                    decoding="async"
+                  />
                 </div>
               </div>
               <!-- Desktop Reflection/Shadow -->
@@ -764,7 +776,13 @@
                 <div class="phone-notch"></div>
                 <!-- Screenshot Container -->
                 <div class="screenshot-container screenshot-mobile">
-                  <img id="screenshot-mobile-img" src="" alt="DecentPaste mobile application screenshot" loading="lazy" decoding="async" />
+                  <img
+                    id="screenshot-mobile-img"
+                    src=""
+                    alt="DecentPaste mobile application screenshot"
+                    loading="lazy"
+                    decoding="async"
+                  />
                 </div>
                 <!-- Home Indicator -->
                 <div class="phone-home-indicator"></div>
@@ -1275,7 +1293,15 @@
         <div class="flex flex-col items-center gap-6">
           <!-- Logo -->
           <a href="/" class="flex items-center gap-3 hover:opacity-80 transition-opacity">
-            <img src="assets/logo_dark.svg" alt="DecentPaste logo" class="h-10 w-10" width="40" height="40" loading="lazy" decoding="async" />
+            <img
+              src="assets/logo_dark.svg"
+              alt="DecentPaste logo"
+              class="h-10 w-10"
+              width="40"
+              height="40"
+              loading="lazy"
+              decoding="async"
+            />
             <span class="font-semibold">DecentPaste</span>
           </a>
 
@@ -1313,9 +1339,7 @@
           </div>
 
           <!-- Made with -->
-          <p class="text-sm text-white/30">
-            Made with <span class="text-red-400">&#10084;</span> for privacy
-          </p>
+          <p class="text-sm text-white/30">Made with <span class="text-red-400">&#10084;</span> for privacy</p>
         </div>
       </div>
     </footer>
@@ -1326,12 +1350,12 @@
     <!-- Analytics - loaded async after page content (non-blocking) -->
     <script>
       // Defer Amplitude loading until after page is interactive
-      window.addEventListener('load', function() {
+      window.addEventListener('load', function () {
         // Load Amplitude script asynchronously
         var script = document.createElement('script');
         script.src = 'https://cdn.amplitude.com/script/c49d6e4694d1749e2dad284c37a60c51.js';
         script.async = true;
-        script.onload = function() {
+        script.onload = function () {
           if (window.amplitude) {
             // Use lower sample rate for session replay to reduce overhead
             window.amplitude.add(window.sessionReplay.plugin({ sampleRate: 0.1 }));
