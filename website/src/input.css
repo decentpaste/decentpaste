@@ -4,12 +4,12 @@
    Tailwind CSS v4 Theme Configuration
    ============================================================================= */
 @theme {
-  /* Font families - Sora for headings, DM Sans for body */
+  /* Font families - matching app typography for brand consistency */
   --font-sans:
-    'DM Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
+    'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
     'Noto Color Emoji';
   --font-display:
-    'Sora', ui-sans-serif, system-ui, sans-serif;
+    'Outfit', ui-sans-serif, system-ui, sans-serif;
 
   /* Letter spacing */
   --tracking-tighter: -0.03em;
@@ -37,7 +37,7 @@ body {
   position: relative;
 }
 
-/* Headings use display font (Sora) */
+/* Headings use display font (Outfit) - matching app */
 h1,
 h2,
 h3,
@@ -45,6 +45,7 @@ h4,
 h5,
 h6 {
   font-family: var(--font-display);
+  letter-spacing: -0.02em;
 }
 
 /* =============================================================================
