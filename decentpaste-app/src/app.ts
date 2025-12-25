@@ -538,8 +538,8 @@ class App {
     this.root.addEventListener('change', async (e) => {
       const target = e.target as HTMLInputElement | HTMLSelectElement;
 
-      // Auto-sync toggle (Settings page and Dashboard)
-      if (target.id === 'auto-sync-toggle' || target.id === 'dashboard-sync-toggle') {
+      // Sync toggle on Dashboard
+      if (target.id === 'dashboard-sync-toggle') {
         const checked = (target as HTMLInputElement).checked;
         const settings = { ...store.get('settings'), auto_sync_enabled: checked };
         try {
@@ -1112,16 +1112,6 @@ class App {
             <h2 class="text-sm font-semibold text-white/80 tracking-tight">Sync</h2>
           </div>
           <div class="card overflow-hidden">
-            <label class="flex items-center justify-between p-4 cursor-pointer hover:bg-white/[0.02] transition-colors">
-              <span class="text-sm text-white/70">Auto-sync clipboard</span>
-              <input
-                type="checkbox"
-                id="auto-sync-toggle"
-                ${settings.auto_sync_enabled ? 'checked' : ''}
-                class="checkbox"
-              />
-            </label>
-            <div class="divider"></div>
             <label class="flex items-center justify-between p-4 cursor-pointer hover:bg-white/[0.02] transition-colors">
               <span class="text-sm text-white/70">Show notifications</span>
               <input
