@@ -25,9 +25,9 @@ pub fn setup_tray(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Erro
     // Create menu items
     let show_item = MenuItem::with_id(app, "show", "Show DecentPaste", true, None::<&str>)?;
     let sync_label = if sync_enabled {
-        "Clipboard Sync: On"
+        "Auto Sync: On"
     } else {
-        "Clipboard Sync: Paused"
+        "Auto Sync: Off"
     };
     let sync_item = MenuItem::with_id(app, "sync_toggle", sync_label, true, None::<&str>)?;
     let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
@@ -96,9 +96,9 @@ pub fn setup_tray(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Erro
 
                     // Update the menu item text
                     let new_label = if new_state {
-                        "Clipboard Sync: On"
+                        "Auto Sync: On"
                     } else {
-                        "Clipboard Sync: Paused"
+                        "Auto Sync: Off"
                     };
                     let _ = sync_item.set_text(new_label);
 

@@ -133,3 +133,4 @@ export type UpdateStatus =
   | 'installing'
   | 'up-to-date'
   | 'error';
+
