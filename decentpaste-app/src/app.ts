@@ -1088,7 +1088,7 @@ class App {
         </div>
 
         <!-- Scrollable Clipboard History (Full List) -->
-        <div class="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
+        <div class="flex-1 min-h-0 overflow-y-auto px-4 pb-4 pt-1">
           <div id="clipboard-history-list" class="space-y-2">
             ${allItems.length > 0 ? allItems.map((item) => this.renderClipboardItem(item, hideContent)).join('') : this.renderEmptyState('No clipboard items yet', 'Copy something to get started')}
           </div>
