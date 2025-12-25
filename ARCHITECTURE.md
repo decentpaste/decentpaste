@@ -607,8 +607,25 @@ DecentPaste supports automatic updates on desktop platforms using Tauri's update
 4. User clicks "Download & Install" → progress bar shows download progress
 5. Download completes → app restarts automatically to apply update
 
+**Platform-Specific Targets:**
+
+The updater dynamically selects the correct artifact based on how the app was installed:
+
+| Platform | Bundle Type | Target Key                          |
+|----------|-------------|-------------------------------------|
+| Linux    | .deb        | `linux-x86_64-deb`                  |
+| Linux    | .rpm        | `linux-x86_64-rpm`                  |
+| Linux    | AppImage    | `linux-x86_64-appimage`             |
+| Windows  | MSI         | `windows-x86_64-msi`                |
+| Windows  | NSIS        | `windows-x86_64-nsis`               |
+| macOS    | .app        | `darwin-aarch64` or `darwin-x86_64` |
+
+This is achieved using Tauri's APIs:
+- `platform()` and `arch()` from `@tauri-apps/plugin-os`
+- `getBundleType()` from `@tauri-apps/api/app` (bundle type is embedded in binary at build time)
+
 **Architecture:**
-- `src/api/updater.ts` - Frontend update logic (check, download, install, progress tracking)
+- `src/api/updater.ts` - Frontend update logic (check, download, install, progress tracking, dynamic target selection)
 - `src-tauri/tauri.conf.json` - Updater configuration (public key, endpoints)
 - `.github/workflows/release.yml` - CI/CD workflow for building signed releases
 
@@ -733,6 +750,7 @@ yarn build
 - `tauri-plugin-stronghold` v2 - IOTA Stronghold encrypted storage
 - `tauri-plugin-updater` v2 - Auto-updates for desktop
 - `tauri-plugin-process` v2 - App restart after update
+- `tauri-plugin-os` v2 - Platform/architecture detection for updater targets
 - `argon2` v0.5 - Argon2id key derivation
 - `aes-gcm` v0.10 - AES-256-GCM encryption
 - `x25519-dalek` v2 - X25519 ECDH key exchange
@@ -745,5 +763,6 @@ yarn build
 - `@tauri-apps/plugin-stronghold` v2 - Vault plugin (initialized from backend)
 - `@tauri-apps/plugin-updater` v2 - Auto-update UI
 - `@tauri-apps/plugin-process` v2 - App restart
+- `@tauri-apps/plugin-os` v2 - Platform/architecture detection
 - `tailwindcss` v4 - CSS framework
 - `lucide` - Icons (inline SVGs)
