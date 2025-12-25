@@ -511,6 +511,8 @@ body::after {
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   color: white;
   text-align: center;
+  overflow: hidden;
+  min-width: 0;
 }
 
 .download-format-btn:hover {
@@ -546,6 +548,10 @@ body::after {
   color: rgba(255, 255, 255, 0.4);
   text-transform: uppercase;
   letter-spacing: 0.03em;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .download-format-btn.download-format-disabled,
