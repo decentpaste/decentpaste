@@ -8,8 +8,14 @@
       name="description"
       content="DecentPaste Privacy Policy. Learn how we protect your privacy with end-to-end encryption, local storage, and zero cloud servers."
     />
-    <meta name="robots" content="index, follow" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
     <meta name="theme-color" content="#0a0a0b" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="DecentPaste" />
+    <meta name="mobile-web-app-capable" content="yes" />
 
     <!-- Canonical URL -->
     <link rel="canonical" href="https://decentpaste.com/privacy" />
@@ -30,35 +36,33 @@
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
 
     <!-- Fonts - matching app typography (Outfit + Plus Jakarta Sans) -->
+    <!-- Preconnect to Google Fonts CDN for faster font loading -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Preload critical font files for LCP optimization -->
     <link
-      href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap"
-      rel="stylesheet"
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@700;800&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap"
     />
+    <!-- Load fonts with print media trick for non-blocking loading -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@700;800&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
+    />
+    <!-- Fallback for browsers with JS disabled -->
+    <noscript>
+      <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@700;800&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap"
+        rel="stylesheet"
+      />
+    </noscript>
 
     <!-- Built Tailwind CSS -->
     <link rel="stylesheet" href="dist/output.css" />
 
-    <!-- Analytics (Website only - App has no analytics) -->
-    <script src="https://cdn.amplitude.com/script/c49d6e4694d1749e2dad284c37a60c51.js"></script>
-    <script>
-      window.amplitude.add(window.sessionReplay.plugin({ sampleRate: 1 }));
-      window.amplitude.init('c49d6e4694d1749e2dad284c37a60c51', {
-        fetchRemoteConfig: true,
-        autocapture: {
-          attribution: true,
-          fileDownloads: true,
-          formInteractions: true,
-          pageViews: true,
-          sessions: true,
-          elementInteractions: true,
-          networkTracking: true,
-          webVitals: true,
-          frustrationInteractions: true,
-        },
-      });
-    </script>
   </head>
   <body class="font-sans antialiased bg-[#0a0a0b] text-white overflow-x-hidden">
     <!-- Gradient Background Orbs -->
@@ -83,6 +87,8 @@
               class="h-12 w-12 transition-transform duration-300 group-hover:scale-110"
               width="48"
               height="48"
+              fetchpriority="high"
+              decoding="async"
             />
             <span class="font-bold text-xl tracking-tight">DecentPaste</span>
           </a>
@@ -102,12 +108,12 @@
     </nav>
 
     <!-- Main Content -->
-    <main class="pt-32 pb-20">
+    <main class="pt-32 pb-20" role="main">
       <div class="max-w-3xl mx-auto px-6 lg:px-8">
         <!-- Header -->
         <div class="mb-16">
           <h1 class="text-4xl md:text-5xl font-bold tracking-tighter mb-4">Privacy Policy</h1>
-          <p class="text-white/40">Last updated: December 25, 2024</p>
+          <p class="text-white/60">Last updated: December 25, 2024</p>
         </div>
 
         <!-- Privacy-First Notice -->
@@ -346,17 +352,17 @@
     </main>
 
     <!-- Footer -->
-    <footer class="py-12 border-t border-white/10">
+    <footer class="py-12 border-t border-white/10" role="contentinfo">
       <div class="max-w-6xl mx-auto px-6 lg:px-8">
         <div class="flex flex-col items-center gap-6">
           <!-- Logo -->
           <a href="/" class="flex items-center gap-3 hover:opacity-80 transition-opacity">
-            <img src="assets/logo_dark.svg" alt="DecentPaste logo" class="h-10 w-10" width="40" height="40" />
+            <img src="assets/logo_dark.svg" alt="DecentPaste logo" class="h-10 w-10" width="40" height="40" loading="lazy" decoding="async" />
             <span class="font-semibold">DecentPaste</span>
           </a>
 
           <!-- Links -->
-          <div class="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-white/40">
+          <div class="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-white/60">
             <a
               href="https://github.com/decentpaste/decentpaste"
               target="_blank"
@@ -389,11 +395,40 @@
           </div>
 
           <!-- Made with -->
-          <p class="text-sm text-white/30">
+          <p class="text-sm text-white/50">
             Made with <span class="text-red-400">&#10084;</span> for privacy
           </p>
         </div>
       </div>
     </footer>
+
+    <!-- Analytics - loaded async after page content (non-blocking) -->
+    <script>
+      // Defer Amplitude loading until after page is interactive
+      window.addEventListener('load', function() {
+        // Load Amplitude script asynchronously
+        var script = document.createElement('script');
+        script.src = 'https://cdn.amplitude.com/script/c49d6e4694d1749e2dad284c37a60c51.js';
+        script.async = true;
+        script.onload = function() {
+          if (window.amplitude) {
+            // Use lower sample rate for session replay to reduce overhead
+            window.amplitude.add(window.sessionReplay.plugin({ sampleRate: 0.1 }));
+            window.amplitude.init('c49d6e4694d1749e2dad284c37a60c51', {
+              fetchRemoteConfig: true,
+              autocapture: {
+                attribution: true,
+                fileDownloads: true,
+                formInteractions: true,
+                pageViews: true,
+                sessions: true,
+                elementInteractions: true,
+              },
+            });
+          }
+        };
+        document.body.appendChild(script);
+      });
+    </script>
   </body>
 </html>
