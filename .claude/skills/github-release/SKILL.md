@@ -13,10 +13,14 @@ Create GitHub release with formatted notes from commits since last tag.
 
 1. **Get version** from `decentpaste-app/src-tauri/tauri.conf.json`
 
-2. **Get commits** since latest tag:
+2. **Get commits** since latest tag (run as separate commands):
    ```bash
-   LATEST_TAG=$(git tag --sort=-v:refname | head -1)
-   git log $LATEST_TAG..HEAD --pretty=format:"%h %s%n%b---" --no-merges
+   # First: get latest tag
+   git tag --sort=-v:refname | head -1
+   ```
+   ```bash
+   # Then: get commits since that tag (replace <TAG> with result above)
+   git log <TAG>..HEAD --pretty=format:"%h %s%n%b---" --no-merges
    ```
 
 3. **Categorize** by conventional commit prefix:
