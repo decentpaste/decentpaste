@@ -4,10 +4,12 @@
    Tailwind CSS v4 Theme Configuration
    ============================================================================= */
 @theme {
-  /* Font family */
+  /* Font families - matching app typography for brand consistency */
   --font-sans:
-    'Inter', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
+    'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
     'Noto Color Emoji';
+  --font-display:
+    'Outfit', ui-sans-serif, system-ui, sans-serif;
 
   /* Letter spacing */
   --tracking-tighter: -0.03em;
@@ -33,6 +35,48 @@ body {
   color: #ffffff;
   overflow-x: hidden;
   position: relative;
+}
+
+/* Headings use display font (Outfit) - matching app */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+}
+
+/* =============================================================================
+   Visual Texture - Noise & Grid Overlays
+   ============================================================================= */
+
+/* Subtle noise texture overlay for depth */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  opacity: 0.025;
+  mix-blend-mode: overlay;
+}
+
+/* Subtle grid pattern for tech aesthetic */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -5;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 60px 60px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 30%, black 20%, transparent 70%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 30%, black 20%, transparent 70%);
 }
 
 /* =============================================================================
@@ -116,25 +160,56 @@ body {
 .cta-primary {
   background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
   color: white;
-  box-shadow: 0 4px 24px -4px rgba(20, 184, 166, 0.4);
+  box-shadow:
+    0 4px 24px -4px rgba(20, 184, 166, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
 .cta-primary:hover {
-  transform: translateY(-2px) scale(1.02);
-  box-shadow: 0 8px 32px -4px rgba(20, 184, 166, 0.5);
+  transform: translateY(-3px) scale(1.02);
+  box-shadow:
+    0 12px 40px -4px rgba(20, 184, 166, 0.5),
+    0 0 20px rgba(20, 184, 166, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.cta-primary:active {
+  transform: translateY(-1px) scale(1.01);
 }
 
 .cta-primary::before {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, transparent 50%);
+  border-radius: 50px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.25) 0%, transparent 50%);
   opacity: 0;
   transition: opacity 0.3s;
 }
 
 .cta-primary:hover::before {
   opacity: 1;
+}
+
+/* Animated shine effect on primary button */
+.cta-primary::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.15) 50%,
+    transparent 100%
+  );
+  transition: left 0.5s ease;
+}
+
+.cta-primary:hover::after {
+  left: 100%;
 }
 
 .cta-secondary {
@@ -146,26 +221,82 @@ body {
 
 .cta-secondary:hover {
   background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.2);
-  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.3);
+}
+
+.cta-secondary:active {
+  transform: translateY(-1px);
 }
 
 /* =============================================================================
-   Feature Cards
+   Feature Cards - Enhanced with gradient borders and glow
    ============================================================================= */
 
 .feature-card {
   padding: 1.5rem;
   background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 1rem;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Gradient border effect using pseudo-element */
+.feature-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 1rem;
+  padding: 1px;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.08) 0%,
+    rgba(255, 255, 255, 0.04) 50%,
+    rgba(255, 255, 255, 0.08) 100%
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Glow effect on hover */
+.feature-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100%;
+  background: radial-gradient(
+    ellipse 80% 50% at 50% 0%,
+    rgba(20, 184, 166, 0.08) 0%,
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
 }
 
 .feature-card:hover {
   background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.1);
-  transform: translateY(-4px);
+  transform: translateY(-6px);
+}
+
+.feature-card:hover::before {
+  background: linear-gradient(
+    135deg,
+    rgba(20, 184, 166, 0.4) 0%,
+    rgba(249, 115, 22, 0.2) 50%,
+    rgba(20, 184, 166, 0.4) 100%
+  );
+}
+
+.feature-card:hover::after {
+  opacity: 1;
 }
 
 .feature-icon {
@@ -176,6 +307,20 @@ body {
   align-items: center;
   justify-content: center;
   margin-bottom: 1rem;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.feature-card:hover .feature-icon {
+  transform: scale(1.1);
+}
+
+/* Alternate cards get orange glow */
+.feature-card:nth-child(even):hover::after {
+  background: radial-gradient(
+    ellipse 80% 50% at 50% 0%,
+    rgba(249, 115, 22, 0.08) 0%,
+    transparent 60%
+  );
 }
 
 /* =============================================================================
@@ -369,13 +514,20 @@ body {
 }
 
 .download-format-btn:hover {
-  background: rgba(20, 184, 166, 0.1);
-  border-color: rgba(20, 184, 166, 0.3);
-  transform: translateY(-2px);
+  background: rgba(20, 184, 166, 0.12);
+  border-color: rgba(20, 184, 166, 0.4);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px -4px rgba(20, 184, 166, 0.15);
 }
 
 .download-format-btn:hover svg {
   color: #14b8a6;
+  transform: translateY(-1px);
+  transition: all 0.2s ease;
+}
+
+.download-format-btn:active {
+  transform: translateY(-1px);
 }
 
 .download-format-btn svg {
@@ -500,7 +652,7 @@ body {
 
 .faq-answer p {
   padding: 0 1.5rem 1.25rem;
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(255, 255, 255, 0.7);
   line-height: 1.7;
   font-size: 0.9375rem;
 }
@@ -608,6 +760,30 @@ body {
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
+/* Enhanced navigation links with animated underline */
+nav a[href^="#"],
+nav a[href*="github"] {
+  position: relative;
+}
+
+nav a[href^="#"]::after,
+nav a[href*="github"]::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 50%;
+  width: 0;
+  height: 1px;
+  background: linear-gradient(90deg, #14b8a6, #2dd4bf);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: translateX(-50%);
+}
+
+nav a[href^="#"]:hover::after,
+nav a[href*="github"]:hover::after {
+  width: 100%;
+}
+
 /* =============================================================================
    Custom Scrollbar
    ============================================================================= */
@@ -643,6 +819,88 @@ body {
 ::selection {
   background-color: rgba(20, 184, 166, 0.4);
   color: white;
+}
+
+/* =============================================================================
+   How It Works - Enhanced Step Styling
+   ============================================================================= */
+
+/* Step number boxes with animated glow */
+#how-it-works .relative.inline-flex > div {
+  position: relative;
+}
+
+/* Animated glow ring around step numbers */
+#how-it-works .relative.inline-flex > div::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 1.25rem;
+  background: inherit;
+  opacity: 0.4;
+  filter: blur(12px);
+  z-index: -1;
+  animation: step-glow 3s ease-in-out infinite;
+}
+
+#how-it-works .relative.inline-flex:nth-child(1) > div::before {
+  animation-delay: 0s;
+}
+
+#how-it-works .relative.inline-flex:nth-child(2) > div::before {
+  animation-delay: 1s;
+}
+
+#how-it-works .relative.inline-flex:nth-child(3) > div::before {
+  animation-delay: 2s;
+}
+
+@keyframes step-glow {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.05);
+  }
+}
+
+/* Animated connecting line with flowing gradient */
+#how-it-works .hidden.md\\:block.absolute {
+  background: linear-gradient(
+    90deg,
+    rgba(20, 184, 166, 0.3) 0%,
+    rgba(249, 115, 22, 0.4) 50%,
+    rgba(20, 184, 166, 0.3) 100%
+  );
+  background-size: 200% 100%;
+  animation: line-flow 4s ease-in-out infinite;
+  height: 2px;
+  border-radius: 1px;
+}
+
+@keyframes line-flow {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+/* Step hover effect */
+#how-it-works .text-center {
+  transition: transform 0.3s ease;
+}
+
+#how-it-works .text-center:hover {
+  transform: translateY(-4px);
+}
+
+#how-it-works .text-center:hover .relative.inline-flex > div {
+  transform: scale(1.05);
+  transition: transform 0.3s ease;
 }
 
 /* =============================================================================
@@ -719,6 +977,83 @@ button:focus-visible {
 
   .gradient-text {
     animation: none;
+  }
+}
+
+/* =============================================================================
+   Mobile Performance Optimizations
+   ============================================================================= */
+
+/* Disable expensive effects on mobile for better performance */
+@media (max-width: 768px) {
+  /* Disable rotating gradient glow - major battery saver */
+  .device-desktop::before {
+    animation: none;
+    opacity: 0.4;
+  }
+
+  /* Simplify backdrop-blur on mobile nav (expensive on some devices) */
+  #navbar.scrolled {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  #mobile-menu {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  /* Reduce glow intensity */
+  .device-frame-mobile::before {
+    opacity: 0.3;
+  }
+
+  /* Simplify noise overlay (can cause repaints) */
+  body::before {
+    opacity: 0.015;
+  }
+
+  /* Disable conic gradient rotation */
+  @keyframes glow-rotate {
+    from, to { transform: translate(-50%, -50%); }
+  }
+
+  /* Reduce floating animation intensity */
+  @keyframes float-desktop {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-5px); }
+  }
+
+  @keyframes float-mobile {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-8px); }
+  }
+}
+
+/* Further optimizations for very small screens */
+@media (max-width: 480px) {
+  /* Disable floating animations entirely on small screens */
+  .animate-float,
+  .animate-float-delayed {
+    animation: none;
+  }
+
+  /* Disable device floating animations */
+  .device-desktop,
+  .device-mobile {
+    animation: none;
+  }
+
+  /* Reduce glows further */
+  .device-desktop::before,
+  .device-frame-mobile::before {
+    opacity: 0.2;
+    filter: blur(20px);
+  }
+
+  /* Disable grid pattern overlay */
+  body::after {
+    display: none;
   }
 }
 
@@ -1008,7 +1343,7 @@ button:focus-visible {
 /* Screenshot caption/label */
 .screenshot-caption {
   font-size: 0.875rem;
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(255, 255, 255, 0.7);
   text-align: center;
   min-height: 1.5rem;
   transition: color 0.3s ease;

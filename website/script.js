@@ -19,6 +19,9 @@ class NetworkGraph {
     this.hoveredNode = null;
     this.animationId = null;
     this.dpr = window.devicePixelRatio || 1;
+    this.isVisible = true;
+    this.isPaused = false;
+    this.prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     // Physics settings
     this.physics = {
@@ -48,7 +51,67 @@ class NetworkGraph {
     this.createNodes();
     this.createEdges();
     this.bindEvents();
-    this.animate();
+    this.setupVisibilityObserver();
+    this.setupReducedMotionListener();
+
+    // If reduced motion is preferred, just draw once without animation
+    if (this.prefersReducedMotion) {
+      this.draw();
+    } else {
+      this.animate();
+    }
+  }
+
+  setupVisibilityObserver() {
+    // Use Intersection Observer to pause animation when off-screen
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          this.isVisible = entry.isIntersecting;
+          if (this.isVisible && !this.isPaused && !this.prefersReducedMotion) {
+            // Resume animation when visible
+            if (!this.animationId) {
+              this.animate();
+            }
+          }
+        });
+      },
+      { threshold: 0.1 }
+    );
+    observer.observe(this.canvas);
+  }
+
+  setupReducedMotionListener() {
+    // Listen for changes in reduced motion preference
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    mediaQuery.addEventListener('change', (e) => {
+      this.prefersReducedMotion = e.matches;
+      if (e.matches) {
+        // Stop animation and draw static state
+        this.pause();
+        this.draw();
+      } else if (this.isVisible) {
+        // Resume animation
+        this.resume();
+      }
+    });
+  }
+
+  pause() {
+    this.isPaused = true;
+    if (this.animationId) {
+      cancelAnimationFrame(this.animationId);
+      this.animationId = null;
+    }
+  }
+
+  resume() {
+    if (this.isPaused && !this.prefersReducedMotion) {
+      this.isPaused = false;
+      if (this.isVisible) {
+        this.animate();
+      }
+    }
   }
 
   resize() {
@@ -590,6 +653,12 @@ class NetworkGraph {
   }
 
   animate() {
+    // Skip animation if not visible or paused
+    if (!this.isVisible || this.isPaused || this.prefersReducedMotion) {
+      this.animationId = null;
+      return;
+    }
+
     this.updatePhysics();
     this.spawnDataPacket();
     this.updateDataPackets();
