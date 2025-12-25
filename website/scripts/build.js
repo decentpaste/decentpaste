@@ -85,7 +85,7 @@ async function build() {
 
   // 6. Copy other static files
   console.log('📋 Copying static files...');
-  const staticFiles = ['robots.txt', 'sitemap.xml', 'CNAME', 'downloads.json'];
+  const staticFiles = ['robots.txt', 'sitemap.xml', 'CNAME', 'downloads.json', 'privacy.html'];
   for (const file of staticFiles) {
     try {
       copyFileSync(join(ROOT, file), join(DIST, file));
