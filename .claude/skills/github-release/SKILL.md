@@ -11,9 +11,7 @@ Create GitHub release with formatted notes from commits since last tag.
 
 ## Workflow
 
-1. **Get version** from `decentpaste-app/src-tauri/tauri.conf.json`
-
-2. **Get commits** since latest tag (run as separate commands):
+1. **Get commits** since latest tag (run as separate commands):
    ```bash
    # First: get latest tag
    git tag --sort=-v:refname | head -1
@@ -22,6 +20,11 @@ Create GitHub release with formatted notes from commits since last tag.
    # Then: get commits since that tag (replace <TAG> with result above)
    git log <TAG>..HEAD --pretty=format:"%h %s%n%b---" --no-merges
    ```
+
+2. **Bump version** if needed:
+   - Check if version in `decentpaste-app/src-tauri/tauri.conf.json` matches latest tag
+   - If yes, run `/bump-version` skill first
+   - If already bumped, continue
 
 3. **Categorize** by conventional commit prefix:
 
@@ -63,7 +66,14 @@ Create GitHub release with formatted notes from commits since last tag.
 
 5. **Confirm** with user: show version, tag, commit count, notes preview
 
-6. **Create release**:
+6. **Commit and push version bump** (CRITICAL - must happen before creating release!):
+   ```bash
+   git add -A && git commit -m "chore: bump version to X.X.X"
+   git push
+   ```
+   ⚠️ CI/CD builds from the pushed code. If you create the release before pushing, CI will build the old version!
+
+7. **Create release**:
    ```bash
    gh release create vX.X.X --title "DecentPaste vX.X.X" --notes "$(cat <<'EOF'
    <notes>
@@ -71,4 +81,4 @@ Create GitHub release with formatted notes from commits since last tag.
    )"
    ```
 
-7. **Done**: Show release URL, remind to upload artifacts with `gh release upload`
+8. **Done**: Show release URL, CI will automatically build and upload artifacts
