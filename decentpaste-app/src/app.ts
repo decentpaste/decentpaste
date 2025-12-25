@@ -7,6 +7,7 @@ import { icon, type IconName } from './components/icons';
 import { $, escapeHtml, formatTime, truncate } from './utils/dom';
 import { getErrorMessage } from './utils/error';
 import { notifyClipboardReceived, notifyMinimizedToTray } from './utils/notifications';
+import { isDesktop } from './utils/platform';
 import { checkForUpdates, downloadAndInstallUpdate, formatBytes, getDownloadPercentage } from './api/updater';
 import type { ClipboardEntry, DiscoveredPeer, PairedPeer } from './api/types';
 // ?url suffix prevents race condition where Tauri webview loads before Vite is ready,
@@ -993,7 +994,8 @@ class App {
     const currentView = store.get('currentView');
     const isActive = currentView === view;
     const updateStatus = store.get('updateStatus');
-    const showBadge = view === 'settings' && updateStatus === 'available';
+    // Only show update badge on desktop (mobile uses app stores)
+    const showBadge = view === 'settings' && updateStatus === 'available' && isDesktop();
 
     return `
       <button
@@ -1252,7 +1254,9 @@ class App {
           </div>
         </div>
 
-        <!-- Updates -->
+        ${
+          isDesktop()
+            ? `<!-- Updates (desktop only - mobile uses app stores) -->
         <div class="mb-6">
           <div class="flex items-center gap-2 mb-3">
             <div class="icon-container-blue" style="width: 1.5rem; height: 1.5rem; border-radius: 0.5rem;">
@@ -1263,7 +1267,9 @@ class App {
           <div id="update-section" class="card overflow-hidden">
             ${this.renderUpdateContent()}
           </div>
-        </div>
+        </div>`
+            : ''
+        }
 
         <!-- About -->
         <div>
@@ -2008,6 +2014,9 @@ class App {
   }
 
   private renderUpdateSection(): void {
+    // Updates section only exists on desktop
+    if (!isDesktop()) return;
+
     const view = store.get('currentView');
     if (view === 'settings') {
       const container = $('#update-section');
@@ -2018,6 +2027,9 @@ class App {
   }
 
   private renderUpdateBadge(): void {
+    // Update badge only relevant on desktop
+    if (!isDesktop()) return;
+
     const status = store.get('updateStatus');
     const badge = $('#nav-settings-badge');
     if (badge) {

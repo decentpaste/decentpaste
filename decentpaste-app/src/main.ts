@@ -3,6 +3,7 @@ import { initApp } from './app';
 import { reconnectPeers, processPendingClipboard, flushVault } from './api/commands';
 import { store } from './state/store';
 import { checkForUpdates } from './api/updater';
+import { isDesktop } from './utils/platform';
 
 // Track if the app has fully initialized (Tauri IPC is ready)
 let appInitialized = false;
@@ -59,17 +60,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // Periodic update check every minute (all platforms)
-  const checkUpdatesQuietly = () => {
-    checkForUpdates().catch((e) => {
-      // Silently fail if offline - user can manually check in Settings
-      console.debug('Update check failed (offline?):', e);
-    });
-  };
+  // Periodic update check every minute (desktop only)
+  // Mobile platforms use app stores for updates (Google Play, App Store)
+  if (isDesktop()) {
+    const checkUpdatesQuietly = () => {
+      checkForUpdates().catch((e) => {
+        // Silently fail if offline - user can manually check in Settings
+        console.debug('Update check failed (offline?):', e);
+      });
+    };
 
-  // Initial check after 10 seconds (let app fully initialize)
-  setTimeout(checkUpdatesQuietly, 10000);
+    // Initial check after 10 seconds (let app fully initialize)
+    setTimeout(checkUpdatesQuietly, 10000);
 
-  // Then check every minute
-  setInterval(checkUpdatesQuietly, 60000);
+    // Then check every minute
+    setInterval(checkUpdatesQuietly, 60000);
+  }
 });
