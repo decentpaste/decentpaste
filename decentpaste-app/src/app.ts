@@ -866,7 +866,7 @@ class App {
             <button class="flex items-center gap-3 hover:opacity-80 transition-opacity" data-nav="dashboard">
               <img src="${logoDark}" alt="DecentPaste Logo" class="w-12 h-12" />
               <div class="text-left">
-                <h1 class="font-semibold text-white text-sm tracking-tight">DecentPaste</h1>
+                <h1 class="font-display font-semibold text-white text-sm tracking-tight">DecentPaste</h1>
                 <p class="text-xs text-white/40">${state.settings.device_name}</p>
               </div>
             </button>
@@ -993,7 +993,7 @@ class App {
 
           <!-- Clipboard History Header -->
           <div class="flex items-center justify-between mb-3">
-            <h2 class="text-sm font-semibold text-white/80 tracking-tight">Clipboard History <span id="clipboard-count" class="text-white/30 font-normal">(${historyCount})</span></h2>
+            <h2 class="text-sm font-semibold text-white/80 tracking-tight font-display">Clipboard History <span id="clipboard-count" class="text-white/30 font-normal">(${historyCount})</span></h2>
             <div class="flex items-center gap-1.5 flex-shrink-0">
               <button id="btn-toggle-visibility" class="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all ${hideContent ? 'bg-teal-500/15 text-teal-400 border border-teal-500/30' : 'bg-white/5 text-white/50 border border-white/10 hover:bg-white/10 hover:text-white/70'}" title="${hideContent ? 'Show content' : 'Hide content'}">
                 ${icon(hideContent ? 'eye' : 'eyeOff', 12)}
@@ -1030,7 +1030,7 @@ class App {
             <div class="icon-container-green" style="width: 1.5rem; height: 1.5rem; border-radius: 0.5rem;">
               ${icon('link', 12)}
             </div>
-            <h2 class="text-sm font-semibold text-white/80 tracking-tight">Paired Devices</h2>
+            <h2 class="text-sm font-semibold text-white/80 tracking-tight font-display">Paired Devices</h2>
             <span class="text-xs text-white/30 ml-auto">${pairedPeers.length}</span>
           </div>
           <div id="paired-peers" class="space-y-2">
@@ -1044,7 +1044,7 @@ class App {
             <div class="icon-container-orange" style="width: 1.5rem; height: 1.5rem; border-radius: 0.5rem;">
               ${icon('wifi', 12)}
             </div>
-            <h2 class="text-sm font-semibold text-white/80 tracking-tight">Discovered Devices</h2>
+            <h2 class="text-sm font-semibold text-white/80 tracking-tight font-display">Discovered Devices</h2>
             <span class="text-xs text-white/30 ml-auto mr-2">${discoveredPeers.length}</span>
             <button id="btn-refresh-peers" class="p-1.5 rounded-lg text-white/40 hover:text-teal-400 hover:bg-teal-500/10 transition-all" title="Refresh">
               ${icon('refreshCw', 14)}
@@ -1071,7 +1071,7 @@ class App {
             <div class="icon-container-purple" style="width: 1.5rem; height: 1.5rem; border-radius: 0.5rem;">
               ${icon('monitor', 12)}
             </div>
-            <h2 class="text-sm font-semibold text-white/80 tracking-tight">Device</h2>
+            <h2 class="text-sm font-semibold text-white/80 tracking-tight font-display">Device</h2>
           </div>
           <div class="card p-4">
             <div class="flex items-center gap-3">
@@ -1083,10 +1083,10 @@ class App {
                   id="device-name-input"
                   type="text"
                   value="${settings.device_name}"
-                  class="input w-full font-semibold text-white"
+                  class="input w-full font-semibold text-white font-display"
                   style="padding: 0.5rem 0.75rem;"
                 />
-                <p class="text-xs text-white/30 mt-1 font-mono">${deviceInfo?.device_id?.slice(0, 16) || 'Unknown'}...</p>
+                <p class="text-xs text-white/30 mt-1 font-mono tracking-wider">${deviceInfo?.device_id?.slice(0, 16) || 'Unknown'}...</p>
               </div>
             </div>
           </div>
@@ -1098,7 +1098,7 @@ class App {
             <div class="icon-container-green" style="width: 1.5rem; height: 1.5rem; border-radius: 0.5rem;">
               ${icon('refreshCw', 12)}
             </div>
-            <h2 class="text-sm font-semibold text-white/80 tracking-tight">Sync</h2>
+            <h2 class="text-sm font-semibold text-white/80 tracking-tight font-display">Sync</h2>
           </div>
           <div class="card overflow-hidden">
             <label class="flex items-center justify-between p-4 cursor-pointer hover:bg-white/[0.02] transition-colors">
@@ -1119,7 +1119,7 @@ class App {
             <div class="icon-container-blue" style="width: 1.5rem; height: 1.5rem; border-radius: 0.5rem;">
               ${icon('history', 12)}
             </div>
-            <h2 class="text-sm font-semibold text-white/80 tracking-tight">History</h2>
+            <h2 class="text-sm font-semibold text-white/80 tracking-tight font-display">History</h2>
           </div>
           <div class="card overflow-hidden">
             <div class="flex items-center justify-between p-4">
@@ -1152,7 +1152,7 @@ class App {
             <div class="icon-container-teal" style="width: 1.5rem; height: 1.5rem; border-radius: 0.5rem;">
               ${icon('lock', 12)}
             </div>
-            <h2 class="text-sm font-semibold text-white/80 tracking-tight">Security</h2>
+            <h2 class="text-sm font-semibold text-white/80 tracking-tight font-display">Security</h2>
           </div>
           <div class="card overflow-hidden">
             <div class="flex items-center justify-between p-4">
@@ -1178,7 +1178,7 @@ class App {
             <div class="icon-container-blue" style="width: 1.5rem; height: 1.5rem; border-radius: 0.5rem;">
               ${icon('download', 12)}
             </div>
-            <h2 class="text-sm font-semibold text-white/80 tracking-tight">Updates</h2>
+            <h2 class="text-sm font-semibold text-white/80 tracking-tight font-display">Updates</h2>
           </div>
           <div id="update-section" class="card overflow-hidden">
             ${this.renderUpdateContent()}
@@ -1191,7 +1191,7 @@ class App {
             <div class="icon-container-orange" style="width: 1.5rem; height: 1.5rem; border-radius: 0.5rem;">
               ${icon('clipboard', 12)}
             </div>
-            <h2 class="text-sm font-semibold text-white/80 tracking-tight">About</h2>
+            <h2 class="text-sm font-semibold text-white/80 tracking-tight font-display">About</h2>
           </div>
           <div class="card p-4">
             <div class="flex items-center gap-3">
@@ -1231,7 +1231,7 @@ class App {
             <div class="w-20 h-20 rounded-2xl mx-auto mb-4 flex items-center justify-center glow-teal" style="background: linear-gradient(135deg, rgba(20, 184, 166, 0.2) 0%, rgba(13, 148, 136, 0.1) 100%); border: 1px solid rgba(20, 184, 166, 0.3);">
               ${icon('lock', 36, 'text-teal-400')}
             </div>
-            <h1 class="text-xl font-semibold text-white mb-1">Welcome back</h1>
+            <h1 class="text-xl font-semibold text-white mb-1 font-display">Welcome back</h1>
             <p class="text-white/50 text-sm">${escapeHtml(deviceName)}</p>
           </div>
 
@@ -1310,7 +1310,7 @@ class App {
           <div class="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center glow-teal" style="background: linear-gradient(135deg, rgba(20, 184, 166, 0.2) 0%, rgba(13, 148, 136, 0.1) 100%); border: 1px solid rgba(20, 184, 166, 0.3);">
             ${icon('monitor', 28, 'text-teal-400')}
           </div>
-          <h2 class="text-xl font-semibold text-white mb-2">Name Your Device</h2>
+          <h2 class="text-xl font-semibold text-white mb-2 font-display">Name Your Device</h2>
           <p class="text-white/50 text-sm">This name will be visible to other devices on your network</p>
         </div>
 
@@ -1339,7 +1339,7 @@ class App {
           <div class="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center" style="background: linear-gradient(135deg, rgba(20, 184, 166, 0.2) 0%, rgba(13, 148, 136, 0.1) 100%); border: 1px solid rgba(20, 184, 166, 0.3);">
             ${icon('key', 28, 'text-teal-400')}
           </div>
-          <h2 class="text-xl font-semibold text-white mb-2">Create Your PIN</h2>
+          <h2 class="text-xl font-semibold text-white mb-2 font-display">Create Your PIN</h2>
           <p class="text-white/50 text-sm">Choose a 4-8 digit PIN to secure your vault</p>
         </div>
 
@@ -1400,7 +1400,7 @@ class App {
             <!-- Logo -->
             <div class="text-center mb-6">
               <img src="${logoDark}" alt="DecentPaste Logo" class="w-16 h-16 mx-auto mb-2" />
-              <h1 class="text-lg font-semibold text-white tracking-tight">Welcome to DecentPaste</h1>
+              <h1 class="text-lg font-semibold text-white tracking-tight font-display">Welcome to DecentPaste</h1>
             </div>
 
             ${progressIndicator}
@@ -1430,7 +1430,7 @@ class App {
               ${icon('alertTriangle', 28, 'text-red-400')}
             </div>
 
-            <h2 class="text-xl font-semibold text-white mb-2">Reset Vault?</h2>
+            <h2 class="text-xl font-semibold text-white mb-2 font-display">Reset Vault?</h2>
             <p class="text-white/50 text-sm mb-4">This will permanently delete all your data:</p>
 
             <!-- Warning List -->
@@ -1497,7 +1497,7 @@ class App {
               ${icon('trash', 22, 'text-red-400')}
             </div>
 
-            <h2 class="text-lg font-semibold text-white mb-1">Clear History?</h2>
+            <h2 class="text-lg font-semibold text-white mb-1 font-display">Clear History?</h2>
             <p class="text-white/50 text-sm mb-5">
               This will delete ${count} clipboard ${count === 1 ? 'item' : 'items'}. This action cannot be undone.
             </p>
@@ -1521,17 +1521,18 @@ class App {
     const isLocal = item.is_local;
     // Escape HTML to prevent XSS attacks from malicious clipboard content
     const safeContent = hideContent ? '••••••••••••••••' : escapeHtml(truncate(item.content, 120));
+    const itemClass = isLocal ? 'clipboard-item-local' : 'clipboard-item-remote';
     return `
-      <div class="card p-3 group cursor-pointer clipboard-item" data-id="${item.id}" style="transition: all 0.2s ease;">
+      <div class="card p-3 group cursor-pointer clipboard-item ${itemClass}" data-id="${item.id}">
         <div class="flex items-start justify-between gap-3">
           <div class="flex-1 min-w-0">
-            <p class="text-sm text-white/90 break-words line-clamp-2 leading-relaxed ${hideContent ? 'select-none' : ''}">${safeContent}</p>
+            <p class="text-sm text-white/90 break-words line-clamp-2 leading-relaxed ${hideContent ? 'select-none font-mono' : ''}">${safeContent}</p>
             <div class="flex items-center gap-2 mt-2">
               <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${isLocal ? 'bg-teal-500/10 text-teal-400' : 'bg-orange-500/10 text-orange-400'}">
                 ${isLocal ? icon('monitor', 10) : icon('download', 10)}
                 ${isLocal ? 'Local' : escapeHtml(item.origin_device_name)}
               </span>
-              <span class="text-xs text-white/30">${formatTime(item.timestamp)}</span>
+              <span class="text-xs text-white/30 font-mono">${formatTime(item.timestamp)}</span>
             </div>
           </div>
           <button
@@ -1592,12 +1593,12 @@ class App {
 
   private renderEmptyState(title: string, subtitle: string): string {
     return `
-      <div class="text-center py-12">
-        <div class="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06);">
-          ${icon('clipboard', 24, 'text-white/20')}
+      <div class="empty-state text-center py-12">
+        <div class="empty-state-icon">
+          ${icon('clipboard', 28, 'text-white/25')}
         </div>
-        <p class="text-white/50 text-sm font-medium">${title}</p>
-        <p class="text-white/30 text-xs mt-1">${subtitle}</p>
+        <p class="text-white/60 text-sm font-semibold tracking-tight">${title}</p>
+        <p class="text-white/35 text-xs mt-1.5">${subtitle}</p>
       </div>
     `;
   }
@@ -1648,7 +1649,7 @@ class App {
           <div class="icon-container-teal icon-container-lg mx-auto mb-4" style="width: 4rem; height: 4rem;">
             ${icon('link', 28)}
           </div>
-          <h3 class="text-lg font-semibold text-white mb-2 tracking-tight">Pairing Request</h3>
+          <h3 class="text-lg font-semibold text-white mb-2 tracking-tight font-display">Pairing Request</h3>
           <p class="text-white/50 mb-6">${safePeerName || 'A device'} wants to pair with you</p>
           <div class="flex gap-3">
             <button id="btn-reject-pairing" class="btn-secondary flex-1" style="touch-action: manipulation">
@@ -1690,7 +1691,7 @@ class App {
           <div class="icon-container-green icon-container-lg mx-auto mb-4" style="width: 4rem; height: 4rem;">
             ${icon('check', 28)}
           </div>
-          <h3 class="text-lg font-semibold text-white mb-2 tracking-tight">Confirm PIN</h3>
+          <h3 class="text-lg font-semibold text-white mb-2 tracking-tight font-display">Confirm PIN</h3>
           <p class="text-white/50 mb-6">Verify this PIN matches on both devices</p>
           <div class="pin-display mx-auto mb-6">
             ${pinDigits}
@@ -1704,7 +1705,7 @@ class App {
           <div class="mx-auto mb-4">
             ${icon('loader', 48, 'text-teal-400 animate-spin')}
           </div>
-          <h3 class="text-lg font-semibold text-white mb-2 tracking-tight">Pairing...</h3>
+          <h3 class="text-lg font-semibold text-white mb-2 tracking-tight font-display">Pairing...</h3>
           <p class="text-white/50 mb-4">Waiting for ${safePeerName || 'device'} to respond</p>
           <p class="text-xs text-white/30 mb-6">Make sure the app is open on the other device</p>
           <button id="btn-cancel-pairing" class="btn-secondary" style="touch-action: manipulation">
