@@ -172,4 +172,3 @@ export async function resetVault(): Promise<void> {
 export async function flushVault(): Promise<void> {
   return invoke('flush_vault');
 }
-
