@@ -477,9 +477,9 @@ Single-file application with authentication and main views:
 - **Lock Screen**: PIN input for returning users, "Forgot PIN?" reset option
 
 **Main Views (after unlock):**
-1. **Dashboard**: Full clipboard history with sync toggle, privacy toggle, and quick actions
+1. **Dashboard**: Auto Sync toggle, paired devices shortcut, Share Now action, and clipboard history
 2. **Peers**: Discovered and paired devices, pairing UI
-3. **Settings**: Device name, sync preferences, history settings, security (auto-lock), lock button
+3. **Settings**: Device name, notifications, history settings, security (auto-lock), lock button
 
 ### API Layer (`src/api/`)
 
@@ -718,7 +718,7 @@ yarn build
 ### Clipboard Not Syncing
 
 - Verify devices are paired (check Peers view)
-- Ensure auto-sync is enabled in Settings
+- Ensure Auto Sync is enabled on Dashboard (Home tab)
 - Check that content is text (images not supported)
 
 ---

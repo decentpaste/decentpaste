@@ -96,6 +96,20 @@ class App {
         return;
       }
 
+      // Sync toggle on Dashboard
+      if (target.closest('#dashboard-sync-toggle')) {
+        const currentSettings = store.get('settings');
+        const newEnabled = !currentSettings.auto_sync_enabled;
+        const settings = { ...currentSettings, auto_sync_enabled: newEnabled };
+        try {
+          await commands.updateSettings(settings);
+          store.set('settings', settings);
+        } catch (error) {
+          store.addToast(`Failed to update settings: ${getErrorMessage(error)}`, 'error');
+        }
+        return;
+      }
+
       // Copy buttons with visual feedback animation
       const copyEl = target.closest('[data-copy]');
       if (copyEl) {
@@ -538,20 +552,6 @@ class App {
     this.root.addEventListener('change', async (e) => {
       const target = e.target as HTMLInputElement | HTMLSelectElement;
 
-      // Sync toggle on Dashboard
-      if (target.id === 'dashboard-sync-toggle') {
-        const checked = (target as HTMLInputElement).checked;
-        const settings = { ...store.get('settings'), auto_sync_enabled: checked };
-        try {
-          await commands.updateSettings(settings);
-          store.set('settings', settings);
-        } catch (error) {
-          store.addToast(`Failed to update settings: ${getErrorMessage(error)}`, 'error');
-          (target as HTMLInputElement).checked = !checked; // Revert
-        }
-        return;
-      }
-
       // Auto-lock timer select
       if (target.id === 'auto-lock-select') {
         const value = parseInt((target as HTMLSelectElement).value, 10);
@@ -863,13 +863,13 @@ class App {
         <!-- Header -->
         <header class="relative z-10 px-4 py-1 pt-safe-top border-b" style="background: rgba(17, 17, 19, 0.8); backdrop-filter: blur(12px); border-color: rgba(255, 255, 255, 0.06);">
           <div class="flex items-center justify-between">
-            <div class="flex items-center gap-3">
+            <button class="flex items-center gap-3 hover:opacity-80 transition-opacity" data-nav="dashboard">
               <img src="${logoDark}" alt="DecentPaste Logo" class="w-12 h-12" />
-              <div>
+              <div class="text-left">
                 <h1 class="font-semibold text-white text-sm tracking-tight">DecentPaste</h1>
                 <p class="text-xs text-white/40">${state.settings.device_name}</p>
               </div>
-            </div>
+            </button>
             <!-- Lock Button with teal icon container styling -->
             <button id="btn-lock-vault" class="icon-container-teal hover:scale-105 transition-transform" style="width: 2.25rem; height: 2.25rem;" title="Lock vault">
               ${icon('lock', 16)}
@@ -950,61 +950,50 @@ class App {
     const allItems = state.clipboardHistory;
     const syncEnabled = state.settings.auto_sync_enabled;
     const hideContent = state.settings.hide_clipboard_content;
+    const pairedCount = state.pairedPeers.length;
 
     return `
       <div class="flex flex-col h-full">
         <!-- Sticky Top Section -->
         <div class="flex-shrink-0 p-4 pb-0">
-          <!-- Stats Grid -->
-          <div class="grid grid-cols-2 gap-3 mb-6">
-            <!-- Sync Toggle Card -->
-            <div class="card p-4">
+          <!-- Quick Actions -->
+          <div class="grid grid-cols-2 gap-3 mb-3">
+            <!-- Auto Sync Toggle Card -->
+            <button id="dashboard-sync-toggle" class="card p-4 w-full text-left cursor-pointer hover:bg-white/[0.03] transition-colors">
               <div class="flex items-center gap-3">
                 <div class="${syncEnabled ? 'icon-container-teal' : 'icon-container-orange'}">
                   ${icon(syncEnabled ? 'refreshCw' : 'wifiOff', 18)}
                 </div>
                 <div class="flex-1 min-w-0">
-                  <p class="text-sm font-medium text-white">Sync</p>
-                  <p class="text-xs text-white/40">${syncEnabled ? 'Active' : 'Paused'}</p>
+                  <p class="text-sm font-medium text-white">Auto Sync</p>
+                  <p class="text-xs text-white/40">${syncEnabled ? 'On' : 'Off'}</p>
                 </div>
-                <label class="relative inline-block w-10 h-6 flex-shrink-0">
-                  <input
-                    type="checkbox"
-                    id="dashboard-sync-toggle"
-                    ${syncEnabled ? 'checked' : ''}
-                    class="peer sr-only"
-                  />
-                  <span class="absolute inset-0 bg-white/10 rounded-full cursor-pointer transition-colors peer-checked:bg-teal-500/50"></span>
-                  <span class="absolute left-1 top-1 w-4 h-4 bg-white/60 rounded-full transition-transform peer-checked:translate-x-4 peer-checked:bg-white"></span>
-                </label>
               </div>
-            </div>
-            <!-- Clipboard Count Card -->
-            <div class="card p-4">
+            </button>
+            <!-- Paired Devices Card -->
+            <button class="card p-4 w-full text-left hover:bg-white/[0.03] transition-colors" data-nav="peers">
               <div class="flex items-center gap-3">
-                <div class="icon-container-teal">
-                  ${icon('clipboard', 18)}
+                <div class="icon-container-purple">
+                  ${icon('monitor', 18)}
                 </div>
-                <div>
-                  <p id="clipboard-count" class="text-2xl font-bold text-white tracking-tight">${historyCount}</p>
-                  <p class="text-xs text-white/40">Clipboard Items</p>
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm font-medium text-white">Devices</p>
+                  <p id="paired-count" class="text-xs text-white/40">${pairedCount} paired</p>
+                </div>
+                <div class="text-white/30">
+                  ${icon('chevronRight', 16)}
                 </div>
               </div>
-            </div>
-          </div>
-
-          <!-- Quick Actions -->
-          <div class="mb-6">
-            <h2 class="text-sm font-semibold text-white/80 mb-3 tracking-tight">Quick Actions</h2>
-            <button id="btn-share-clipboard" class="btn-primary w-full">
-              ${icon('share', 18)}
-              <span>Share Clipboard</span>
             </button>
           </div>
+          <button id="btn-share-clipboard" class="btn-primary w-full mb-6">
+            ${icon('share', 18)}
+            <span>Share Now</span>
+          </button>
 
           <!-- Clipboard History Header -->
           <div class="flex items-center justify-between mb-3">
-            <h2 class="text-sm font-semibold text-white/80 tracking-tight">Clipboard History</h2>
+            <h2 class="text-sm font-semibold text-white/80 tracking-tight">Clipboard History <span id="clipboard-count" class="text-white/30 font-normal">(${historyCount})</span></h2>
             <div class="flex items-center gap-1.5 flex-shrink-0">
               <button id="btn-toggle-visibility" class="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all ${hideContent ? 'bg-teal-500/15 text-teal-400 border border-teal-500/30' : 'bg-white/5 text-white/50 border border-white/10 hover:bg-white/10 hover:text-white/70'}" title="${hideContent ? 'Show content' : 'Hide content'}">
                 ${icon(hideContent ? 'eye' : 'eyeOff', 12)}
@@ -1765,6 +1754,12 @@ class App {
       if (content) {
         content.innerHTML = this.renderPeersView();
       }
+    } else if (view === 'dashboard') {
+      // Update the paired count on dashboard
+      const countEl = $('#paired-count');
+      if (countEl) {
+        countEl.textContent = `${store.get('pairedPeers').length} paired`;
+      }
     }
   }
 
@@ -1774,10 +1769,10 @@ class App {
       const history = store.get('clipboardHistory');
       const hideContent = store.get('settings').hide_clipboard_content;
 
-      // Update the clipboard count in stats
+      // Update the clipboard count in header
       const countEl = $('#clipboard-count');
       if (countEl) {
-        countEl.textContent = String(history.length);
+        countEl.textContent = `(${history.length})`;
       }
 
       // Update the full clipboard history list

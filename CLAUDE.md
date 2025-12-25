@@ -200,7 +200,7 @@ Device names propagate through:
 
 ### Mobile (Android & iOS)
 
-- **Clipboard outgoing**: Auto-monitoring disabled; use "Share Clipboard" button
+- **Clipboard outgoing**: Auto-monitoring disabled; use "Share Now" button
 - **Clipboard incoming**: Only syncs when app is in foreground; connections drop when backgrounded
 - When app resumes: automatically reconnects to peers via `reconnect_peers`
 
