@@ -3,9 +3,7 @@ use std::time::Duration;
 use tauri::AppHandle;
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tokio::sync::{mpsc, RwLock};
-use tracing::{debug, error, warn};
-
-use crate::security::hash_content;
+use tracing::{debug, warn};
 
 #[derive(Debug, Clone)]
 pub struct ClipboardChange {
@@ -67,7 +65,7 @@ impl ClipboardMonitor {
                     match app_handle.clipboard().read_text() {
                         Ok(text) => {
                             if !text.is_empty() && text.len() <= MAX_CLIPBOARD_SIZE {
-                                let hash = hash_content(&text);
+                                let hash = crate::security::hash_content(&text);
                                 let mut last = last_hash.write().await;
 
                                 if last.as_ref() != Some(&hash) {
@@ -81,7 +79,7 @@ impl ClipboardMonitor {
                                     };
 
                                     if tx.send(change).await.is_err() {
-                                        error!(
+                                        tracing::error!(
                                             "Failed to send clipboard change - receiver dropped"
                                         );
                                         break;

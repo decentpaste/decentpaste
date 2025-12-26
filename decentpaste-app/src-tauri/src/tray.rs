@@ -115,9 +115,3 @@ pub fn setup_tray(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Erro
     info!("System tray initialized");
     Ok(())
 }
-
-/// No-op for mobile platforms
-#[cfg(any(target_os = "android", target_os = "ios"))]
-pub fn setup_tray(_app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
-    Ok(())
-}
