@@ -2,6 +2,8 @@ package com.decentpaste.plugins.shareintent
 
 import android.app.Activity
 import android.content.Intent
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.webkit.WebView
 import app.tauri.annotation.Command
@@ -24,12 +26,16 @@ class ShareIntentPlugin(private val activity: Activity) : Plugin(activity) {
     // Track if we've already emitted for this content (prevent duplicates)
     private var lastEmittedContent: String? = null
 
+    // Store webView reference for event emission
+    private var webViewRef: WebView? = null
+
     /**
      * Called when the plugin is loaded and WebView is ready.
      * Check for share intent that launched the app (cold start).
      */
     override fun load(webView: WebView) {
         super.load(webView)
+        webViewRef = webView
         Log.i(TAG, "ShareIntentPlugin loaded")
         Log.i(TAG, "Checking activity intent: action=${activity.intent?.action}, type=${activity.intent?.type}")
         // Handle intent that started the activity
@@ -44,6 +50,50 @@ class ShareIntentPlugin(private val activity: Activity) : Plugin(activity) {
         super.onNewIntent(intent)
         Log.i(TAG, "onNewIntent received: action=${intent.action}, type=${intent.type}")
         handleIntent(intent)
+    }
+
+    /**
+     * Emit an event to the frontend via JavaScript evaluation.
+     * Uses window.__TAURI__.event.emit for Tauri v2 compatibility.
+     */
+    private fun emitEvent(eventName: String, content: String, source: String) {
+        val webView = webViewRef ?: run {
+            Log.e(TAG, "WebView not available for event emission")
+            return
+        }
+
+        // Escape content for JavaScript string
+        val escapedContent = content
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\n", "\\n")
+            .replace("\r", "\\r")
+            .replace("\t", "\\t")
+
+        // JavaScript to emit the event using Tauri's event system
+        val js = """
+            (function() {
+                if (window.__TAURI__ && window.__TAURI__.event && window.__TAURI__.event.emit) {
+                    window.__TAURI__.event.emit('$eventName', { content: "$escapedContent", source: "$source" });
+                    console.log('[ShareIntentPlugin] Event emitted via __TAURI__.event.emit');
+                } else if (window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke) {
+                    // Fallback for older Tauri versions
+                    window.__TAURI_INTERNALS__.invoke('plugin:event|emit', { event: '$eventName', payload: { content: "$escapedContent", source: "$source" } });
+                    console.log('[ShareIntentPlugin] Event emitted via __TAURI_INTERNALS__.invoke');
+                } else {
+                    // Last resort: dispatch a custom DOM event
+                    window.dispatchEvent(new CustomEvent('$eventName', { detail: { content: "$escapedContent", source: "$source" } }));
+                    console.log('[ShareIntentPlugin] Event emitted via dispatchEvent');
+                }
+            })();
+        """.trimIndent()
+
+        // Run on UI thread
+        Handler(Looper.getMainLooper()).post {
+            webView.evaluateJavascript(js) { result ->
+                Log.d(TAG, "JavaScript evaluation result: $result")
+            }
+        }
     }
 
     /**
@@ -71,12 +121,11 @@ class ShareIntentPlugin(private val activity: Activity) : Plugin(activity) {
                 if (sharedText != lastEmittedContent) {
                     lastEmittedContent = sharedText
 
-                    // Emit event to frontend
-                    val payload = JSObject()
-                    payload.put("content", sharedText)
-                    payload.put("source", "android")
-                    Log.i(TAG, "Emitting share-intent-received event")
-                    trigger("share-intent-received", payload)
+                    Log.i(TAG, "Emitting share-intent-received event via JavaScript")
+                    // Use a slight delay to ensure WebView is fully ready
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        emitEvent("share-intent-received", sharedText, "android")
+                    }, 500)
                 } else {
                     Log.d(TAG, "Skipping duplicate content emission")
                 }

@@ -84,9 +84,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Listen for share intents from mobile platforms (Android/iOS)
   // When user shares content from another app and selects DecentPaste
   if (isMobile()) {
+    // Listen via Tauri event system
     listen<{ content: string; source: string }>('share-intent-received', async (event) => {
-      console.log('Share intent received:', event.payload);
+      console.log('Share intent received (Tauri event):', event.payload);
       await handleShareIntent(event.payload.content);
+    });
+
+    // Also listen via DOM CustomEvent as fallback
+    window.addEventListener('share-intent-received', async (event: Event) => {
+      const customEvent = event as CustomEvent<{ content: string; source: string }>;
+      console.log('Share intent received (DOM event):', customEvent.detail);
+      if (customEvent.detail?.content) {
+        await handleShareIntent(customEvent.detail.content);
+      }
     });
   }
 });
