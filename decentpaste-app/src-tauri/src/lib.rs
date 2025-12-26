@@ -59,6 +59,10 @@ pub fn run() {
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let builder = builder.plugin(tauri_plugin_notification::init());
 
+    // Share intent plugin - functional on mobile, no-op on desktop
+    // Must be registered for all platforms since capabilities are validated at build time
+    let builder = builder.plugin(tauri_plugin_share_intent::init());
+
     builder
         // Stronghold plugin - password callback returns bytes for encryption key
         // Note: We handle our own Argon2 key derivation in VaultManager,

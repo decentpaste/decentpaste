@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.decentpaste.plugins.shareintent">
+
+    <!--
+        NOTE: This manifest is intentionally minimal.
+        The share intent filter is added to the main app's manifest.
+        See the activity-alias below which references the MainActivity.
+    -->
+
+    <application>
+        <!--
+            Activity alias that adds the SEND intent filter to MainActivity.
+            Uses ${applicationId} placeholder which resolves to the app's package.
+        -->
+        <activity-alias
+            android:name="${applicationId}.ShareReceiverAlias"
+            android:targetActivity="${applicationId}.MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity-alias>
+    </application>
+
+</manifest>

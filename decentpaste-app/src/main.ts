@@ -1,9 +1,13 @@
 import './styles.css';
 import { initApp } from './app';
-import { reconnectPeers, processPendingClipboard, flushVault } from './api/commands';
+import { reconnectPeers, processPendingClipboard, flushVault, shareClipboardContent } from './api/commands';
 import { store } from './state/store';
 import { checkForUpdates } from './api/updater';
-import { isDesktop } from './utils/platform';
+import { isDesktop, isMobile } from './utils/platform';
+import { listen } from '@tauri-apps/api/event';
+
+// Store pending share content for after vault unlock (mobile only)
+let pendingShareContent: string | null = null;
 
 // Track if the app has fully initialized (Tauri IPC is ready)
 let appInitialized = false;
@@ -76,4 +80,82 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Then check every minute
     setInterval(checkUpdatesQuietly, 60000);
   }
+
+  // Listen for share intents from mobile platforms (Android/iOS)
+  // When user shares content from another app and selects DecentPaste
+  if (isMobile()) {
+    listen<{ content: string; source: string }>('share-intent-received', async (event) => {
+      console.log('Share intent received:', event.payload);
+      await handleShareIntent(event.payload.content);
+    });
+  }
 });
+
+/**
+ * Handle shared content from another app via the OS share menu.
+ * If vault is locked, stores for later. If unlocked, shares immediately.
+ */
+async function handleShareIntent(content: string): Promise<void> {
+  if (!content || content.trim() === '') {
+    console.log('Empty share intent, ignoring');
+    return;
+  }
+
+  const vaultStatus = store.get('vaultStatus');
+  console.log(`Processing share intent, vault status: ${vaultStatus}`);
+
+  if (vaultStatus !== 'Unlocked') {
+    // Store for later processing after unlock
+    pendingShareContent = content;
+    store.addToast('Unlock to share content with your devices', 'info');
+    console.log('Stored share intent for after unlock');
+    return;
+  }
+
+  // Vault is unlocked, process immediately
+  await processShareIntentContent(content);
+}
+
+/**
+ * Actually share the content with paired devices.
+ * Reconnects to peers first (important for mobile resume) then broadcasts.
+ */
+async function processShareIntentContent(content: string): Promise<void> {
+  try {
+    // Reconnect to peers first (important for mobile resume)
+    console.log('Reconnecting to peers...');
+    await reconnectPeers();
+
+    // Small delay for reconnection to establish
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    // Share the content
+    console.log('Sharing content with peers...');
+    await shareClipboardContent(content);
+
+    store.addToast('Content shared with your devices!', 'success');
+    console.log('Share intent processed successfully');
+  } catch (error) {
+    console.error('Failed to process share intent:', error);
+    const message = error instanceof Error ? error.message : String(error);
+
+    if (message.includes('No paired peers')) {
+      store.addToast('No paired devices to share with', 'error');
+    } else {
+      store.addToast(`Failed to share: ${message}`, 'error');
+    }
+  }
+}
+
+/**
+ * Check for pending share content and process it.
+ * Call this after vault unlock completes.
+ */
+export async function checkPendingShareContent(): Promise<void> {
+  if (pendingShareContent) {
+    const content = pendingShareContent;
+    pendingShareContent = null;
+    console.log('Processing pending share content after unlock');
+    await processShareIntentContent(content);
+  }
+}

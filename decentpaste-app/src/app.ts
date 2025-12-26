@@ -740,9 +740,20 @@ class App {
       const previousStatus = store.get('vaultStatus');
       store.set('vaultStatus', status);
 
-      // If transitioning to Unlocked, load app data
+      // If transitioning to Unlocked, load app data and check for pending share intent
       if (status === 'Unlocked' && previousStatus !== 'Unlocked') {
         await this.loadDataAfterUnlock();
+
+        // Check for pending share content (mobile only - from share intent received while locked)
+        // Delay slightly to ensure network is ready
+        setTimeout(async () => {
+          try {
+            const { checkPendingShareContent } = await import('./main');
+            await checkPendingShareContent();
+          } catch (e) {
+            console.error('Failed to check pending share content:', e);
+          }
+        }, 1000);
       }
     });
 

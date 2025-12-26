@@ -1117,6 +1117,7 @@ dependencies = [
  "tauri-plugin-opener",
  "tauri-plugin-os",
  "tauri-plugin-process",
+ "tauri-plugin-share-intent",
  "tauri-plugin-stronghold",
  "tauri-plugin-updater",
  "thiserror 2.0.17",
@@ -6311,6 +6312,19 @@ checksum = "d55511a7bf6cd70c8767b02c97bf8134fa434daf3926cfc1be0a0f94132d165a"
 dependencies = [
  "tauri",
  "tauri-plugin",
+]
+
+[[package]]
+name = "tauri-plugin-share-intent"
+version = "0.1.0"
+dependencies = [
+ "jni",
+ "log",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-plugin",
+ "thiserror 2.0.17",
 ]
 
 [[package]]

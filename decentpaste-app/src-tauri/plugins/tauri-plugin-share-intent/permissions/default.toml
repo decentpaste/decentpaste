@@ -1,0 +1,12 @@
+"$schema" = "schemas/schema.json"
+
+[default]
+description = """
+Default permissions for the share-intent plugin.
+Allows receiving shared content from other apps via the OS share menu.
+"""
+permissions = [
+    "allow-get-pending-content",
+    "allow-has-pending-content",
+    "allow-clear-pending-content"
+]

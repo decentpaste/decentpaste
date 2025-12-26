@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-has-pending-content"
+description = "Enables the has_pending_content command without any pre-configured scope."
+commands.allow = ["has_pending_content"]
+
+[[permission]]
+identifier = "deny-has-pending-content"
+description = "Denies the has_pending_content command without any pre-configured scope."
+commands.deny = ["has_pending_content"]

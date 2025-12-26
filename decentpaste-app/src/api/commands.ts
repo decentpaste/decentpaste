@@ -172,3 +172,36 @@ export async function resetVault(): Promise<void> {
 export async function flushVault(): Promise<void> {
   return invoke('flush_vault');
 }
+
+// Share Intent commands (mobile only - for receiving content from other apps via share menu)
+
+/** Content received from a share intent */
+export interface ShareIntentContent {
+  content: string | null;
+  source: string | null; // "android" or "ios"
+}
+
+/**
+ * Get and consume pending share intent content.
+ * Returns shared content if any was received via the OS share menu, null otherwise.
+ * The content is consumed (cleared) after retrieval.
+ */
+export async function getPendingShareContent(): Promise<ShareIntentContent> {
+  return invoke('plugin:share-intent|get_pending_content');
+}
+
+/**
+ * Check if there's pending share content without consuming it.
+ */
+export async function hasPendingShareContent(): Promise<boolean> {
+  const result = await invoke<{ hasPending: boolean }>('plugin:share-intent|has_pending_content');
+  return result.hasPending;
+}
+
+/**
+ * Clear pending share content without processing.
+ * Useful for cancellation flows.
+ */
+export async function clearPendingShareContent(): Promise<void> {
+  return invoke('plugin:share-intent|clear_pending_content');
+}

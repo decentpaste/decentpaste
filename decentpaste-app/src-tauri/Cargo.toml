@@ -67,6 +67,10 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 futures = "0.3"
 async-trait = "0.1"
 
+# Share intent plugin - functional on mobile, no-op on desktop
+# Must be available on all platforms since capabilities are validated at build time
+tauri-plugin-share-intent = { path = "./plugins/tauri-plugin-share-intent" }
+
 # Desktop-only plugins (notifications don't work on mobile - network dies when backgrounded)
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-notification = "2"
