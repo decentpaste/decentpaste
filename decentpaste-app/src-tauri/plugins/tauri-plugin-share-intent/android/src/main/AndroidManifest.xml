@@ -3,20 +3,16 @@
     package="com.decentpaste.plugins.shareintent">
 
     <!--
-        NOTE: This manifest is intentionally minimal.
-        The share intent filter is added to the main app's manifest.
-        See the activity-alias below which references the MainActivity.
+        Activity alias that adds the SEND intent filter.
+        Uses ${applicationId} placeholder which resolves to the app's package (com.decentpaste.application).
+        The targetActivity points to the main app's MainActivity.
     -->
-
     <application>
-        <!--
-            Activity alias that adds the SEND intent filter to MainActivity.
-            Uses ${applicationId} placeholder which resolves to the app's package.
-        -->
         <activity-alias
             android:name="${applicationId}.ShareReceiverAlias"
             android:targetActivity="${applicationId}.MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:label="DecentPaste">
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
