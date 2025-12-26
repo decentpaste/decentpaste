@@ -1,6 +1,5 @@
 import UIKit
 import Social
-import MobileCoreServices
 import UniformTypeIdentifiers
 
 class ShareViewController: SLComposeServiceViewController {
@@ -30,13 +29,11 @@ class ShareViewController: SLComposeServiceViewController {
                 fullText = "\(self.contentText)\n\n\(text)"
             }
 
-            // Store in shared container
+            // Store in shared container for main app to pick up
             self.storeSharedContent(fullText)
 
-            // Open main app (optional - may not work in all cases)
-            self.openMainApp()
-
             // Complete the extension
+            // Note: Main app will detect content via App Groups when it becomes active
             self.extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
         }
     }
@@ -99,23 +96,5 @@ class ShareViewController: SLComposeServiceViewController {
         defaults.synchronize()
 
         print("[ShareExtension] Stored content: \(content.prefix(50))...")
-    }
-
-    // MARK: - Open Main App
-
-    private func openMainApp() {
-        // Try to open main app via URL scheme
-        // Note: This may not work reliably from extensions
-        guard let url = URL(string: "decentpaste://share") else { return }
-
-        // Use the responder chain to find the application
-        var responder: UIResponder? = self
-        while responder != nil {
-            if let application = responder as? UIApplication {
-                application.open(url, options: [:], completionHandler: nil)
-                break
-            }
-            responder = responder?.next
-        }
     }
 }

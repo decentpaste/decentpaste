@@ -9,8 +9,9 @@ class ShareIntentPlugin: Plugin {
     private static let pendingContentKey = "shareIntent_pendingContent"
     private static let pendingTimestampKey = "shareIntent_timestamp"
 
-    // Track last emitted content to prevent duplicates
-    private var lastEmittedContent: String?
+    // Track the timestamp of the last processed content to prevent duplicate processing
+    // Using timestamp instead of content value allows same text to be shared multiple times
+    private var lastProcessedTimestamp: Date?
 
     // MARK: - Plugin Lifecycle
 
@@ -48,21 +49,25 @@ class ShareIntentPlugin: Plugin {
             return
         }
 
-        // Check timestamp - expire after 5 minutes
-        if let timestamp = defaults.object(forKey: Self.pendingTimestampKey) as? Date {
-            let fiveMinutesAgo = Date().addingTimeInterval(-300)
-            if timestamp < fiveMinutesAgo {
-                // Content is stale, clear it
-                clearPendingContentFromDefaults()
-                return
-            }
-        }
-
-        // Prevent duplicate emissions
-        if content == lastEmittedContent {
+        // Get the timestamp when content was stored
+        guard let timestamp = defaults.object(forKey: Self.pendingTimestampKey) as? Date else {
+            // No timestamp means malformed data, clear it
+            clearPendingContentFromDefaults()
             return
         }
-        lastEmittedContent = content
+
+        // Expire content after 5 minutes
+        let fiveMinutesAgo = Date().addingTimeInterval(-300)
+        if timestamp < fiveMinutesAgo {
+            clearPendingContentFromDefaults()
+            return
+        }
+
+        // Use timestamp to detect if this is new content (allows same text to be shared multiple times)
+        if let lastProcessed = lastProcessedTimestamp, timestamp <= lastProcessed {
+            return
+        }
+        lastProcessedTimestamp = timestamp
 
         // Emit event to frontend
         trigger("share-intent-received", data: [
@@ -114,6 +119,7 @@ class ShareIntentPlugin: Plugin {
     /// Clear pending content without processing
     @objc public func clearPendingContent(_ invoke: Invoke) throws {
         clearPendingContentFromDefaults()
+        lastProcessedTimestamp = nil
         invoke.resolve([:])
     }
 

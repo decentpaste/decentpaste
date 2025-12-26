@@ -51,8 +51,8 @@ targets:
           - UIInterfaceOrientationPortraitUpsideDown
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
-        CFBundleShortVersionString: 0.1.0
-        CFBundleVersion: "0.1.0"
+        CFBundleShortVersionString: 0.3.5
+        CFBundleVersion: "0.3.5"
     entitlements:
       path: decentpaste-app_iOS/decentpaste-app_iOS.entitlements
     scheme:

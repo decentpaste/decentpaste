@@ -1,15 +1,11 @@
 use serde::{Serialize, Serializer};
 
+/// Plugin errors (currently unused since native code handles all logic,
+/// but kept for API completeness and future extensibility)
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("Failed to access share intent: {0}")]
-    AccessError(String),
-
-    #[error("No pending share content")]
-    NoPendingContent,
-
-    #[error("Platform not supported")]
-    PlatformNotSupported,
+    #[error("{0}")]
+    Plugin(String),
 }
 
 impl Serialize for Error {

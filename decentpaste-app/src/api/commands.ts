@@ -174,6 +174,11 @@ export async function flushVault(): Promise<void> {
 }
 
 // Share Intent commands (mobile only - for receiving content from other apps via share menu)
+//
+// Note: The primary mechanism for receiving share intents is the 'share-intent-received' event,
+// which is emitted by native code when content is shared. These commands are provided as an
+// optional fallback/polling mechanism but are not required for normal operation.
+// See main.ts for the event-based implementation.
 
 /** Content received from a share intent */
 export interface ShareIntentContent {
@@ -182,7 +187,8 @@ export interface ShareIntentContent {
 }
 
 /**
- * Get and consume pending share intent content.
+ * Get and consume pending share intent content (optional fallback mechanism).
+ * The primary way to receive share intents is via the 'share-intent-received' event.
  * Returns shared content if any was received via the OS share menu, null otherwise.
  * The content is consumed (cleared) after retrieval.
  */
@@ -191,7 +197,8 @@ export async function getPendingShareContent(): Promise<ShareIntentContent> {
 }
 
 /**
- * Check if there's pending share content without consuming it.
+ * Check if there's pending share content without consuming it (optional fallback mechanism).
+ * The primary way to receive share intents is via the 'share-intent-received' event.
  */
 export async function hasPendingShareContent(): Promise<boolean> {
   const result = await invoke<{ hasPending: boolean }>('plugin:share-intent|has_pending_content');
@@ -200,7 +207,7 @@ export async function hasPendingShareContent(): Promise<boolean> {
 
 /**
  * Clear pending share content without processing.
- * Useful for cancellation flows.
+ * Useful for cancellation flows or resetting state.
  */
 export async function clearPendingShareContent(): Promise<void> {
   return invoke('plugin:share-intent|clear_pending_content');

@@ -23,8 +23,9 @@ class ShareIntentPlugin(private val activity: Activity) : Plugin(activity) {
     // Store pending content for retrieval by Rust/JS
     private var pendingContent: String? = null
 
-    // Track if we've already emitted for this content (prevent duplicates)
-    private var lastEmittedContent: String? = null
+    // Track the last processed intent to prevent duplicate processing on config changes
+    // We use a hash of content + timestamp to allow same content to be shared multiple times
+    private var lastProcessedIntentHash: Int = 0
 
     // Store webView reference for event emission
     private var webViewRef: WebView? = null
@@ -113,22 +114,25 @@ class ShareIntentPlugin(private val activity: Activity) : Plugin(activity) {
             Log.i(TAG, "Share intent detected! Text: ${sharedText?.take(50)}...")
 
             if (!sharedText.isNullOrEmpty()) {
-                // Store for retrieval
+                // Use Intent's identity hash to detect if this is the same intent being reprocessed
+                // (e.g., on configuration changes). This allows the same text to be shared multiple times.
+                val intentHash = System.identityHashCode(intent)
+
+                if (intentHash == lastProcessedIntentHash) {
+                    Log.d(TAG, "Skipping already-processed intent (same object)")
+                    return
+                }
+                lastProcessedIntentHash = intentHash
+
+                // Store for retrieval via command
                 pendingContent = sharedText
                 Log.i(TAG, "Stored pending content (${sharedText.length} chars)")
 
-                // Only emit if this is new content (prevent duplicate events)
-                if (sharedText != lastEmittedContent) {
-                    lastEmittedContent = sharedText
-
-                    Log.i(TAG, "Emitting share-intent-received event via JavaScript")
-                    // Use a slight delay to ensure WebView is fully ready
-                    Handler(Looper.getMainLooper()).postDelayed({
-                        emitEvent("share-intent-received", sharedText, "android")
-                    }, 500)
-                } else {
-                    Log.d(TAG, "Skipping duplicate content emission")
-                }
+                Log.i(TAG, "Emitting share-intent-received event via JavaScript")
+                // Use a slight delay to ensure WebView is fully ready
+                Handler(Looper.getMainLooper()).postDelayed({
+                    emitEvent("share-intent-received", sharedText, "android")
+                }, 500)
             }
         } else {
             Log.d(TAG, "Not a share intent, skipping")
@@ -174,7 +178,7 @@ class ShareIntentPlugin(private val activity: Activity) : Plugin(activity) {
     @Command
     fun clearPendingContent(invoke: Invoke) {
         pendingContent = null
-        lastEmittedContent = null
+        lastProcessedIntentHash = 0
         invoke.resolve(JSObject())
     }
 }
