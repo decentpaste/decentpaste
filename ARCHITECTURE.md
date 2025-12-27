@@ -441,6 +441,7 @@ Tauri commands exposed to frontend:
 | `reset_vault`                      | Destroy vault and all data (factory reset)                                |
 | `flush_vault`                      | Force save vault data to disk                                             |
 | `process_pending_clipboard`        | Process clipboard queued while app was backgrounded                       |
+| `handle_shared_content`            | Handle text shared from Android share sheet (waits for peers, shares)     |
 
 ### 7. Events (Emitted to Frontend)
 
@@ -506,6 +507,8 @@ Single-file application with authentication and main views:
 - Initializes the app on DOMContentLoaded
 - **Mobile background handling**: Listens for `visibilitychange` events and triggers `reconnectPeers()` when app becomes
   visible (critical for mobile where connections drop when backgrounded)
+- **Android share intent handling**: Checks for pending shared content from `tauri-plugin-decentshare` on app init and
+  visibility changes. If vault is locked, stores content for processing after unlock.
 
 ---
 
