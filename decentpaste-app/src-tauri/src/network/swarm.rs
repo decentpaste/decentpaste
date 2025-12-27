@@ -56,11 +56,13 @@ pub enum NetworkCommand {
     BroadcastClipboard {
         message: ClipboardMessage,
     },
+    #[allow(dead_code)]
     GetPeers,
     /// Force reconnection to all discovered peers (used after app resume from background)
     ReconnectPeers,
     /// Re-emit PeerDiscovered event for a specific peer (used after unpairing to make peer
     /// appear in discovered list again)
+    #[allow(dead_code)]
     RefreshPeer {
         peer_id: String,
     },

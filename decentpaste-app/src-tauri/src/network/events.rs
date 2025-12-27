@@ -74,5 +74,6 @@ pub enum NetworkEvent {
 
     // Status events
     StatusChanged(NetworkStatus),
+    #[allow(dead_code)]
     Error(String),
 }
