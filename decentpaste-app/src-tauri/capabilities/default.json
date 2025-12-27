@@ -20,6 +20,7 @@
     "updater:default",
     "process:allow-restart",
     "stronghold:default",
-    "os:default"
+    "os:default",
+    "decentshare:default"
   ]
 }

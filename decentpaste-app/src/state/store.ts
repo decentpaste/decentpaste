@@ -74,6 +74,10 @@ export interface AppState {
 
   // App version (fetched from Tauri)
   appVersion: string;
+
+  // Share intent state (Android "share with" functionality)
+  // Stores content received from share intent while vault is locked
+  pendingShare: string | null;
 }
 
 type StateListener<K extends keyof AppState> = (value: AppState[K]) => void;
@@ -124,6 +128,8 @@ class Store {
       showClearHistoryConfirm: false,
       // App version (fetched from Tauri on init)
       appVersion: '',
+      // Share intent state (Android)
+      pendingShare: null,
     };
   }
 

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+        Activity alias that adds the SEND intent filter for receiving shared text.
+
+        How this works:
+        1. User selects "Share" on text in another app
+        2. Android shows the share sheet with DecentPaste as an option
+        3. When selected, the SEND intent is routed to this alias
+        4. The alias targets MainActivity, which handles the intent
+        5. The DecentsharePlugin receives onNewIntent() callback
+        6. Plugin emits "share-received" event to the frontend
+
+        Uses ${applicationId} placeholder which resolves to the app's package
+        (com.decentpaste.application) at build time.
+    -->
+    <application>
+        <activity-alias
+            android:name="${applicationId}.ShareReceiverAlias"
+            android:targetActivity="${applicationId}.MainActivity"
+            android:exported="true"
+            android:label="DecentPaste">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity-alias>
+    </application>
+
+</manifest>

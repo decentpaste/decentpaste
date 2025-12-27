@@ -52,6 +52,12 @@ pub enum DecentPasteError {
 
     #[error("Not supported: {0}")]
     NotSupported(String),
+
+    #[error("Vault is locked")]
+    VaultLocked,
+
+    #[error("No paired peers available")]
+    NoPeersAvailable,
 }
 
 impl serde::Serialize for DecentPasteError {
