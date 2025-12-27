@@ -130,8 +130,8 @@ DecentPaste is designed with security as a priority:
 
 ### Data Storage
 
-- **Shared secrets**: Stored locally in `~/.local/share/com.decentpaste.app/peers.json`
-- **Private key**: Stored in `~/.local/share/com.decentpaste.app/private_key.bin`
+- **Shared secrets**: Stored locally in `~/.local/share/com.decentpaste.application/peers.json`
+- **Private key**: Stored in `~/.local/share/com.decentpaste.application/private_key.bin`
 - **No cloud**: All data stays on your devices
 
 > **Note**: Secrets are currently stored in plaintext. OS keychain integration is planned for future releases.

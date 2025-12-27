@@ -752,7 +752,7 @@ git push origin main --tags
 
 - Uses `@tailwindcss/postcss` for Tailwind v4
 
-### Data Directory (`~/.local/share/com.decentpaste.app/`)
+### Data Directory (`~/.local/share/com.decentpaste.application/`)
 
 **Encrypted (Stronghold vault):**
 - `vault.hold` - IOTA Stronghold encrypted vault containing:
