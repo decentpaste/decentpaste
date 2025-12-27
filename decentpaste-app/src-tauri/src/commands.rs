@@ -873,3 +873,147 @@ pub async fn reset_vault(app_handle: AppHandle, state: State<'_, AppState>) -> R
 pub async fn flush_vault(state: State<'_, AppState>) -> Result<()> {
     state.flush_all_to_vault().await
 }
+
+// ============================================================================
+// Share Intent Handling - For Android "share with" functionality
+// ============================================================================
+
+use std::time::{Duration, Instant};
+
+/// Result of handling shared content from Android share intent.
+#[derive(Debug, Clone, Serialize)]
+pub struct ShareResult {
+    /// Number of paired peers the content was sent to
+    pub peer_count: usize,
+    /// Whether the content was added to clipboard history
+    pub added_to_history: bool,
+    /// Whether the operation completed successfully
+    pub success: bool,
+    /// Optional message for the user
+    pub message: Option<String>,
+}
+
+/// Handle shared content received from Android share intent.
+///
+/// This command is called by the frontend after receiving a "share-received" event
+/// from the decentshare plugin. It:
+/// 1. Verifies the vault is unlocked
+/// 2. Waits for paired peers to reconnect (with smart timeout)
+/// 3. Shares the content with all available paired peers
+/// 4. Adds the content to clipboard history
+///
+/// # Arguments
+/// * `content` - The shared text content
+///
+/// # Returns
+/// * `ShareResult` - Details about the sharing operation
+#[tauri::command]
+pub async fn handle_shared_content(
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+    content: String,
+) -> Result<ShareResult> {
+    use crate::vault::VaultStatus;
+    use tracing::info;
+
+    info!(
+        "Handling shared content from share intent ({} chars)",
+        content.len()
+    );
+
+    // 1. Check vault is unlocked
+    let vault_status = *state.vault_status.read().await;
+    if vault_status != VaultStatus::Unlocked {
+        return Err(DecentPasteError::VaultLocked);
+    }
+
+    // 2. Check we have paired peers
+    let paired_peer_count = state.paired_peers.read().await.len();
+    if paired_peer_count == 0 {
+        return Err(DecentPasteError::NoPeersAvailable);
+    }
+
+    // 3. Wait for network to be ready and try to connect to peers
+    let connected_count = wait_for_peers_ready(&state, Duration::from_secs(5)).await;
+
+    info!(
+        "After waiting: {} peers potentially reachable",
+        connected_count
+    );
+
+    // 4. Share the content using existing share_clipboard_content logic
+    // This handles encryption, broadcast, and history
+    share_clipboard_content(app_handle.clone(), state.clone(), content).await?;
+
+    // 5. Return success with accurate messaging
+    let message = if connected_count > 0 {
+        Some(format!("Sent to {} paired device(s)", paired_peer_count))
+    } else {
+        Some("Saved to history. Devices may receive it when they connect.".to_string())
+    };
+
+    Ok(ShareResult {
+        peer_count: paired_peer_count, // Number of paired peers (content sent to all)
+        added_to_history: true,
+        success: true,
+        message,
+    })
+}
+
+/// Wait for the network to be ready and peers to potentially reconnect.
+///
+/// This implements a smart waiting strategy:
+/// - Phase 1 (0-500ms): Check if network command channel is available
+/// - Phase 2 (500ms-5s): Poll periodically, send reconnect command, wait for peers
+/// - Returns early if we detect the network is ready
+///
+/// # Returns
+/// The number of paired peers that might be reachable (based on network status)
+async fn wait_for_peers_ready(state: &AppState, timeout: Duration) -> usize {
+    use crate::network::NetworkCommand;
+    use tracing::debug;
+
+    let start = Instant::now();
+    let poll_interval = Duration::from_millis(200);
+
+    // First, trigger a reconnect if the network channel is available
+    {
+        let tx = state.network_command_tx.read().await;
+        if let Some(tx) = tx.as_ref() {
+            debug!("Sending ReconnectPeers command for share intent");
+            let _ = tx.send(NetworkCommand::ReconnectPeers).await;
+        }
+    }
+
+    // Now poll for network readiness
+    while start.elapsed() < timeout {
+        // Check network status
+        let network_status = state.network_status.read().await.clone();
+
+        match network_status {
+            crate::network::NetworkStatus::Connected => {
+                // Network is ready - return paired peer count
+                let count = state.paired_peers.read().await.len();
+                debug!("Network ready, {} paired peers", count);
+                return count;
+            }
+            crate::network::NetworkStatus::Connecting => {
+                // Still connecting, wait a bit more
+                debug!("Network still connecting, waiting...");
+            }
+            crate::network::NetworkStatus::Disconnected
+            | crate::network::NetworkStatus::Error(_) => {
+                // Network not ready, but keep waiting
+                debug!("Network not ready: {:?}", network_status);
+            }
+        }
+
+        tokio::time::sleep(poll_interval).await;
+    }
+
+    // Timeout reached - return paired peer count anyway
+    // The content will be sent when/if peers connect
+    let count = state.paired_peers.read().await.len();
+    debug!("Timeout waiting for peers, proceeding with {} paired", count);
+    count
+}

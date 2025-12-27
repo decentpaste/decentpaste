@@ -1,3 +1,3 @@
 [default]
-description = "Default permissions for the plugin"
-permissions = ["allow-ping"]
+description = "Default permissions for the decentshare plugin. Allows checking and clearing pending shared content."
+permissions = ["allow-get-pending-share", "allow-clear-pending-share"]

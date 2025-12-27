@@ -25,8 +25,11 @@ class GetPendingShareArgs
  * When a user shares text from another app to DecentPaste:
  * 1. Android routes the SEND intent to our activity-alias (defined in AndroidManifest.xml)
  * 2. The activity-alias targets MainActivity, which triggers onNewIntent()
- * 3. We extract the shared text and emit a "share-received" event to the frontend
+ * 3. We extract the shared text and store it for the frontend to retrieve
  * 4. The frontend handles vault unlock (if needed) and sharing to peers
+ *
+ * Note: We use a command-based approach (getPendingShare) rather than events
+ * to avoid race conditions where both the event and command could fire.
  */
 @TauriPlugin
 class DecentsharePlugin(private val activity: Activity) : Plugin(activity) {
@@ -34,19 +37,21 @@ class DecentsharePlugin(private val activity: Activity) : Plugin(activity) {
     /**
      * Stores the pending shared content until it's retrieved by the frontend.
      * This handles the case where the intent arrives before the webview is ready.
+     *
+     * Thread-safety: Uses @Volatile for visibility across threads (onNewIntent runs
+     * on the activity thread, commands run on Tauri's IPC thread).
      */
+    @Volatile
     private var pendingShareContent: String? = null
 
     /**
      * Called when the activity receives a new intent (e.g., from share sheet).
      * This is the main entry point for handling shared content from other apps.
      */
-    override fun onNewIntent(intent: Intent?) {
+    override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
 
-        Log.d(TAG, "onNewIntent called with action: ${intent?.action}, type: ${intent?.type}")
-
-        if (intent == null) return
+        Log.d(TAG, "onNewIntent called with action: ${intent.action}, type: ${intent.type}")
 
         // Check if this is a SEND intent with plain text
         if (intent.action == Intent.ACTION_SEND && intent.type == "text/plain") {
@@ -59,17 +64,11 @@ class DecentsharePlugin(private val activity: Activity) : Plugin(activity) {
 
             Log.i(TAG, "Received shared text (${sharedText.length} chars)")
 
-            // Store for later retrieval and emit event
+            // Store for later retrieval via getPendingShare command
+            // We don't emit an event here to avoid race conditions where both
+            // the event listener and getPendingShare could process the same content
             pendingShareContent = sharedText
-
-            // Emit event to frontend
-            val payload = JSObject().apply {
-                put("content", sharedText)
-                put("timestamp", System.currentTimeMillis())
-            }
-
-            trigger("share-received", payload)
-            Log.d(TAG, "Emitted share-received event")
+            Log.d(TAG, "Stored pending share content for retrieval")
         }
     }
 

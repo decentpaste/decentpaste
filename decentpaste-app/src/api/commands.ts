@@ -172,3 +172,38 @@ export async function resetVault(): Promise<void> {
 export async function flushVault(): Promise<void> {
   return invoke('flush_vault');
 }
+
+// ============================================================================
+// Share Intent Handling - For Android "share with" functionality
+// ============================================================================
+
+/** Result of handling shared content from Android share intent */
+export interface ShareResult {
+  /** Number of paired peers the content was sent to */
+  peerCount: number;
+  /** Whether the content was added to clipboard history */
+  addedToHistory: boolean;
+  /** Whether the operation completed successfully */
+  success: boolean;
+  /** Optional message for the user */
+  message: string | null;
+}
+
+/**
+ * Handle shared content received from Android share intent.
+ *
+ * This is called by the frontend after receiving a "share-received" event
+ * from the decentshare plugin. It:
+ * 1. Verifies the vault is unlocked
+ * 2. Waits for paired peers to reconnect (with smart timeout)
+ * 3. Shares the content with all available paired peers
+ * 4. Adds the content to clipboard history
+ *
+ * @param content - The shared text content
+ * @returns Details about the sharing operation
+ * @throws VaultLocked if vault is not unlocked
+ * @throws NoPeersAvailable if there are no paired peers
+ */
+export async function handleSharedContent(content: string): Promise<ShareResult> {
+  return invoke('handle_shared_content', { content });
+}

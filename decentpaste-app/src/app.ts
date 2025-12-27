@@ -758,16 +758,67 @@ class App {
   /**
    * Load app data after vault unlock or setup completion.
    * Called when vaultStatus transitions to 'Unlocked'.
+   *
+   * Also processes any pending shared content that was received
+   * via Android share intent while the vault was locked.
    */
   private async loadDataAfterUnlock(): Promise<void> {
     store.set('isLoading', true);
     try {
       await this.loadInitialData();
-      store.addToast('Data loaded successfully', 'success');
+
+      // Process any pending share intent content (Android "share with" feature)
+      await this.processPendingShare();
+
+      // Only show "Data loaded" toast if there was no pending share
+      // (pendingShare toast is more informative)
+      if (!store.get('pendingShare')) {
+        store.addToast('Data loaded successfully', 'success');
+      }
     } catch (error) {
       console.error('Failed to load data after unlock:', error);
       store.addToast('Failed to load some data', 'error');
       store.set('isLoading', false);
+    }
+  }
+
+  /**
+   * Process any pending shared content from Android share intent.
+   * This is called after vault unlock to handle content that arrived while locked.
+   */
+  private async processPendingShare(): Promise<void> {
+    const pendingShare = store.get('pendingShare');
+    if (!pendingShare) return;
+
+    console.log('Processing pending share after vault unlock');
+
+    try {
+      store.addToast('Sharing with your devices...', 'info');
+
+      const result = await commands.handleSharedContent(pendingShare);
+
+      // Clear the pending share on success
+      store.set('pendingShare', null);
+
+      if (result.success) {
+        store.addToast(result.message || `Shared with ${result.peerCount} device(s)`, 'success');
+      } else {
+        store.addToast('Failed to share content', 'error');
+      }
+    } catch (error) {
+      console.error('Failed to process pending share:', error);
+
+      const errorMessage = String(error);
+
+      // Only clear pending share for permanent errors (no peers configured)
+      // For transient errors (network issues), keep it for potential retry
+      if (errorMessage.includes('NoPeersAvailable')) {
+        store.set('pendingShare', null);
+        store.addToast('No paired devices. Pair a device first.', 'error');
+      } else {
+        // Keep pendingShare for potential retry, but notify user
+        store.addToast('Failed to share. Will retry when network is available.', 'error');
+      }
     }
   }
 

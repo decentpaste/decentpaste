@@ -1,9 +1,43 @@
-import { invoke } from '@tauri-apps/api/core'
+import { invoke } from '@tauri-apps/api/core';
 
-export async function ping(value: string): Promise<string | null> {
-  return await invoke<{value?: string}>('plugin:decentshare|ping', {
-    payload: {
-      value,
-    },
-  }).then((r) => (r.value ? r.value : null));
+/**
+ * Response from the getPendingShare command.
+ */
+export interface PendingShareResponse {
+  /** The shared text content, if any */
+  content: string | null;
+  /** Whether there was pending content */
+  hasPending: boolean;
+}
+
+/**
+ * Payload emitted with the "share-received" event.
+ */
+export interface ShareReceivedPayload {
+  /** The shared text content */
+  content: string;
+  /** Timestamp when the share was received (milliseconds since epoch) */
+  timestamp: number;
+}
+
+/**
+ * Check if there's pending shared content from an Android share intent.
+ *
+ * This should be called after app initialization to handle content
+ * that was shared before the webview was ready.
+ *
+ * @returns The pending shared content, if any
+ */
+export async function getPendingShare(): Promise<PendingShareResponse> {
+  return await invoke<PendingShareResponse>('plugin:decentshare|get_pending_share');
+}
+
+/**
+ * Clear the pending shared content after it's been processed.
+ *
+ * This should be called after successfully handling the shared content
+ * to prevent it from being processed again.
+ */
+export async function clearPendingShare(): Promise<void> {
+  await invoke('plugin:decentshare|clear_pending_share');
 }

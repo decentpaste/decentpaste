@@ -52,7 +52,8 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
-        .plugin(tauri_plugin_os::init());
+        .plugin(tauri_plugin_os::init())
+        .plugin(tauri_plugin_decentshare::init());
 
     // Notification plugin is desktop-only (mobile can't receive notifications
     // when backgrounded because network connections are terminated)
@@ -129,6 +130,8 @@ pub fn run() {
             commands::lock_vault,
             commands::reset_vault,
             commands::flush_vault,
+            // Share intent handling (Android)
+            commands::handle_shared_content,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
