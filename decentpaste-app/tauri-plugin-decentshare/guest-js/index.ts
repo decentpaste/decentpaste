@@ -11,16 +11,6 @@ export interface PendingShareResponse {
 }
 
 /**
- * Payload emitted with the "share-received" event.
- */
-export interface ShareReceivedPayload {
-  /** The shared text content */
-  content: string;
-  /** Timestamp when the share was received (milliseconds since epoch) */
-  timestamp: number;
-}
-
-/**
  * Check if there's pending shared content from an Android share intent.
  *
  * This should be called after app initialization to handle content

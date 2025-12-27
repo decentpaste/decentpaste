@@ -1,15 +1,10 @@
 import './styles.css';
 import { initApp } from './app';
-import {
-  reconnectPeers,
-  processPendingClipboard,
-  flushVault,
-  handleSharedContent,
-} from './api/commands';
+import { reconnectPeers, processPendingClipboard, flushVault, handleSharedContent } from './api/commands';
 import { store } from './state/store';
 import { checkForUpdates } from './api/updater';
 import { isDesktop, isMobile } from './utils/platform';
-import { getPendingShare, clearPendingShare } from 'tauri-plugin-decentshare-api';
+import { getPendingShare } from 'tauri-plugin-decentshare-api';
 
 // Track if the app has fully initialized (Tauri IPC is ready)
 let appInitialized = false;
@@ -77,7 +72,6 @@ async function checkForPendingShare(): Promise<void> {
     if (pendingShare.hasPending && pendingShare.content) {
       console.log('Found pending share content');
       await handleShareIntent(pendingShare.content);
-      await clearPendingShare();
     }
   } catch (error) {
     console.error('Failed to check for pending share:', error);

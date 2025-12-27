@@ -12,15 +12,3 @@ pub struct PendingShareResponse {
     /// Whether there was pending content
     pub has_pending: bool,
 }
-
-/// Payload emitted with the "share-received" event from the mobile plugin.
-///
-/// This is sent to the frontend when a share intent is received.
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ShareReceivedPayload {
-    /// The shared text content
-    pub content: String,
-    /// Timestamp when the share was received (milliseconds since epoch)
-    pub timestamp: i64,
-}

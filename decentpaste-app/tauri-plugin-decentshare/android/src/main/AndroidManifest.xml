@@ -10,7 +10,6 @@
         3. When selected, the SEND intent is routed to this alias
         4. The alias targets MainActivity, which handles the intent
         5. The DecentsharePlugin receives onNewIntent() callback
-        6. Plugin emits "share-received" event to the frontend
 
         Uses ${applicationId} placeholder which resolves to the app's package
         (com.decentpaste.application) at build time.

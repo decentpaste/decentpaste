@@ -37,7 +37,6 @@ impl<R: Runtime, T: Manager<R>> crate::DecentshareExt<R> for T {
 /// This plugin enables Android "share with" functionality:
 /// - Registers as a share target in Android's share sheet
 /// - Intercepts shared text via onNewIntent()
-/// - Emits "share-received" events to the frontend
 /// - Provides commands to check for pending shared content
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("decentshare")
