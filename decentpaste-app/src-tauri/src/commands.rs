@@ -963,18 +963,25 @@ pub async fn handle_shared_content(
 /// Wait for the network to be ready and peers to potentially reconnect.
 ///
 /// This implements a smart waiting strategy:
-/// - Phase 1 (0-500ms): Check if network command channel is available
-/// - Phase 2 (500ms-5s): Poll periodically, send reconnect command, wait for peers
-/// - Returns early if we detect the network is ready
+/// - Phase 1: Trigger reconnect command
+/// - Phase 2: Poll for network readiness (Connected or Listening status)
+/// - Phase 3: Wait additional time for gossipsub subscriptions to complete
+///
+/// The extra delay after network is "ready" is crucial because:
+/// - TCP connection establishes first (NetworkStatus::Connected)
+/// - Gossipsub subscription exchange happens ~100-500ms later
+/// - Without this delay, we'd broadcast before peers are subscribed to the topic
 ///
 /// # Returns
 /// The number of paired peers that might be reachable (based on network status)
 async fn wait_for_peers_ready(state: &AppState, timeout: Duration) -> usize {
-    use crate::network::NetworkCommand;
+    use crate::network::{NetworkCommand, NetworkStatus};
     use tracing::debug;
 
     let start = Instant::now();
     let poll_interval = Duration::from_millis(200);
+    // Extra delay after network is ready to allow gossipsub subscriptions
+    let gossipsub_settle_time = Duration::from_millis(500);
 
     // First, trigger a reconnect if the network channel is available
     {
@@ -986,24 +993,37 @@ async fn wait_for_peers_ready(state: &AppState, timeout: Duration) -> usize {
     }
 
     // Now poll for network readiness
+    let mut network_became_ready = false;
+    let mut ready_at: Option<Instant> = None;
+
     while start.elapsed() < timeout {
         // Check network status
         let network_status = state.network_status.read().await.clone();
 
         match network_status {
-            crate::network::NetworkStatus::Connected => {
-                // Network is ready - return paired peer count
-                let count = state.paired_peers.read().await.len();
-                debug!("Network ready, {} paired peers", count);
-                return count;
+            NetworkStatus::Connected => {
+                if !network_became_ready {
+                    debug!("Network is ready (status: Connected)");
+                    network_became_ready = true;
+                    ready_at = Some(Instant::now());
+                }
+
+                // Check if we've waited long enough for gossipsub to settle
+                if let Some(ready_time) = ready_at {
+                    if ready_time.elapsed() >= gossipsub_settle_time {
+                        let count = state.paired_peers.read().await.len();
+                        debug!(
+                            "Gossipsub settle time elapsed, {} paired peers ready",
+                            count
+                        );
+                        return count;
+                    }
+                }
             }
-            crate::network::NetworkStatus::Connecting => {
-                // Still connecting, wait a bit more
+            NetworkStatus::Connecting => {
                 debug!("Network still connecting, waiting...");
             }
-            crate::network::NetworkStatus::Disconnected
-            | crate::network::NetworkStatus::Error(_) => {
-                // Network not ready, but keep waiting
+            NetworkStatus::Disconnected | NetworkStatus::Error(_) => {
                 debug!("Network not ready: {:?}", network_status);
             }
         }

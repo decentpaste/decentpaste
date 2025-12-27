@@ -40,8 +40,10 @@ impl<R: Runtime> Decentshare<R> {
 
     /// Clear the pending shared content after it's been processed.
     pub fn clear_pending_share(&self) -> crate::Result<()> {
+        // Kotlin returns JSObject (empty map `{}`), so we deserialize to Value and discard it
         self.0
-            .run_mobile_plugin::<()>("clearPendingShare", ())
+            .run_mobile_plugin::<serde_json::Value>("clearPendingShare", ())
+            .map(|_| ()) // Discard the response and return ()
             .map_err(Into::into)
     }
 }
