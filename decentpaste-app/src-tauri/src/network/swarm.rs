@@ -158,7 +158,9 @@ impl NetworkManager {
         }
 
         // Start listening on all interfaces
-        let listen_addr: Multiaddr = "/ip4/0.0.0.0/tcp/0".parse().unwrap();
+        // Use a fixed port (31773) so cached addresses remain valid across app restarts.
+        // This enables reliable reconnection when mDNS is slow or unavailable.
+        let listen_addr: Multiaddr = "/ip4/0.0.0.0/tcp/31773".parse().unwrap();
         if let Err(e) = self.swarm.listen_on(listen_addr) {
             error!("Failed to start listening: {}", e);
             let _ = self
