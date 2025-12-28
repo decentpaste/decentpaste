@@ -15,7 +15,7 @@ use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use clipboard::{ClipboardChange, ClipboardEntry, ClipboardMonitor, SyncManager};
+use clipboard::{ClipboardChange, ClipboardEntry, ClipboardMonitor};
 use network::{ClipboardMessage, NetworkCommand, NetworkEvent, NetworkManager};
 use state::AppState;
 #[cfg(any(target_os = "android", target_os = "ios"))]
@@ -409,17 +409,14 @@ pub async fn start_network_services(
         }
     });
 
-    // Start clipboard monitor
-    let clipboard_monitor = ClipboardMonitor::new(settings.clipboard_poll_interval_ms);
+    // Start clipboard monitor (shared via Arc for echo prevention)
+    let clipboard_monitor = std::sync::Arc::new(ClipboardMonitor::new(
+        settings.clipboard_poll_interval_ms,
+    ));
     clipboard_monitor
         .start(app_handle.clone(), clipboard_tx)
         .await;
-
-    // Create shared SyncManager for echo loop prevention
-    // Both clipboard and network handlers need to share state
-    let sync_manager = std::sync::Arc::new(tokio::sync::Mutex::new(SyncManager::new()));
-    let sync_manager_clipboard = sync_manager.clone();
-    let sync_manager_network = sync_manager.clone();
+    let clipboard_monitor_network = clipboard_monitor.clone();
 
     // Handle clipboard changes - broadcast to network
     let app_handle_clipboard = app_handle.clone();
@@ -434,12 +431,9 @@ pub async fn start_network_services(
                 continue; // Skip broadcast when sync is paused
             }
 
-            if change.is_local
-                && sync_manager_clipboard
-                    .lock()
-                    .await
-                    .should_broadcast(&change.content_hash, true)
-            {
+            // The monitor already filters by hash change, and is_local ensures
+            // we only broadcast user actions (not received clipboard updates)
+            if change.is_local {
                 // Get device info
                 let device_identity = state.device_identity.read().await;
                 if let Some(ref identity) = *device_identity {
@@ -505,6 +499,8 @@ pub async fn start_network_services(
     let app_handle_network = app_handle.clone();
     tokio::spawn(async move {
         let state = app_handle_network.state::<AppState>();
+        // Clipboard monitor for echo prevention (set_last_hash after receiving)
+        let clipboard_monitor = clipboard_monitor_network;
 
         while let Some(event) = network_event_rx.recv().await {
             match event {
@@ -913,6 +909,18 @@ pub async fn start_network_services(
                 }
 
                 NetworkEvent::ClipboardReceived(msg) => {
+                    // Safety check: ignore our own messages (belt-and-suspenders)
+                    let my_device_id = state
+                        .device_identity
+                        .read()
+                        .await
+                        .as_ref()
+                        .map(|i| i.device_id.clone());
+                    if my_device_id.as_ref() == Some(&msg.origin_device_id) {
+                        debug!("Ignoring clipboard message from self");
+                        continue;
+                    }
+
                     // Check if from paired peer
                     let paired_peers = state.paired_peers.read().await;
 
@@ -928,71 +936,71 @@ pub async fn start_network_services(
                                     let hash = security::hash_content(&content);
                                     if hash == msg.content_hash {
                                         decrypted_successfully = true;
-                                        if sync_manager_network
-                                            .lock()
-                                            .await
-                                            .on_received(&msg.content_hash)
-                                        {
-                                            // Check if we should queue for background (mobile only)
-                                            #[cfg(any(target_os = "android", target_os = "ios"))]
-                                            let is_foreground = *state.is_foreground.read().await;
-                                            #[cfg(not(any(
-                                                target_os = "android",
-                                                target_os = "ios"
-                                            )))]
-                                            let is_foreground = true;
 
-                                            if is_foreground {
-                                                // Update local clipboard directly
-                                                if let Err(e) =
-                                                    clipboard::monitor::set_clipboard_content(
-                                                        &app_handle_network,
-                                                        &content,
-                                                    )
-                                                {
-                                                    error!("Failed to set clipboard: {}", e);
-                                                }
-                                            } else {
-                                                // Mobile background: queue clipboard silently (no notification)
-                                                // Clipboard will be copied when app resumes
-                                                #[cfg(any(
-                                                    target_os = "android",
-                                                    target_os = "ios"
-                                                ))]
-                                                {
-                                                    info!(
-                                                        "App in background, queuing clipboard from {} (silent)",
-                                                        msg.origin_device_name
-                                                    );
+                                        // Check if we should queue for background (mobile only)
+                                        #[cfg(any(target_os = "android", target_os = "ios"))]
+                                        let is_foreground = *state.is_foreground.read().await;
+                                        #[cfg(not(any(
+                                            target_os = "android",
+                                            target_os = "ios"
+                                        )))]
+                                        let is_foreground = true;
 
-                                                    // Store pending clipboard - will be processed on resume
-                                                    {
-                                                        let mut pending =
-                                                            state.pending_clipboard.write().await;
-                                                        *pending = Some(PendingClipboard {
-                                                            content: content.clone(),
-                                                            from_device: msg
-                                                                .origin_device_name
-                                                                .clone(),
-                                                        });
-                                                    }
-                                                }
+                                        if is_foreground {
+                                            // Update local clipboard directly
+                                            if let Err(e) =
+                                                clipboard::monitor::set_clipboard_content(
+                                                    &app_handle_network,
+                                                    &content,
+                                                )
+                                            {
+                                                error!("Failed to set clipboard: {}", e);
                                             }
 
-                                            // Add to history
-                                            let entry = ClipboardEntry::new_remote(
-                                                content,
-                                                msg.content_hash.clone(),
-                                                msg.timestamp,
-                                                &msg.origin_device_id,
-                                                &msg.origin_device_name,
-                                            );
-                                            state.add_clipboard_entry(entry.clone()).await;
+                                            // Prevent echo: tell the monitor about this hash
+                                            // so it won't treat it as a local change
+                                            clipboard_monitor.set_last_hash(hash.clone()).await;
+                                        } else {
+                                            // Mobile background: queue clipboard silently (no notification)
+                                            // Clipboard will be copied when app resumes
+                                            #[cfg(any(
+                                                target_os = "android",
+                                                target_os = "ios"
+                                            ))]
+                                            {
+                                                info!(
+                                                    "App in background, queuing clipboard from {} (silent)",
+                                                    msg.origin_device_name
+                                                );
 
-                                            // Emit to frontend
-                                            let _ = app_handle_network
-                                                .emit("clipboard-received", entry);
+                                                // Store pending clipboard - will be processed on resume
+                                                {
+                                                    let mut pending =
+                                                        state.pending_clipboard.write().await;
+                                                    *pending = Some(PendingClipboard {
+                                                        content: content.clone(),
+                                                        from_device: msg
+                                                            .origin_device_name
+                                                            .clone(),
+                                                    });
+                                                }
+                                            }
                                         }
+
+                                        // Add to history (always, even for duplicates - moved to front)
+                                        let entry = ClipboardEntry::new_remote(
+                                            content,
+                                            msg.content_hash.clone(),
+                                            msg.timestamp,
+                                            &msg.origin_device_id,
+                                            &msg.origin_device_name,
+                                        );
+                                        state.add_clipboard_entry(entry.clone()).await;
+
+                                        // Emit to frontend
+                                        let _ = app_handle_network
+                                            .emit("clipboard-received", entry);
+
                                         break;
                                     }
                                 }

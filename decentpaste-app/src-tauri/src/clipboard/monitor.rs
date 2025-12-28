@@ -117,7 +117,8 @@ impl ClipboardMonitor {
         *running = false;
     }
 
-    #[allow(dead_code)]
+    /// Set the last known hash to prevent the monitor from treating
+    /// received clipboard content as a local change (echo prevention).
     pub async fn set_last_hash(&self, hash: String) {
         let mut last = self.last_hash.write().await;
         *last = Some(hash);
