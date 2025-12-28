@@ -45,15 +45,28 @@ pub async fn stop_network(state: State<'_, AppState>) -> Result<()> {
     Ok(())
 }
 
-/// Force reconnection to all discovered peers.
+/// Force reconnection to all discovered and paired peers.
 /// Call this when the app resumes from background on mobile.
+/// Uses paired peers' last-known addresses as fallback when mDNS hasn't rediscovered them.
 #[tauri::command]
 pub async fn reconnect_peers(state: State<'_, AppState>) -> Result<()> {
+    // Get paired peers with their last-known addresses for reconnection fallback
+    let paired_peer_addresses: Vec<(String, Vec<String>)> = {
+        let peers = state.paired_peers.read().await;
+        peers
+            .iter()
+            .filter(|p| !p.last_known_addresses.is_empty())
+            .map(|p| (p.peer_id.clone(), p.last_known_addresses.clone()))
+            .collect()
+    };
+
     let tx = state.network_command_tx.read().await;
     if let Some(tx) = tx.as_ref() {
-        tx.send(NetworkCommand::ReconnectPeers)
-            .await
-            .map_err(|_| DecentPasteError::ChannelSend)?;
+        tx.send(NetworkCommand::ReconnectPeers {
+            paired_peer_addresses,
+        })
+        .await
+        .map_err(|_| DecentPasteError::ChannelSend)?;
     }
     Ok(())
 }
@@ -205,9 +218,20 @@ pub async fn initiate_pairing(state: State<'_, AppState>, peer_id: String) -> Re
         return Err(DecentPasteError::AlreadyPaired(peer_id));
     }
 
-    // Create pairing session
+    // Capture peer addresses NOW before mDNS can expire during pairing flow
+    let peer_addresses = {
+        let discovered = state.discovered_peers.read().await;
+        discovered
+            .iter()
+            .find(|p| p.peer_id == peer_id)
+            .map(|p| p.addresses.clone())
+            .unwrap_or_default()
+    };
+
+    // Create pairing session with cached addresses
     let session_id = uuid::Uuid::new_v4().to_string();
-    let session = PairingSession::new(session_id.clone(), peer_id.clone(), true);
+    let session = PairingSession::new(session_id.clone(), peer_id.clone(), true)
+        .with_peer_addresses(peer_addresses);
 
     let mut sessions = state.pairing_sessions.write().await;
     sessions.push(session);
@@ -986,10 +1010,16 @@ async fn wait_for_peers_ready(state: &AppState, timeout: Duration) -> usize {
     let start = Instant::now();
     let poll_interval = Duration::from_millis(100);
 
-    // Get target peer IDs (paired peers we want to reach)
-    let target_peers: HashSet<String> = {
+    // Get target peer IDs and their addresses (paired peers we want to reach)
+    let (target_peers, paired_peer_addresses): (HashSet<String>, Vec<(String, Vec<String>)>) = {
         let peers = state.paired_peers.read().await;
-        peers.iter().map(|p| p.peer_id.clone()).collect()
+        let ids: HashSet<String> = peers.iter().map(|p| p.peer_id.clone()).collect();
+        let addrs: Vec<(String, Vec<String>)> = peers
+            .iter()
+            .filter(|p| !p.last_known_addresses.is_empty())
+            .map(|p| (p.peer_id.clone(), p.last_known_addresses.clone()))
+            .collect();
+        (ids, addrs)
     };
 
     if target_peers.is_empty() {
@@ -997,12 +1027,16 @@ async fn wait_for_peers_ready(state: &AppState, timeout: Duration) -> usize {
         return 0;
     }
 
-    // Trigger reconnect command
+    // Trigger reconnect command with paired peer addresses as fallback
     {
         let tx = state.network_command_tx.read().await;
         if let Some(tx) = tx.as_ref() {
             debug!("Sending ReconnectPeers command");
-            let _ = tx.send(NetworkCommand::ReconnectPeers).await;
+            let _ = tx
+                .send(NetworkCommand::ReconnectPeers {
+                    paired_peer_addresses,
+                })
+                .await;
         }
     }
 

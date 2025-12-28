@@ -61,15 +61,24 @@ impl AppState {
     }
 
     pub async fn add_clipboard_entry(&self, entry: ClipboardEntry) {
-        let added = {
+        let modified = {
             let mut history = self.clipboard_history.write().await;
 
-            // Check for duplicates by hash
-            if history.iter().any(|e| e.content_hash == entry.content_hash) {
-                return;
+            // Check for existing entry with same content hash
+            if let Some(idx) = history
+                .iter()
+                .position(|e| e.content_hash == entry.content_hash)
+            {
+                // Update existing entry with new metadata and move to front
+                // This keeps history clean while allowing re-sharing same content
+                history.remove(idx);
+                debug!(
+                    "Updated existing clipboard entry (moved to front): {}",
+                    &entry.content_hash[..8]
+                );
             }
 
-            // Add to front
+            // Add to front (either new entry or updated existing)
             history.insert(0, entry);
 
             // Trim to max size from settings
@@ -79,7 +88,7 @@ impl AppState {
         };
 
         // Flush-on-write: persist clipboard history immediately
-        if added {
+        if modified {
             if let Err(e) = self.flush_clipboard_history().await {
                 warn!("Failed to flush clipboard history: {}", e);
             }

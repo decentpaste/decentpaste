@@ -60,8 +60,15 @@ pub enum NetworkCommand {
     },
     #[allow(dead_code)]
     GetPeers,
-    /// Force reconnection to all discovered peers (used after app resume from background)
-    ReconnectPeers,
+    /// Force reconnection to all discovered peers (used after app resume from background).
+    /// Also attempts to reconnect to paired peers using their last-known addresses
+    /// as fallback when mDNS hasn't rediscovered them yet.
+    ReconnectPeers {
+        /// Paired peers with their last-known addresses (from vault).
+        /// Used as fallback when peer is not in discovered_peers.
+        /// Format: Vec<(peer_id, Vec<address>)>
+        paired_peer_addresses: Vec<(String, Vec<String>)>,
+    },
     /// Re-emit PeerDiscovered event for a specific peer (used after unpairing to make peer
     /// appear in discovered list again)
     #[allow(dead_code)]
@@ -880,8 +887,8 @@ impl NetworkManager {
                 }
             }
 
-            NetworkCommand::ReconnectPeers => {
-                info!("Reconnecting to all discovered peers (app resumed from background)");
+            NetworkCommand::ReconnectPeers { paired_peer_addresses } => {
+                info!("Reconnecting to peers (app resumed from background)");
 
                 // Only clear pending retries - don't clear connected_peers as that
                 // drops valid connections and causes a brief disconnection window
@@ -921,7 +928,10 @@ impl NetworkManager {
                     );
                 }
 
-                // Try to dial discovered peers that aren't already connected
+                // Track which peers we've attempted to dial
+                let mut dialed_peers: std::collections::HashSet<PeerId> = std::collections::HashSet::new();
+
+                // First, try to dial discovered peers (freshest addresses from mDNS)
                 for (peer_id, peer) in &self.discovered_peers {
                     // Skip peers that are already connected
                     if self.connected_peers.contains_key(peer_id) {
@@ -929,13 +939,48 @@ impl NetworkManager {
                     }
                     if let Some(addr_str) = peer.addresses.first() {
                         if let Ok(addr) = addr_str.parse::<Multiaddr>() {
-                            info!("Attempting to reconnect to {} at {}", peer_id, addr);
+                            info!("Attempting to reconnect to discovered peer {} at {}", peer_id, addr);
                             if let Err(e) = self.swarm.dial(addr) {
                                 warn!("Failed to initiate reconnection to {}: {}", peer_id, e);
+                            }
+                            dialed_peers.insert(*peer_id);
+                        }
+                    }
+                }
+
+                // Then, try paired peers using their last-known addresses as fallback
+                // This handles the case where mDNS expired but we still have cached addresses
+                for (peer_id_str, addresses) in &paired_peer_addresses {
+                    if let Ok(peer_id) = peer_id_str.parse::<PeerId>() {
+                        // Skip if already connected or already dialed
+                        if self.connected_peers.contains_key(&peer_id) || dialed_peers.contains(&peer_id) {
+                            continue;
+                        }
+
+                        // Try the first available address
+                        for addr_str in addresses {
+                            if let Ok(addr) = addr_str.parse::<Multiaddr>() {
+                                info!(
+                                    "Attempting to reconnect to paired peer {} using cached address {}",
+                                    peer_id, addr
+                                );
+                                if let Err(e) = self.swarm.dial(addr.clone()) {
+                                    warn!("Failed to dial paired peer {} at {}: {}", peer_id, addr, e);
+                                } else {
+                                    dialed_peers.insert(peer_id);
+                                    break; // Only try one address per peer
+                                }
                             }
                         }
                     }
                 }
+
+                info!(
+                    "Reconnection initiated: {} peers dialed ({} discovered, {} from vault cache)",
+                    dialed_peers.len(),
+                    self.discovered_peers.len(),
+                    paired_peer_addresses.len()
+                );
             }
 
             NetworkCommand::StartListening | NetworkCommand::StopListening => {

@@ -17,6 +17,7 @@ pub struct PairingSession {
     pub peer_id: String,
     pub peer_name: Option<String>,
     pub peer_public_key: Option<Vec<u8>>, // Peer's X25519 public key for ECDH
+    pub peer_addresses: Vec<String>,      // Cached addresses from discovery (survives mDNS expiry)
     pub pin: Option<String>,
     pub state: PairingState,
     pub is_initiator: bool,
@@ -30,6 +31,7 @@ impl PairingSession {
             peer_id,
             peer_name: None,
             peer_public_key: None,
+            peer_addresses: Vec::new(),
             pin: None,
             state: PairingState::Initiated,
             is_initiator,
@@ -44,6 +46,11 @@ impl PairingSession {
 
     pub fn with_peer_public_key(mut self, public_key: Vec<u8>) -> Self {
         self.peer_public_key = Some(public_key);
+        self
+    }
+
+    pub fn with_peer_addresses(mut self, addresses: Vec<String>) -> Self {
+        self.peer_addresses = addresses;
         self
     }
 

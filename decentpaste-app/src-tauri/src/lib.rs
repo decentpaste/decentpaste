@@ -148,6 +148,7 @@ pub fn run() {
                     let is_foreground = state.is_foreground.clone();
                     let tx_arc = state.network_command_tx.clone();
                     let pending_clipboard = state.pending_clipboard.clone();
+                    let paired_peers_arc = state.paired_peers.clone();
 
                     tauri::async_runtime::spawn(async move {
                         info!("Resume async task started");
@@ -159,10 +160,23 @@ pub fn run() {
                             info!("Foreground state set to true");
                         }
 
-                        // Reconnect to peers
+                        // Get paired peers with their last-known addresses for reconnection fallback
+                        let paired_peer_addresses: Vec<(String, Vec<String>)> = {
+                            let peers = paired_peers_arc.read().await;
+                            peers
+                                .iter()
+                                .filter(|p| !p.last_known_addresses.is_empty())
+                                .map(|p| (p.peer_id.clone(), p.last_known_addresses.clone()))
+                                .collect()
+                        };
+
+                        // Reconnect to peers (using both mDNS cache and paired peer addresses)
                         let tx = tx_arc.read().await;
                         if let Some(tx) = tx.as_ref() {
-                            if let Err(e) = tx.send(NetworkCommand::ReconnectPeers).await {
+                            if let Err(e) = tx
+                                .send(NetworkCommand::ReconnectPeers { paired_peer_addresses })
+                                .await
+                            {
                                 error!("Failed to send reconnect command: {}", e);
                             }
                         }
@@ -501,12 +515,42 @@ pub async fn start_network_services(
                 }
 
                 NetworkEvent::PeerDiscovered(peer) => {
-                    // Check if this peer is already paired - if so, skip adding to discovered
+                    // Check if this peer is already paired
                     let is_paired = {
                         let paired = state.paired_peers.read().await;
                         paired.iter().any(|p| p.peer_id == peer.peer_id)
                     };
 
+                    // Update paired peer's last-known addresses for reconnection fallback
+                    // This ensures we can reconnect even if mDNS expires later
+                    if is_paired && !peer.addresses.is_empty() {
+                        let mut should_flush = false;
+                        {
+                            let mut paired = state.paired_peers.write().await;
+                            if let Some(paired_peer) =
+                                paired.iter_mut().find(|p| p.peer_id == peer.peer_id)
+                            {
+                                // Update addresses if they've changed
+                                if paired_peer.last_known_addresses != peer.addresses {
+                                    debug!(
+                                        "Updating last-known addresses for paired peer {}: {:?}",
+                                        peer.peer_id, peer.addresses
+                                    );
+                                    paired_peer.last_known_addresses = peer.addresses.clone();
+                                    paired_peer.last_seen = Some(Utc::now());
+                                    should_flush = true;
+                                }
+                            }
+                        }
+                        // Flush to persist the updated addresses
+                        if should_flush {
+                            if let Err(e) = state.flush_paired_peers().await {
+                                warn!("Failed to flush paired peers after address update: {}", e);
+                            }
+                        }
+                    }
+
+                    // Only add to discovered_peers if not already paired
                     if !is_paired {
                         let mut peers = state.discovered_peers.write().await;
                         // Update existing peer or add new one
@@ -610,11 +654,22 @@ pub async fn start_network_services(
                     peer_id,
                     request,
                 } => {
+                    // Capture peer addresses NOW before mDNS can expire during pairing flow
+                    let peer_addresses = {
+                        let discovered = state.discovered_peers.read().await;
+                        discovered
+                            .iter()
+                            .find(|p| p.peer_id == peer_id)
+                            .map(|p| p.addresses.clone())
+                            .unwrap_or_default()
+                    };
+
                     // Store the initiator's public key for ECDH key derivation later
                     let session =
                         security::PairingSession::new(session_id.clone(), peer_id.clone(), false)
                             .with_peer_name(request.device_name.clone())
-                            .with_peer_public_key(request.public_key.clone());
+                            .with_peer_public_key(request.public_key.clone())
+                            .with_peer_addresses(peer_addresses);
 
                     let mut sessions = state.pairing_sessions.write().await;
                     // Clean up expired sessions before adding a new one
@@ -666,9 +721,10 @@ pub async fn start_network_services(
                     device_name,
                     shared_secret: received_secret,
                 } => {
-                    // Get the device name and peer's public key from the session
+                    // Get the device name, peer's public key, and cached addresses from the session
                     let final_device_name: String;
                     let peer_public_key: Option<Vec<u8>>;
+                    let session_peer_addresses: Vec<String>;
                     let is_responder: bool;
                     {
                         let mut sessions = state.pairing_sessions.write().await;
@@ -685,10 +741,13 @@ pub async fn start_network_services(
                                 }
                             });
                             peer_public_key = session.peer_public_key.clone();
+                            // Use cached addresses from session (captured at pairing start, before mDNS could expire)
+                            session_peer_addresses = session.peer_addresses.clone();
                             is_responder = !session.is_initiator;
                         } else {
                             final_device_name = device_name.clone();
                             peer_public_key = None;
+                            session_peer_addresses = Vec::new();
                             is_responder = false;
                         }
                     }
@@ -780,6 +839,20 @@ pub async fn start_network_services(
                         received_secret
                     };
 
+                    // Use addresses cached in session (captured at pairing start, survives mDNS expiry)
+                    // Fall back to discovered_peers lookup only if session didn't have addresses
+                    let last_known_addresses = if !session_peer_addresses.is_empty() {
+                        session_peer_addresses
+                    } else {
+                        // Fallback: try discovered_peers (may be empty if mDNS expired)
+                        let discovered = state.discovered_peers.read().await;
+                        discovered
+                            .iter()
+                            .find(|p| p.peer_id == peer_id)
+                            .map(|p| p.addresses.clone())
+                            .unwrap_or_default()
+                    };
+
                     // Add to paired peers (with duplicate check)
                     let paired_peer = storage::PairedPeer {
                         peer_id: peer_id.clone(),
@@ -787,6 +860,7 @@ pub async fn start_network_services(
                         shared_secret,
                         paired_at: Utc::now(),
                         last_seen: Some(Utc::now()),
+                        last_known_addresses,
                     };
 
                     // Add to paired peers (release lock before flushing to avoid deadlock)
