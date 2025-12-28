@@ -210,13 +210,12 @@ class Store {
 
   addClipboardEntry(entry: ClipboardEntry): void {
     this.update('clipboardHistory', (history) => {
-      // Check for duplicates
-      if (history.some((e) => e.content_hash === entry.content_hash)) {
-        return history;
-      }
+      // Remove existing entry with same content hash (if any)
+      // This allows "re-sharing" same content to move it to front with fresh metadata
+      const filtered = history.filter((e) => e.content_hash !== entry.content_hash);
       // Add to front, limit to settings limit
       const limit = this.state.settings.clipboard_history_limit;
-      return [entry, ...history].slice(0, limit);
+      return [entry, ...filtered].slice(0, limit);
     });
   }
 
