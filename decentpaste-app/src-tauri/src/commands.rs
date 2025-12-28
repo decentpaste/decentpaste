@@ -58,6 +58,16 @@ pub async fn reconnect_peers(state: State<'_, AppState>) -> Result<()> {
     Ok(())
 }
 
+/// Update app visibility state (called from frontend on visibility change).
+/// This ensures backend is the single source of truth for foreground state.
+#[tauri::command]
+pub async fn set_app_visibility(state: State<'_, AppState>, visible: bool) -> Result<()> {
+    let mut fg = state.is_foreground.write().await;
+    *fg = visible;
+    debug!("App visibility set to: {}", visible);
+    Ok(())
+}
+
 /// Response from process_pending_clipboard
 #[derive(Debug, Clone, Serialize)]
 pub struct PendingClipboardResponse {
@@ -960,80 +970,86 @@ pub async fn handle_shared_content(
     })
 }
 
-/// Wait for the network to be ready and peers to potentially reconnect.
+/// Wait for at least one paired peer to be ready for broadcast.
 ///
-/// This implements a smart waiting strategy:
-/// - Phase 1: Trigger reconnect command
-/// - Phase 2: Poll for network readiness (Connected or Listening status)
-/// - Phase 3: Wait additional time for gossipsub subscriptions to complete
-///
-/// The extra delay after network is "ready" is crucial because:
-/// - TCP connection establishes first (NetworkStatus::Connected)
-/// - Gossipsub subscription exchange happens ~100-500ms later
-/// - Without this delay, we'd broadcast before peers are subscribed to the topic
+/// This is a protocol-agnostic function that checks `ready_peers` state.
+/// Returns immediately when the first peer becomes ready (no need to wait for all).
+/// Some peers may be offline - we send to whoever is available.
 ///
 /// # Returns
-/// The number of paired peers that might be reachable (based on network status)
+/// The number of paired peers that are confirmed ready to receive messages.
 async fn wait_for_peers_ready(state: &AppState, timeout: Duration) -> usize {
     use crate::network::{NetworkCommand, NetworkStatus};
+    use std::collections::HashSet;
     use tracing::debug;
 
     let start = Instant::now();
-    let poll_interval = Duration::from_millis(200);
-    // Extra delay after network is ready to allow gossipsub subscriptions
-    let gossipsub_settle_time = Duration::from_millis(500);
+    let poll_interval = Duration::from_millis(100);
 
-    // First, trigger a reconnect if the network channel is available
+    // Get target peer IDs (paired peers we want to reach)
+    let target_peers: HashSet<String> = {
+        let peers = state.paired_peers.read().await;
+        peers.iter().map(|p| p.peer_id.clone()).collect()
+    };
+
+    if target_peers.is_empty() {
+        debug!("No paired peers to wait for");
+        return 0;
+    }
+
+    // Trigger reconnect command
     {
         let tx = state.network_command_tx.read().await;
         if let Some(tx) = tx.as_ref() {
-            debug!("Sending ReconnectPeers command for share intent");
+            debug!("Sending ReconnectPeers command");
             let _ = tx.send(NetworkCommand::ReconnectPeers).await;
         }
     }
 
-    // Now poll for network readiness
-    let mut network_became_ready = false;
-    let mut ready_at: Option<Instant> = None;
-
+    // Poll until at least one target peer is ready OR timeout
+    // We return immediately on first ready peer - no need to wait for all
     while start.elapsed() < timeout {
-        // Check network status
+        // Check network status first
         let network_status = state.network_status.read().await.clone();
+        if !matches!(network_status, NetworkStatus::Connected) {
+            tokio::time::sleep(poll_interval).await;
+            continue;
+        }
 
-        match network_status {
-            NetworkStatus::Connected => {
-                if !network_became_ready {
-                    debug!("Network is ready (status: Connected)");
-                    network_became_ready = true;
-                    ready_at = Some(Instant::now());
-                }
+        // Check how many target peers are ready
+        let ready = state.ready_peers.read().await;
+        let ready_count = target_peers
+            .iter()
+            .filter(|p| ready.contains(*p))
+            .count();
 
-                // Check if we've waited long enough for gossipsub to settle
-                if let Some(ready_time) = ready_at {
-                    if ready_time.elapsed() >= gossipsub_settle_time {
-                        let count = state.paired_peers.read().await.len();
-                        debug!(
-                            "Gossipsub settle time elapsed, {} paired peers ready",
-                            count
-                        );
-                        return count;
-                    }
-                }
-            }
-            NetworkStatus::Connecting => {
-                debug!("Network still connecting, waiting...");
-            }
-            NetworkStatus::Disconnected | NetworkStatus::Error(_) => {
-                debug!("Network not ready: {:?}", network_status);
-            }
+        // Return immediately when at least one peer is ready
+        // Other peers may be offline - we'll send to whoever is available
+        if ready_count > 0 {
+            debug!(
+                "{}/{} paired peers ready - proceeding with broadcast",
+                ready_count,
+                target_peers.len()
+            );
+            return ready_count;
         }
 
         tokio::time::sleep(poll_interval).await;
     }
 
-    // Timeout reached - return paired peer count anyway
-    // The content will be sent when/if peers connect
-    let count = state.paired_peers.read().await.len();
-    debug!("Timeout waiting for peers, proceeding with {} paired", count);
-    count
+    // Timeout - return count anyway (graceful degradation)
+    // Message will still be added to history for later sync
+    let ready = state.ready_peers.read().await;
+    let ready_count = target_peers
+        .iter()
+        .filter(|p| ready.contains(*p))
+        .count();
+
+    debug!(
+        "Timeout after {:?}: {}/{} peers ready",
+        timeout,
+        ready_count,
+        target_peers.len()
+    );
+    ready_count
 }

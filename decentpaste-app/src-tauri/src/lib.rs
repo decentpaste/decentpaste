@@ -12,7 +12,7 @@ use chrono::Utc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::mpsc;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use clipboard::{ClipboardChange, ClipboardEntry, ClipboardMonitor, SyncManager};
@@ -107,6 +107,7 @@ pub fn run() {
             commands::start_network,
             commands::stop_network,
             commands::reconnect_peers,
+            commands::set_app_visibility,
             commands::process_pending_clipboard,
             commands::get_discovered_peers,
             commands::get_paired_peers,
@@ -211,15 +212,14 @@ pub fn run() {
                     });
                 }
 
-                // Mobile: Flush vault when app goes to background (safety net)
-                // NOTE: With flush-on-write pattern, data should already be persisted.
-                // This is a safety net in case any mutation was missed.
+                // Mobile: Handle app going to background via window focus loss
+                // This clears ready_peers (connections drop when backgrounded) and flushes vault
                 #[cfg(any(target_os = "android", target_os = "ios"))]
                 tauri::RunEvent::WindowEvent {
                     event: tauri::WindowEvent::Focused(false),
                     ..
                 } => {
-                    info!("App lost focus (going to background) - safety flush");
+                    info!("App lost focus (going to background)");
                     let app_handle_clone = app_handle.clone();
 
                     tauri::async_runtime::spawn(async move {
@@ -231,11 +231,18 @@ pub fn run() {
                             *fg = false;
                         }
 
+                        // Clear ready peers (connections will drop when backgrounded)
+                        {
+                            let mut ready = state.ready_peers.write().await;
+                            ready.clear();
+                            debug!("Cleared ready peers on background");
+                        }
+
                         // Safety net flush - data should already be persisted via flush-on-write
                         if let Err(e) = state.flush_all_to_vault().await {
                             error!("Failed to flush vault on background: {}", e);
                         } else {
-                            info!("Vault safety-flushed before backgrounding");
+                            debug!("Vault flushed on background");
                         }
                     });
                 }
@@ -574,6 +581,28 @@ pub async fn start_network_services(
 
                 NetworkEvent::PeerDisconnected(peer_id) => {
                     let _ = app_handle_network.emit("peer-disconnected", peer_id);
+                }
+
+                // Readiness events (protocol-agnostic)
+                // These update the ready_peers set used by wait_for_peers_ready()
+                NetworkEvent::PeerReady { peer_id } => {
+                    let mut ready = state.ready_peers.write().await;
+                    ready.insert(peer_id.clone());
+                    debug!(
+                        "Peer {} now ready ({} total ready)",
+                        peer_id,
+                        ready.len()
+                    );
+                }
+
+                NetworkEvent::PeerNotReady { peer_id } => {
+                    let mut ready = state.ready_peers.write().await;
+                    ready.remove(&peer_id);
+                    debug!(
+                        "Peer {} no longer ready ({} remaining)",
+                        peer_id,
+                        ready.len()
+                    );
                 }
 
                 NetworkEvent::PairingRequestReceived {

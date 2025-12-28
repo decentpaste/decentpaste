@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
 use tracing::{debug, warn};
@@ -30,6 +31,10 @@ pub struct AppState {
     pub pending_clipboard: Arc<RwLock<Option<PendingClipboard>>>,
     /// Whether the app is currently in foreground (tracked for mobile)
     pub is_foreground: Arc<RwLock<bool>>,
+    /// Peers confirmed ready to receive broadcast messages.
+    /// This is protocol-agnostic - the network layer determines what "ready" means.
+    /// Currently: gossipsub topic subscription. Future: could be any protocol.
+    pub ready_peers: Arc<RwLock<HashSet<String>>>,
     /// Current vault authentication status
     pub vault_status: Arc<RwLock<VaultStatus>>,
     /// VaultManager instance for encrypted storage (only present when vault is open)
@@ -49,6 +54,7 @@ impl AppState {
             network_command_tx: Arc::new(RwLock::new(None)),
             pending_clipboard: Arc::new(RwLock::new(None)),
             is_foreground: Arc::new(RwLock::new(true)), // Assume foreground at start
+            ready_peers: Arc::new(RwLock::new(HashSet::new())), // No peers ready initially
             vault_status: Arc::new(RwLock::new(VaultStatus::NotSetup)), // Vault starts as not setup
             vault_manager: Arc::new(RwLock::new(None)), // No vault manager until unlocked
         }

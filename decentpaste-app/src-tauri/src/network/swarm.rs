@@ -12,9 +12,11 @@ use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 
 /// Maximum number of connection retries per peer
-const MAX_CONNECTION_RETRIES: u32 = 3;
-/// Delay between connection retries
-const RETRY_DELAY: Duration = Duration::from_secs(2);
+const MAX_CONNECTION_RETRIES: u32 = 5;
+/// Base delay for exponential backoff (first retry delay)
+const BASE_RETRY_DELAY: Duration = Duration::from_millis(500);
+/// Maximum delay between retries (caps the exponential growth)
+const MAX_RETRY_DELAY: Duration = Duration::from_secs(8);
 
 use super::behaviour::{
     DecentPasteBehaviour, PairingRequest as ReqPairingRequest,
@@ -74,12 +76,14 @@ pub enum NetworkCommand {
     },
 }
 
-/// Tracks retry state for a peer connection
+/// Tracks retry state for a peer connection with exponential backoff
 #[derive(Debug, Clone)]
 struct PeerRetryState {
     address: Multiaddr,
     retry_count: u32,
     next_retry: Instant,
+    /// Current backoff delay (doubles each retry, capped at MAX_RETRY_DELAY)
+    current_delay: Duration,
 }
 
 pub struct NetworkManager {
@@ -91,6 +95,9 @@ pub struct NetworkManager {
     pending_responses: HashMap<PeerId, ResponseChannel<ReqPairingResponse>>,
     /// Tracks peers that need connection retries
     pending_retries: HashMap<PeerId, PeerRetryState>,
+    /// Peers confirmed ready for broadcast (currently: subscribed to clipboard topic).
+    /// This is protocol-specific tracking; the protocol-agnostic state is in AppState.ready_peers.
+    ready_peers: HashMap<PeerId, Instant>,
     /// Current device name (updated when settings change)
     device_name: String,
 }
@@ -128,6 +135,7 @@ impl NetworkManager {
             connected_peers: HashMap::new(),
             pending_responses: HashMap::new(),
             pending_retries: HashMap::new(),
+            ready_peers: HashMap::new(),
             device_name,
         })
     }
@@ -336,6 +344,21 @@ impl NetworkManager {
                 gossipsub::Event::Subscribed { peer_id, topic } => {
                     info!("Peer {} subscribed to topic {}", peer_id, topic);
 
+                    // Mark peer as ready when they subscribe to the clipboard topic
+                    // This is the protocol-specific trigger for "readiness"
+                    if topic.to_string().contains("clipboard") {
+                        self.ready_peers.insert(peer_id, Instant::now());
+
+                        // Emit protocol-agnostic "ready" event to AppState
+                        let _ = self
+                            .event_tx
+                            .send(NetworkEvent::PeerReady {
+                                peer_id: peer_id.to_string(),
+                            })
+                            .await;
+                        debug!("Peer {} is now ready ({} total ready)", peer_id, self.ready_peers.len());
+                    }
+
                     // Announce our device name now that the peer is subscribed
                     // This ensures they receive our current name
                     let local_peer_id = self.swarm.local_peer_id().to_string();
@@ -354,6 +377,20 @@ impl NetworkManager {
                 }
                 gossipsub::Event::Unsubscribed { peer_id, topic } => {
                     info!("Peer {} unsubscribed from topic {}", peer_id, topic);
+
+                    // Mark peer as not ready when they unsubscribe from clipboard topic
+                    if topic.to_string().contains("clipboard") {
+                        self.ready_peers.remove(&peer_id);
+
+                        // Emit protocol-agnostic "not ready" event to AppState
+                        let _ = self
+                            .event_tx
+                            .send(NetworkEvent::PeerNotReady {
+                                peer_id: peer_id.to_string(),
+                            })
+                            .await;
+                        debug!("Peer {} is no longer ready ({} remaining)", peer_id, self.ready_peers.len());
+                    }
                 }
                 gossipsub::Event::GossipsubNotSupported { peer_id } => {
                     warn!("Peer {} does not support gossipsub", peer_id);
@@ -629,6 +666,17 @@ impl NetworkManager {
                     .remove_explicit_peer(&peer_id);
                 debug!("Removed {} from gossipsub explicit peers", peer_id);
 
+                // Peer is no longer ready when disconnected
+                if self.ready_peers.remove(&peer_id).is_some() {
+                    let _ = self
+                        .event_tx
+                        .send(NetworkEvent::PeerNotReady {
+                            peer_id: peer_id.to_string(),
+                        })
+                        .await;
+                    debug!("Peer {} no longer ready (disconnected), {} remaining", peer_id, self.ready_peers.len());
+                }
+
                 self.connected_peers.remove(&peer_id);
                 let _ = self
                     .event_tx
@@ -639,30 +687,38 @@ impl NetworkManager {
             SwarmEvent::OutgoingConnectionError { peer_id, error, .. } => {
                 warn!("Outgoing connection error to {:?}: {}", peer_id, error);
 
-                // Schedule retry if we have the peer's address and haven't exceeded max retries
+                // Schedule retry with exponential backoff if we have the peer's address
                 if let Some(peer_id) = peer_id {
                     if let Some(discovered) = self.discovered_peers.get(&peer_id) {
-                        // Get current retry count
-                        let current_retry = self
-                            .pending_retries
-                            .get(&peer_id)
-                            .map(|s| s.retry_count)
-                            .unwrap_or(0);
+                        // Get current state or initialize for first retry
+                        let current_state = self.pending_retries.get(&peer_id);
+                        let current_retry = current_state.map(|s| s.retry_count).unwrap_or(0);
+                        let current_delay = current_state
+                            .map(|s| s.current_delay)
+                            .unwrap_or(BASE_RETRY_DELAY);
 
                         if current_retry < MAX_CONNECTION_RETRIES {
                             if let Ok(addr) = discovered.addresses[0].parse::<Multiaddr>() {
+                                // Calculate next delay with exponential backoff (capped)
+                                let next_delay = std::cmp::min(
+                                    current_delay.saturating_mul(2),
+                                    MAX_RETRY_DELAY,
+                                );
+
                                 info!(
-                                    "Scheduling retry {} for peer {} in {:?}",
+                                    "Scheduling retry {} for peer {} in {:?} (next delay: {:?})",
                                     current_retry + 1,
                                     peer_id,
-                                    RETRY_DELAY
+                                    current_delay,
+                                    next_delay
                                 );
                                 self.pending_retries.insert(
                                     peer_id,
                                     PeerRetryState {
                                         address: addr,
                                         retry_count: current_retry + 1,
-                                        next_retry: Instant::now() + RETRY_DELAY,
+                                        next_retry: Instant::now() + current_delay,
+                                        current_delay: next_delay,
                                     },
                                 );
                             }
@@ -830,6 +886,40 @@ impl NetworkManager {
                 // Only clear pending retries - don't clear connected_peers as that
                 // drops valid connections and causes a brief disconnection window
                 self.pending_retries.clear();
+
+                // Re-populate ready_peers for already-connected peers.
+                // This is needed because ready_peers is cleared on app pause, but
+                // connections may survive the pause. Without this, wait_for_peers_ready()
+                // would timeout even though peers are actually connected and subscribed.
+                let mesh_peers: std::collections::HashSet<PeerId> = self
+                    .swarm
+                    .behaviour()
+                    .gossipsub
+                    .all_mesh_peers()
+                    .cloned()
+                    .collect();
+
+                for peer_id in &mesh_peers {
+                    if !self.ready_peers.contains_key(peer_id) {
+                        self.ready_peers.insert(*peer_id, Instant::now());
+                        info!("Re-added mesh peer {} to ready_peers on reconnect", peer_id);
+
+                        // Emit PeerReady event so AppState.ready_peers is also updated
+                        let _ = self
+                            .event_tx
+                            .send(NetworkEvent::PeerReady {
+                                peer_id: peer_id.to_string(),
+                            })
+                            .await;
+                    }
+                }
+
+                if !mesh_peers.is_empty() {
+                    info!(
+                        "Re-populated {} ready peers from gossipsub mesh",
+                        mesh_peers.len()
+                    );
+                }
 
                 // Try to dial discovered peers that aren't already connected
                 for (peer_id, peer) in &self.discovered_peers {

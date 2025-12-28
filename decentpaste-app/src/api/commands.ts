@@ -32,6 +32,15 @@ export async function reconnectPeers(): Promise<void> {
   return invoke('reconnect_peers');
 }
 
+/**
+ * Update app visibility state in the backend.
+ * This ensures backend is the single source of truth for foreground state.
+ * Call this when document.visibilityState changes.
+ */
+export async function setAppVisibility(visible: boolean): Promise<void> {
+  return invoke('set_app_visibility', { visible });
+}
+
 /** Response from processPendingClipboard */
 export interface PendingClipboardResponse {
   content: string;

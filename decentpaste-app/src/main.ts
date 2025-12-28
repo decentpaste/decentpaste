@@ -1,6 +1,6 @@
 import './styles.css';
 import { initApp } from './app';
-import { reconnectPeers, processPendingClipboard, flushVault, handleSharedContent } from './api/commands';
+import { reconnectPeers, processPendingClipboard, flushVault, handleSharedContent, setAppVisibility } from './api/commands';
 import { store } from './state/store';
 import { checkForUpdates } from './api/updater';
 import { isDesktop, isMobile } from './utils/platform';
@@ -61,21 +61,41 @@ async function handleShareIntent(content: string): Promise<void> {
 /**
  * Check for and process any pending shared content from Android share intent.
  * This uses a command-based approach to avoid race conditions with events.
+ *
+ * Implements retry with exponential backoff to handle transient IPC failures:
+ * - 3 retries max
+ * - Delays: 200ms, 400ms, 800ms
  */
 async function checkForPendingShare(): Promise<void> {
   if (!isMobile()) {
     return;
   }
 
-  try {
-    const pendingShare = await getPendingShare();
-    if (pendingShare.hasPending && pendingShare.content) {
-      console.log('Found pending share content');
-      await handleShareIntent(pendingShare.content);
+  const maxRetries = 3;
+  const baseDelay = 200; // ms
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const pendingShare = await getPendingShare();
+      if (pendingShare.hasPending && pendingShare.content) {
+        console.log('Found pending share content');
+        await handleShareIntent(pendingShare.content);
+      }
+      return; // Success - exit
+    } catch (error) {
+      const delay = baseDelay * Math.pow(2, attempt);
+      console.warn(
+        `Failed to check pending share (attempt ${attempt + 1}/${maxRetries}):`,
+        error
+      );
+
+      if (attempt < maxRetries - 1) {
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
     }
-  } catch (error) {
-    console.error('Failed to check for pending share:', error);
   }
+
+  console.error('All attempts to check pending share failed');
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -103,7 +123,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Skip if app hasn't fully initialized (prevents IPC errors during dev hot-reload)
     if (!appInitialized) return;
 
-    if (document.visibilityState === 'visible') {
+    const isVisible = document.visibilityState === 'visible';
+
+    // Sync visibility state to backend FIRST (single source of truth)
+    try {
+      await setAppVisibility(isVisible);
+    } catch (e) {
+      console.error('Failed to set visibility:', e);
+    }
+
+    if (isVisible) {
       store.set('isWindowVisible', true);
       store.set('isMinimizedToTray', false); // Window is now visible, no longer in tray
       console.log('App became visible, reconnecting to peers...');
@@ -123,7 +152,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       } catch (e) {
         console.error('Failed to reconnect peers:', e);
       }
-    } else if (document.visibilityState === 'hidden') {
+    } else {
       // App going to background - flush vault to persist data
       const vaultStatus = store.get('vaultStatus');
       if (vaultStatus === 'Unlocked') {
