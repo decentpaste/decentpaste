@@ -746,14 +746,16 @@ pub async fn setup_vault(
         save_settings(&settings)?;
     }
 
-    // Emit vault status change
-    let _ = app_handle.emit("vault-status", VaultStatus::Unlocked);
-
-    // Start network and clipboard services now that vault is unlocked
+    // Start network and clipboard services BEFORE emitting event
+    // This ensures network_command_tx is set when frontend processes pending share
     if let Err(e) = crate::start_network_services(app_handle.clone()).await {
         tracing::error!("Failed to start network services: {}", e);
         // Don't fail the vault setup - services can be started later
     }
+
+    // Emit vault status change AFTER network is ready
+    // Frontend may immediately try to send pending share content on this event
+    let _ = app_handle.emit("vault-status", VaultStatus::Unlocked);
 
     info!("Vault setup completed successfully");
     Ok(())
@@ -803,14 +805,16 @@ pub async fn unlock_vault(
         *vault_status = VaultStatus::Unlocked;
     }
 
-    // Emit vault status change
-    let _ = app_handle.emit("vault-status", VaultStatus::Unlocked);
-
-    // Start network and clipboard services now that vault is unlocked
+    // Start network and clipboard services BEFORE emitting event
+    // This ensures network_command_tx is set when frontend processes pending share
     if let Err(e) = crate::start_network_services(app_handle.clone()).await {
         tracing::error!("Failed to start network services: {}", e);
         // Don't fail the unlock - services can be started later
     }
+
+    // Emit vault status change AFTER network is ready
+    // Frontend may immediately try to send pending share content on this event
+    let _ = app_handle.emit("vault-status", VaultStatus::Unlocked);
 
     info!("Vault unlocked successfully");
     Ok(())
@@ -1152,6 +1156,3 @@ pub async fn refresh_connections(state: State<'_, AppState>) -> Result<Connectio
     info!("Manual refresh connections requested");
     Ok(ensure_connected(&state, Duration::from_secs(5)).await)
 }
-
-// Note: wait_for_peers_ready has been replaced by ensure_connected()
-// which uses proper event-driven waiting instead of polling.
