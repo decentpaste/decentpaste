@@ -916,16 +916,18 @@ pub async fn flush_vault(state: State<'_, AppState>) -> Result<()> {
 // ============================================================================
 
 /// Result of handling shared content from Android share intent.
+/// This is a DTO - the UI decides how to present these values to the user.
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ShareResult {
-    /// Number of paired peers the content was sent to
-    pub peer_count: usize,
+    /// Total number of paired peers
+    pub total_peers: usize,
+    /// Number of peers that were online and received the content
+    pub peers_reached: usize,
+    /// Number of peers that were offline
+    pub peers_offline: usize,
     /// Whether the content was added to clipboard history
     pub added_to_history: bool,
-    /// Whether the operation completed successfully
-    pub success: bool,
-    /// Optional message for the user
-    pub message: Option<String>,
 }
 
 /// Summary of connection status after ensure_connected() completes.
@@ -1132,26 +1134,12 @@ pub async fn handle_shared_content(
     // This handles encryption, broadcast, and history
     share_clipboard_content(app_handle.clone(), state.clone(), content).await?;
 
-    // 5. Return with HONEST messaging - no false promises about offline peers
-    let message = if summary.connected == summary.total_peers {
-        format!("Sent to {} device(s)", summary.total_peers)
-    } else if summary.connected > 0 {
-        format!(
-            "Sent to {}/{}. {} offline.",
-            summary.connected, summary.total_peers, summary.failed
-        )
-    } else {
-        format!(
-            "Saved to history. {} device(s) offline.",
-            summary.total_peers
-        )
-    };
-
+    // 5. Return DTO - UI decides how to present this to user
     Ok(ShareResult {
-        peer_count: summary.connected, // Actual devices that received, not paired count
+        total_peers: summary.total_peers,
+        peers_reached: summary.connected,
+        peers_offline: summary.failed,
         added_to_history: true,
-        success: true,
-        message: Some(message),
     })
 }
 

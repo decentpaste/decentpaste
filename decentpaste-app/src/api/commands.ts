@@ -202,16 +202,36 @@ export async function flushVault(): Promise<void> {
 // Share Intent Handling - For Android "share with" functionality
 // ============================================================================
 
-/** Result of handling shared content from Android share intent */
+/**
+ * Result of handling shared content from Android share intent.
+ * This is a DTO - the UI decides how to present these values to the user.
+ */
 export interface ShareResult {
-  /** Number of paired peers the content was sent to */
-  peerCount: number;
+  /** Total number of paired peers */
+  totalPeers: number;
+  /** Number of peers that were online and received the content */
+  peersReached: number;
+  /** Number of peers that were offline */
+  peersOffline: number;
   /** Whether the content was added to clipboard history */
   addedToHistory: boolean;
-  /** Whether the operation completed successfully */
-  success: boolean;
-  /** Optional message for the user */
-  message: string | null;
+}
+
+/**
+ * Format a ShareResult DTO into a user-friendly message.
+ * Centralizes the message logic so UI can present it consistently.
+ */
+export function formatShareResultMessage(result: ShareResult): string {
+  if (result.peersReached === result.totalPeers) {
+    // All peers received the content
+    return `Sent to ${result.totalPeers} device(s)`;
+  } else if (result.peersReached > 0) {
+    // Some peers received, some offline
+    return `Sent to ${result.peersReached}/${result.totalPeers}. ${result.peersOffline} offline.`;
+  } else {
+    // No peers reachable - saved to history for later sync
+    return `Saved to history. ${result.totalPeers} device(s) offline.`;
+  }
 }
 
 /**
@@ -220,12 +240,12 @@ export interface ShareResult {
  * This is called by the frontend after receiving a "share-received" event
  * from the decentshare plugin. It:
  * 1. Verifies the vault is unlocked
- * 2. Waits for paired peers to reconnect (with smart timeout)
- * 3. Shares the content with all available paired peers
+ * 2. Ensures peers are connected (awaitable, with timeout)
+ * 3. Shares the content with all connected paired peers
  * 4. Adds the content to clipboard history
  *
  * @param content - The shared text content
- * @returns Details about the sharing operation
+ * @returns DTO with peer counts - UI decides how to present this
  * @throws VaultLocked if vault is not unlocked
  * @throws NoPeersAvailable if there are no paired peers
  */

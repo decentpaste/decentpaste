@@ -6,6 +6,7 @@ import {
   flushVault,
   handleSharedContent,
   setAppVisibility,
+  formatShareResultMessage,
 } from './api/commands';
 import { store } from './state/store';
 import { checkForUpdates } from './api/updater';
@@ -42,12 +43,11 @@ async function handleShareIntent(content: string): Promise<void> {
     store.addToast('Sharing with your devices...', 'info');
 
     const result = await handleSharedContent(content);
+    const message = formatShareResultMessage(result);
 
-    if (result.success) {
-      store.addToast(result.message || `Shared with ${result.peerCount} device(s)`, 'success');
-    } else {
-      store.addToast('Failed to share content', 'error');
-    }
+    // Determine toast type based on result
+    const toastType = result.peersReached > 0 ? 'success' : 'info';
+    store.addToast(message, toastType);
   } catch (error) {
     console.error('Failed to handle shared content:', error);
 
@@ -205,5 +205,5 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 });
 
-// Export handleShareIntent for use from app.ts after vault unlock
+// Export for use from app.ts after vault unlock
 export { handleShareIntent };

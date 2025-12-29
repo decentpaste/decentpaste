@@ -818,11 +818,10 @@ class App {
       // Clear the pending share on success
       store.set('pendingShare', null);
 
-      if (result.success) {
-        store.addToast(result.message || `Shared with ${result.peerCount} device(s)`, 'success');
-      } else {
-        store.addToast('Failed to share content', 'error');
-      }
+      // Format message from DTO and determine toast type
+      const message = commands.formatShareResultMessage(result);
+      const toastType = result.peersReached > 0 ? 'success' : 'info';
+      store.addToast(message, toastType);
     } catch (error) {
       console.error('Failed to process pending share:', error);
 
