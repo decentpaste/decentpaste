@@ -1,6 +1,10 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicBool, AtomicUsize};
 use std::sync::Arc;
-use tokio::sync::{mpsc, RwLock};
+
+use chrono::{DateTime, Utc};
+use serde::Serialize;
+use tokio::sync::{mpsc, Notify, RwLock};
 use tracing::{debug, warn};
 
 use crate::clipboard::ClipboardEntry;
@@ -9,6 +13,30 @@ use crate::network::{DiscoveredPeer, NetworkCommand, NetworkStatus};
 use crate::security::PairingSession;
 use crate::storage::{AppSettings, DeviceIdentity, PairedPeer};
 use crate::vault::{VaultManager, VaultStatus};
+
+// =============================================================================
+// Connection State Types
+// =============================================================================
+
+/// Connection status for a paired peer.
+/// Used for per-device tracking and UI status indicators.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ConnectionStatus {
+    /// Peer is connected (libp2p connection + gossipsub subscribed)
+    Connected,
+    /// Dial attempt in progress
+    Connecting,
+    /// Not connected
+    Disconnected,
+}
+
+/// Connection state for a single peer.
+#[derive(Debug, Clone)]
+pub struct PeerConnectionState {
+    pub status: ConnectionStatus,
+    pub last_connected: Option<DateTime<Utc>>,
+}
 
 /// Clipboard content received while app was in background (Android)
 #[derive(Debug, Clone)]
@@ -39,6 +67,27 @@ pub struct AppState {
     pub vault_status: Arc<RwLock<VaultStatus>>,
     /// VaultManager instance for encrypted storage (only present when vault is open)
     pub vault_manager: Arc<RwLock<Option<VaultManager>>>,
+
+    // =========================================================================
+    // Connection Management State
+    // =========================================================================
+
+    /// Per-peer connection state for paired peers.
+    /// Maps peer_id -> connection state (status + last_connected time).
+    /// Used for UI status indicators and smart reconnection.
+    pub peer_connections: Arc<RwLock<HashMap<String, PeerConnectionState>>>,
+
+    /// Guard against concurrent reconnection attempts.
+    /// Only one ensure_connected() operation runs at a time.
+    pub reconnect_in_progress: AtomicBool,
+
+    /// Count of pending dial attempts during reconnection.
+    /// Decremented as connections succeed or fail.
+    pub pending_dials: AtomicUsize,
+
+    /// Notified when all pending dials complete.
+    /// Used by ensure_connected() to await completion.
+    pub dials_complete_notify: Arc<Notify>,
 }
 
 impl AppState {
@@ -57,6 +106,12 @@ impl AppState {
             ready_peers: Arc::new(RwLock::new(HashSet::new())), // No peers ready initially
             vault_status: Arc::new(RwLock::new(VaultStatus::NotSetup)), // Vault starts as not setup
             vault_manager: Arc::new(RwLock::new(None)), // No vault manager until unlocked
+
+            // Connection management
+            peer_connections: Arc::new(RwLock::new(HashMap::new())),
+            reconnect_in_progress: AtomicBool::new(false),
+            pending_dials: AtomicUsize::new(0),
+            dials_complete_notify: Arc::new(Notify::new()),
         }
     }
 

@@ -219,7 +219,10 @@ The `tauri-plugin-decentshare` enables sharing text directly from any Android ap
 2. Plugin's `onNewIntent()` captures the shared text
 3. Frontend polls for pending share via `getPendingShare()` command
 4. If vault locked: stores in `pendingShare` state, processes after unlock
-5. If vault unlocked: calls `handle_shared_content` which waits for peers (≤5s) then shares
+5. If vault unlocked: calls `handle_shared_content` which:
+   - Triggers `ensure_connected()` with 3s timeout
+   - Dials only disconnected peers (event-driven, no polling)
+   - Returns honest status: "Sent to 2/3. 1 offline."
 
 Key files:
 - `tauri-plugin-decentshare/android/.../DecentsharePlugin.kt` - Kotlin intent handler

@@ -6,6 +6,7 @@ import {
   flushVault,
   handleSharedContent,
   setAppVisibility,
+  formatShareResultMessage,
 } from './api/commands';
 import { store } from './state/store';
 import { checkForUpdates } from './api/updater';
@@ -42,12 +43,11 @@ async function handleShareIntent(content: string): Promise<void> {
     store.addToast('Sharing with your devices...', 'info');
 
     const result = await handleSharedContent(content);
+    const message = formatShareResultMessage(result);
 
-    if (result.success) {
-      store.addToast(result.message || `Shared with ${result.peerCount} device(s)`, 'success');
-    } else {
-      store.addToast('Failed to share content', 'error');
-    }
+    // Determine toast type based on result
+    const toastType = result.peersReached > 0 ? 'success' : 'info';
+    store.addToast(message, toastType);
   } catch (error) {
     console.error('Failed to handle shared content:', error);
 
@@ -66,11 +66,28 @@ async function handleShareIntent(content: string): Promise<void> {
 
 /**
  * Check for and process any pending shared content from Android share intent.
- * This uses a command-based approach to avoid race conditions with events.
  *
- * Implements retry with exponential backoff to handle transient IPC failures:
- * - 3 retries max
- * - Delays: 200ms, 400ms, 800ms
+ * ## Why Retry with Backoff?
+ * The Tauri IPC bridge can fail transiently when:
+ * - App is resuming from background (WebView reinitializing)
+ * - Android share intent arrives before Tauri bridge is fully ready
+ * - Hot reload during development
+ *
+ * This retry handles **IPC reliability**, NOT network/peer connectivity.
+ * Peer reconnection is handled separately by the backend's ensure_connected().
+ *
+ * ## Strategy
+ * - 3 attempts with exponential backoff: 200ms, 400ms, 800ms delays
+ * - On success: calls handleShareIntent() which invokes backend
+ * - Backend's handleSharedContent() uses event-driven waiting for peers
+ *
+ * ## Flow
+ * 1. getPendingShare() - Asks plugin for shared content
+ * 2. handleShareIntent() - Sends to backend which:
+ *    - Triggers peer reconnection (ensure_connected)
+ *    - Waits for connections with proper async primitives (not polling)
+ *    - Broadcasts via gossipsub
+ *    - Returns honest status: "Sent to 2/3. 1 offline."
  */
 async function checkForPendingShare(): Promise<void> {
   if (!isMobile()) {
@@ -188,5 +205,5 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 });
 
-// Export handleShareIntent for use from app.ts after vault unlock
+// Export for use from app.ts after vault unlock
 export { handleShareIntent };

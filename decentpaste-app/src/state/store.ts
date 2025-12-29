@@ -78,6 +78,10 @@ export interface AppState {
   // Share intent state (Android "share with" functionality)
   // Stores content received from share intent while vault is locked
   pendingShare: string | null;
+
+  // Connection status per paired peer
+  // Maps peer_id -> connection status for UI status indicators
+  peerConnections: Map<string, 'connected' | 'connecting' | 'disconnected'>;
 }
 
 type StateListener<K extends keyof AppState> = (value: AppState[K]) => void;
@@ -130,6 +134,8 @@ class Store {
       appVersion: '',
       // Share intent state (Android)
       pendingShare: null,
+      // Connection status per peer
+      peerConnections: new Map(),
     };
   }
 
@@ -258,6 +264,31 @@ class Store {
     this.update('pairedPeers', (peers) =>
       peers.map((p) => (p.peer_id === peerId ? { ...p, device_name: deviceName } : p)),
     );
+  }
+
+  /**
+   * Update connection status for a peer.
+   * Used to track online/offline status for UI indicators.
+   */
+  updatePeerConnection(
+    peerId: string,
+    status: 'connected' | 'connecting' | 'disconnected',
+  ): void {
+    const connections = new Map(this.state.peerConnections);
+    connections.set(peerId, status);
+    this.set('peerConnections', connections);
+  }
+
+  /**
+   * Set all paired peers to connecting status.
+   * Used when initiating a refresh.
+   */
+  setAllPeersConnecting(): void {
+    const connections = new Map(this.state.peerConnections);
+    this.state.pairedPeers.forEach((p) => {
+      connections.set(p.peer_id, 'connecting');
+    });
+    this.set('peerConnections', connections);
   }
 }
 

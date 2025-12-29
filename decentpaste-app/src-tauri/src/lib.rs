@@ -17,7 +17,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use clipboard::{ClipboardChange, ClipboardEntry, ClipboardMonitor};
 use network::{ClipboardMessage, NetworkCommand, NetworkEvent, NetworkManager};
-use state::AppState;
+use state::{AppState, ConnectionStatus, PeerConnectionState};
 #[cfg(any(target_os = "android", target_os = "ios"))]
 use state::PendingClipboard;
 use storage::{init_data_dir, load_settings};
@@ -133,6 +133,8 @@ pub fn run() {
             commands::flush_vault,
             // Share intent handling (Android)
             commands::handle_shared_content,
+            // Connection management
+            commands::refresh_connections,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
@@ -617,29 +619,98 @@ pub async fn start_network_services(
                 }
 
                 NetworkEvent::PeerConnected(peer) => {
-                    let _ = app_handle_network.emit("peer-connected", peer);
+                    let _ = app_handle_network.emit("peer-connected", &peer);
+
+                    // Note: We don't mark as Connected here - wait for PeerReady
+                    // which indicates gossipsub subscription is complete
+                    debug!("Peer {} connected (awaiting gossipsub subscribe)", peer.peer_id);
                 }
 
-                NetworkEvent::PeerDisconnected(peer_id) => {
+                NetworkEvent::PeerDisconnected(ref peer_id) => {
+                    // Update connection state to Disconnected
+                    {
+                        let mut conns = state.peer_connections.write().await;
+                        if let Some(conn) = conns.get_mut(peer_id) {
+                            conn.status = ConnectionStatus::Disconnected;
+                        }
+                    }
+
+                    // Also remove from ready_peers
+                    {
+                        let mut ready = state.ready_peers.write().await;
+                        ready.remove(peer_id);
+                    }
+
+                    // Emit status change to frontend
+                    let _ = app_handle_network.emit("peer-connection-status", serde_json::json!({
+                        "peer_id": peer_id,
+                        "status": "disconnected"
+                    }));
+
+                    // Also emit legacy event for compatibility
                     let _ = app_handle_network.emit("peer-disconnected", peer_id);
+
+                    debug!("Peer {} disconnected", peer_id);
                 }
 
                 // Readiness events (protocol-agnostic)
-                // These update the ready_peers set used by wait_for_peers_ready()
-                NetworkEvent::PeerReady { peer_id } => {
-                    let mut ready = state.ready_peers.write().await;
-                    ready.insert(peer_id.clone());
-                    debug!("Peer {} now ready ({} total ready)", peer_id, ready.len());
+                // PeerReady indicates gossipsub subscription - this is "truly connected"
+                NetworkEvent::PeerReady { ref peer_id } => {
+                    // Update ready_peers (legacy, keep for compatibility)
+                    {
+                        let mut ready = state.ready_peers.write().await;
+                        ready.insert(peer_id.clone());
+                    }
+
+                    // Update connection state to Connected
+                    {
+                        let mut conns = state.peer_connections.write().await;
+                        conns.insert(
+                            peer_id.clone(),
+                            PeerConnectionState {
+                                status: ConnectionStatus::Connected,
+                                last_connected: Some(Utc::now()),
+                            },
+                        );
+                    }
+
+                    // Decrement pending dials and notify if all done
+                    let prev = state.pending_dials.fetch_sub(1, Ordering::SeqCst);
+                    if prev <= 1 {
+                        state.dials_complete_notify.notify_waiters();
+                    }
+
+                    // Emit status change to frontend
+                    let _ = app_handle_network.emit("peer-connection-status", serde_json::json!({
+                        "peer_id": peer_id,
+                        "status": "connected"
+                    }));
+
+                    debug!("Peer {} now ready (gossipsub subscribed)", peer_id);
                 }
 
-                NetworkEvent::PeerNotReady { peer_id } => {
-                    let mut ready = state.ready_peers.write().await;
-                    ready.remove(&peer_id);
-                    debug!(
-                        "Peer {} no longer ready ({} remaining)",
-                        peer_id,
-                        ready.len()
-                    );
+                NetworkEvent::PeerNotReady { ref peer_id } => {
+                    // Remove from ready_peers
+                    {
+                        let mut ready = state.ready_peers.write().await;
+                        ready.remove(peer_id);
+                    }
+
+                    // Update connection state (gossipsub unsubscribed = not ready for messages)
+                    {
+                        let mut conns = state.peer_connections.write().await;
+                        if let Some(conn) = conns.get_mut(peer_id) {
+                            conn.status = ConnectionStatus::Disconnected;
+                        }
+                    }
+
+                    // Emit status change to frontend
+                    let _ = app_handle_network.emit("peer-connection-status", serde_json::json!({
+                        "peer_id": peer_id,
+                        "status": "disconnected"
+                    }));
+
+                    debug!("Peer {} no longer ready (gossipsub unsubscribed)", peer_id);
                 }
 
                 NetworkEvent::PairingRequestReceived {
