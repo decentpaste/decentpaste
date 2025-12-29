@@ -32,6 +32,22 @@ export async function reconnectPeers(): Promise<void> {
   return invoke('reconnect_peers');
 }
 
+/** Summary of connection status after refresh */
+export interface ConnectionSummary {
+  total_peers: number;
+  connected: number;
+  failed: number;
+}
+
+/**
+ * Refresh connections to all paired peers.
+ * This is an awaitable operation that returns when all dial attempts complete or timeout.
+ * Use this for the refresh button instead of reconnectPeers for better feedback.
+ */
+export async function refreshConnections(): Promise<ConnectionSummary> {
+  return invoke('refresh_connections');
+}
+
 /**
  * Update app visibility state in the backend.
  * This ensures backend is the single source of truth for foreground state.

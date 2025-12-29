@@ -208,9 +208,9 @@ Manages the libp2p swarm lifecycle:
 - Accepts a persisted keypair for consistent PeerId across restarts
 - Handles incoming network events (peer discovery, messages)
 - Processes commands from the main app (send clipboard, initiate pairing)
-- Maintains peer connection state
+- Maintains peer connection state (Connected/Connecting/Disconnected per peer)
 - Filters out already-paired peers from discovery events
-- **Connection resilience**: Automatically retries failed connections (3 attempts, 2s delay)
+- **Connection tracking**: Per-peer status emitted to frontend via `peer-connection-status` events
 - **Gossipsub optimization**: Adds peers to explicit peer list on connection for immediate mesh inclusion
 - **Mobile support**: Handles `ReconnectPeers` command for app resume from background
 - **Device name tracking**: Stores current device name and announces it on new connections
@@ -430,7 +430,8 @@ Tauri commands exposed to frontend:
 | `set_clipboard`                    | Set clipboard content                                                     |
 | `share_clipboard_content`          | Manually share clipboard with peers (for mobile)                          |
 | `clear_clipboard_history`          | Clear all clipboard history                                               |
-| `reconnect_peers`                  | Force reconnection to all discovered peers (for mobile background resume) |
+| `reconnect_peers`                  | Trigger reconnection to disconnected peers (for mobile background resume) |
+| `refresh_connections`              | Awaitable reconnection, returns `ConnectionSummary` with connected/failed count |
 | `get_settings` / `update_settings` | Manage app settings (broadcasts device name change)                       |
 | `get_device_info`                  | Get this device's info                                                    |
 | `get_pairing_sessions`             | Get active pairing sessions                                               |
@@ -441,7 +442,7 @@ Tauri commands exposed to frontend:
 | `reset_vault`                      | Destroy vault and all data (factory reset)                                |
 | `flush_vault`                      | Force save vault data to disk                                             |
 | `process_pending_clipboard`        | Process clipboard queued while app was backgrounded                       |
-| `handle_shared_content`            | Handle text shared from Android share sheet (waits for peers, shares)     |
+| `handle_shared_content`            | Handle text shared from Android share sheet (awaits peers ≤3s, shares)    |
 
 ### 7. Events (Emitted to Frontend)
 
@@ -451,6 +452,7 @@ Tauri commands exposed to frontend:
 | `peer-discovered`    | `DiscoveredPeer`                  | New peer found                                  |
 | `peer-lost`          | `string` (peer_id)                | Peer went offline                               |
 | `peer-name-updated`  | `{peerId, deviceName}`            | Peer's device name changed (via DeviceAnnounce) |
+| `peer-connection-status` | `{peer_id, status}`           | Peer connection state changed (connected/connecting/disconnected) |
 | `clipboard-received` | `ClipboardEntry`                  | Clipboard from peer                             |
 | `pairing-request`    | `{sessionId, peerId, deviceName}` | Incoming pairing request                        |
 | `pairing-pin`        | `{sessionId, pin}`                | PIN ready to display                            |
@@ -476,6 +478,8 @@ interface AppState {
     currentView: 'dashboard' | 'peers' | 'settings';
     settings: AppSettings;
     deviceInfo: DeviceInfo | null;
+    // Per-peer connection status for UI indicators
+    peerConnections: Map<string, 'connected' | 'connecting' | 'disconnected'>;
     // Onboarding state
     onboardingStep: 'device-name' | 'pin-setup' | null;
     onboardingDeviceName: string;
@@ -644,9 +648,8 @@ DecentPaste registers as a share target in Android's share sheet, allowing users
 ┌─────────────────────────────────┐
 │ handle_shared_content (Rust)    │
 │ 1. Verify vault unlocked        │
-│ 2. Send ReconnectPeers command  │
-│ 3. Wait for network (≤5s)       │
-│ 4. share_clipboard_content()    │
+│ 2. ensure_connected() (≤3s)     │
+│ 3. share_clipboard_content()    │
 └────────┬────────────────────────┘
          │
          ▼
@@ -672,13 +675,14 @@ If the vault is locked when content is shared:
 3. After PIN entry and vault unlock, `processPendingShare()` is called
 4. Content is shared to all paired peers automatically
 
-**Smart Peer Waiting:**
+**Event-Driven Peer Connection:**
 
-The Rust `handle_shared_content` command implements smart waiting:
-1. Sends `ReconnectPeers` command to trigger peer connections
-2. Polls network status every 200ms for up to 5 seconds
-3. Returns early if network becomes ready (Connected/Listening)
-4. If timeout reached, shares anyway (gossipsub will deliver when peers connect)
+The Rust `handle_shared_content` command uses `ensure_connected()`:
+1. Guards against concurrent reconnection attempts (only one at a time)
+2. Identifies disconnected peers and marks them as "Connecting"
+3. Dials disconnected peers, waits via `tokio::sync::Notify` (no polling)
+4. Returns when all dials complete or 3s timeout
+5. Provides honest feedback: "Sent to 2/3. 1 offline." (gossipsub doesn't queue for offline peers)
 
 ### Auto-Updates
 
