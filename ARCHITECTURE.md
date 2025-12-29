@@ -45,8 +45,22 @@ decentpaste/
     ├── vite.config.ts
     ├── postcss.config.js
     ├── index.html                # App entry HTML
+    ├── tauri-plugin-decentshare/ # Android "share with" plugin
+    │   ├── Cargo.toml            # Plugin Rust dependencies
+    │   ├── src/                  # Plugin Rust code
+    │   │   ├── lib.rs            # Plugin entry point
+    │   │   ├── mobile.rs         # Mobile-specific (Android/iOS)
+    │   │   ├── desktop.rs        # Desktop stub
+    │   │   ├── commands.rs       # Plugin commands
+    │   │   └── models.rs         # Shared types
+    │   ├── android/              # Android Kotlin code
+    │   │   └── src/main/
+    │   │       ├── java/DecentsharePlugin.kt  # Intent handler
+    │   │       └── AndroidManifest.xml        # SEND intent filter
+    │   └── guest-js/             # TypeScript bindings
+    │       └── index.ts
     ├── src/                      # Frontend TypeScript
-    │   ├── main.ts               # Entry point
+    │   ├── main.ts               # Entry point + share intent handling
     │   ├── app.ts                # Main application logic & UI
     │   ├── styles.css            # Tailwind CSS
     │   ├── api/
@@ -194,9 +208,9 @@ Manages the libp2p swarm lifecycle:
 - Accepts a persisted keypair for consistent PeerId across restarts
 - Handles incoming network events (peer discovery, messages)
 - Processes commands from the main app (send clipboard, initiate pairing)
-- Maintains peer connection state
+- Maintains peer connection state (Connected/Connecting/Disconnected per peer)
 - Filters out already-paired peers from discovery events
-- **Connection resilience**: Automatically retries failed connections (3 attempts, 2s delay)
+- **Connection tracking**: Per-peer status emitted to frontend via `peer-connection-status` events
 - **Gossipsub optimization**: Adds peers to explicit peer list on connection for immediate mesh inclusion
 - **Mobile support**: Handles `ReconnectPeers` command for app resume from background
 - **Device name tracking**: Stores current device name and announces it on new connections
@@ -416,7 +430,8 @@ Tauri commands exposed to frontend:
 | `set_clipboard`                    | Set clipboard content                                                     |
 | `share_clipboard_content`          | Manually share clipboard with peers (for mobile)                          |
 | `clear_clipboard_history`          | Clear all clipboard history                                               |
-| `reconnect_peers`                  | Force reconnection to all discovered peers (for mobile background resume) |
+| `reconnect_peers`                  | Trigger reconnection to disconnected peers (for mobile background resume) |
+| `refresh_connections`              | Awaitable reconnection, returns `ConnectionSummary` with connected/failed count |
 | `get_settings` / `update_settings` | Manage app settings (broadcasts device name change)                       |
 | `get_device_info`                  | Get this device's info                                                    |
 | `get_pairing_sessions`             | Get active pairing sessions                                               |
@@ -427,6 +442,7 @@ Tauri commands exposed to frontend:
 | `reset_vault`                      | Destroy vault and all data (factory reset)                                |
 | `flush_vault`                      | Force save vault data to disk                                             |
 | `process_pending_clipboard`        | Process clipboard queued while app was backgrounded                       |
+| `handle_shared_content`            | Handle text shared from Android share sheet (awaits peers ≤3s, shares)    |
 
 ### 7. Events (Emitted to Frontend)
 
@@ -436,6 +452,7 @@ Tauri commands exposed to frontend:
 | `peer-discovered`    | `DiscoveredPeer`                  | New peer found                                  |
 | `peer-lost`          | `string` (peer_id)                | Peer went offline                               |
 | `peer-name-updated`  | `{peerId, deviceName}`            | Peer's device name changed (via DeviceAnnounce) |
+| `peer-connection-status` | `{peer_id, status}`           | Peer connection state changed (connected/connecting/disconnected) |
 | `clipboard-received` | `ClipboardEntry`                  | Clipboard from peer                             |
 | `pairing-request`    | `{sessionId, peerId, deviceName}` | Incoming pairing request                        |
 | `pairing-pin`        | `{sessionId, pin}`                | PIN ready to display                            |
@@ -461,6 +478,8 @@ interface AppState {
     currentView: 'dashboard' | 'peers' | 'settings';
     settings: AppSettings;
     deviceInfo: DeviceInfo | null;
+    // Per-peer connection status for UI indicators
+    peerConnections: Map<string, 'connected' | 'connecting' | 'disconnected'>;
     // Onboarding state
     onboardingStep: 'device-name' | 'pin-setup' | null;
     onboardingDeviceName: string;
@@ -492,6 +511,8 @@ Single-file application with authentication and main views:
 - Initializes the app on DOMContentLoaded
 - **Mobile background handling**: Listens for `visibilitychange` events and triggers `reconnectPeers()` when app becomes
   visible (critical for mobile where connections drop when backgrounded)
+- **Android share intent handling**: Checks for pending shared content from `tauri-plugin-decentshare` on app init and
+  visibility changes. If vault is locked, stores content for processing after unlock.
 
 ---
 
@@ -596,6 +617,73 @@ When a paired device is unpaired:
 5. Frontend updates and shows the device in the "Discovered Devices" section
 6. User can pair with the device again immediately without restart
 
+### Android Share Intent ("Share With")
+
+DecentPaste registers as a share target in Android's share sheet, allowing users to share text from any app directly to their paired devices.
+
+**How It Works:**
+
+```
+┌─────────────────┐
+│ User selects    │  Any Android app with text
+│ text & shares   │
+└────────┬────────┘
+         │ Intent.ACTION_SEND (text/plain)
+         ▼
+┌─────────────────────────────────┐
+│ DecentsharePlugin (Kotlin)      │  Plugin intercepts intent
+│ onNewIntent() → store content   │
+└────────┬────────────────────────┘
+         │ getPendingShare() command
+         ▼
+┌─────────────────────────────────┐
+│ Frontend (main.ts)              │  Checks on init & visibility
+├─────────────────────────────────┤
+│ If Locked → Store in state      │
+│           → Show PIN screen     │
+│ If Unlocked → handleSharedContent│
+└────────┬────────────────────────┘
+         │ Rust command
+         ▼
+┌─────────────────────────────────┐
+│ handle_shared_content (Rust)    │
+│ 1. Verify vault unlocked        │
+│ 2. ensure_connected() (≤3s)     │
+│ 3. share_clipboard_content()    │
+└────────┬────────────────────────┘
+         │
+         ▼
+┌─────────────────────────────────┐
+│ Content sent to all paired peers│
+│ + Added to clipboard history    │
+└─────────────────────────────────┘
+```
+
+**Plugin Architecture:**
+
+The `tauri-plugin-decentshare` Tauri plugin handles Android-specific intent interception:
+
+- **AndroidManifest.xml**: Registers an activity-alias with SEND intent filter
+- **DecentsharePlugin.kt**: Kotlin plugin that overrides `onNewIntent()` to capture shared text
+- **Command-based retrieval**: Frontend polls for pending shares via `getPendingShare()` to avoid race conditions
+
+**Vault Integration:**
+
+If the vault is locked when content is shared:
+1. Content is stored in frontend state (`pendingShare`)
+2. User sees lock screen with "Unlock to share" message
+3. After PIN entry and vault unlock, `processPendingShare()` is called
+4. Content is shared to all paired peers automatically
+
+**Event-Driven Peer Connection:**
+
+The Rust `handle_shared_content` command uses `ensure_connected()`:
+1. Guards against concurrent reconnection attempts (only one at a time)
+2. Identifies disconnected peers and marks them as "Connecting"
+3. Dials disconnected peers, waits via `tokio::sync::Notify` (no polling)
+4. Returns when all dials complete or 3s timeout
+5. Provides honest feedback: "Sent to 2/3. 1 offline." (gossipsub doesn't queue for offline peers)
+
 ### Auto-Updates
 
 DecentPaste supports automatic updates on desktop platforms using Tauri's updater plugin with GitHub Releases.
@@ -668,7 +756,7 @@ git push origin main --tags
 
 - Uses `@tailwindcss/postcss` for Tailwind v4
 
-### Data Directory (`~/.local/share/com.decentpaste.app/`)
+### Data Directory (`~/.local/share/com.decentpaste.application/`)
 
 **Encrypted (Stronghold vault):**
 - `vault.hold` - IOTA Stronghold encrypted vault containing:
@@ -709,8 +797,10 @@ yarn build
 
 1. **Text-only clipboard**: Currently only supports text. Images/files could be added.
 2. **Local network only**: Uses mDNS, so devices must be on same network. Internet relay could be added.
-3. **Mobile clipboard (outgoing)**: On Android/iOS, automatic clipboard monitoring is not supported. Users must manually
-   share content using the "Share" button.
+3. **Mobile clipboard (outgoing)**: On Android/iOS, automatic clipboard monitoring is not supported. Users can either:
+   - Use the in-app "Share Now" button to send current clipboard
+   - Use Android's share sheet to share directly from any app (via `tauri-plugin-decentshare`)
+   - iOS share extension is planned for future implementation
 4. **Mobile clipboard (incoming)**: Clipboard only syncs when the app is in foreground. Network connections drop when
    the app is backgrounded (same behavior on both Android and iOS).
 5. **Device name in identify**: The identify protocol includes device name in `agent_version` field, which is
@@ -751,6 +841,7 @@ yarn build
 - `tauri-plugin-updater` v2 - Auto-updates for desktop
 - `tauri-plugin-process` v2 - App restart after update
 - `tauri-plugin-os` v2 - Platform/architecture detection for updater targets
+- `tauri-plugin-decentshare` (local) - Android share intent handling
 - `argon2` v0.5 - Argon2id key derivation
 - `aes-gcm` v0.10 - AES-256-GCM encryption
 - `x25519-dalek` v2 - X25519 ECDH key exchange
@@ -764,5 +855,6 @@ yarn build
 - `@tauri-apps/plugin-updater` v2 - Auto-update UI
 - `@tauri-apps/plugin-process` v2 - App restart
 - `@tauri-apps/plugin-os` v2 - Platform/architecture detection
+- `tauri-plugin-decentshare-api` (local) - Share intent JS bindings
 - `tailwindcss` v4 - CSS framework
 - `lucide` - Icons (inline SVGs)

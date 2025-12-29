@@ -1094,7 +1094,7 @@ dependencies = [
 
 [[package]]
 name = "decentpaste-app"
-version = "0.3.5"
+version = "0.4.0"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -1113,6 +1113,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tauri-plugin-clipboard-manager",
+ "tauri-plugin-decentshare",
  "tauri-plugin-notification",
  "tauri-plugin-opener",
  "tauri-plugin-os",
@@ -6237,6 +6238,17 @@ checksum = "206dc20af4ed210748ba945c2774e60fd0acd52b9a73a028402caf809e9b6ecf"
 dependencies = [
  "arboard",
  "log",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-plugin",
+ "thiserror 2.0.17",
+]
+
+[[package]]
+name = "tauri-plugin-decentshare"
+version = "0.1.0"
+dependencies = [
  "serde",
  "serde_json",
  "tauri",

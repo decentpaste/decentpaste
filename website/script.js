@@ -769,9 +769,27 @@ async function populateDownloadLinks() {
         btn.classList.add('download-format-unavailable');
       }
     });
+
+    // Update signature links - each .sig URL is just the binary URL + '.sig'
+    document.querySelectorAll('.signature-link[data-sig-for]').forEach((sigLink) => {
+      const format = sigLink.getAttribute('data-sig-for');
+      const binaryUrl = data.assets?.[format];
+
+      if (binaryUrl) {
+        sigLink.href = binaryUrl + '.sig';
+        sigLink.style.display = '';
+      } else {
+        // Hide signature link if no binary URL
+        sigLink.style.display = 'none';
+      }
+    });
   } catch (error) {
     console.warn('Could not load downloads.json:', error.message);
     // Buttons keep their fallback href (GitHub releases page)
+    // Hide all signature links on error
+    document.querySelectorAll('.signature-link').forEach((sigLink) => {
+      sigLink.style.display = 'none';
+    });
   }
 }
 

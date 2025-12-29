@@ -119,7 +119,15 @@ impl DecentPasteBehaviour {
             .heartbeat_interval(Duration::from_secs(1))
             .validation_mode(gossipsub::ValidationMode::Strict)
             .message_id_fn(|message| {
-                // Use content hash as message ID for deduplication
+                // For clipboard messages: use the message's own UUID as the MessageId
+                // This makes each broadcast unique, allowing resending same content.
+                // For other messages: use content hash for deduplication.
+                if let Ok(ProtocolMessage::Clipboard(clipboard_msg)) =
+                    ProtocolMessage::from_bytes(&message.data)
+                {
+                    return gossipsub::MessageId::from(clipboard_msg.id);
+                }
+                // Fallback: content-based hash for non-clipboard messages
                 let mut hasher = std::collections::hash_map::DefaultHasher::new();
                 std::hash::Hash::hash(&message.data, &mut hasher);
                 gossipsub::MessageId::from(std::hash::Hasher::finish(&hasher).to_string())

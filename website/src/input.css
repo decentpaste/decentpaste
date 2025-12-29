@@ -466,6 +466,15 @@ body::after {
   gap: 0.5rem;
 }
 
+/* Wrapper for download button + signature link */
+.download-format-wrapper {
+  position: relative;
+}
+
+.download-format-wrapper .download-format-btn {
+  width: 100%;
+}
+
 /* Single-item formats should span full width */
 .download-formats-1 {
   grid-template-columns: minmax(0, 1fr);
@@ -568,6 +577,63 @@ body::after {
 .download-format-btn.download-format-secondary:hover {
   background: rgba(255, 255, 255, 0.1);
   border-color: rgba(255, 255, 255, 0.15);
+}
+
+/* Signature verification link - corner badge style (appears on hover) */
+.signature-link {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
+  font-size: 0.5625rem;
+  color: rgba(255, 255, 255, 0.5);
+  text-decoration: none;
+  transition: all 0.2s ease;
+  padding: 0.1875rem 0.375rem;
+  border-radius: 0.375rem;
+  background: rgba(30, 30, 35, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(4px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  /* Hidden by default */
+  opacity: 0;
+  transform: scale(0.8) translateY(4px);
+  pointer-events: none;
+}
+
+/* Show on wrapper hover */
+.download-format-wrapper:hover .signature-link {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+  pointer-events: auto;
+}
+
+.signature-link:hover {
+  color: #14b8a6;
+  background: rgba(20, 184, 166, 0.15);
+  border-color: rgba(20, 184, 166, 0.4);
+  transform: scale(1.08);
+}
+
+.signature-link svg {
+  width: 9px;
+  height: 9px;
+  opacity: 0.8;
+  transition: all 0.2s ease;
+}
+
+.signature-link:hover svg {
+  opacity: 1;
+  color: #14b8a6;
+}
+
+.signature-link .sig-text {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 
 /* Highlight recommended format within card */
@@ -862,7 +928,7 @@ nav a[href*='github']:hover::after {
 }
 
 /* Animated connecting line with flowing gradient */
-#how-it-works .hidden.md\\:block.absolute {
+.step-connector-line {
   background: linear-gradient(
     90deg,
     rgba(20, 184, 166, 0.3) 0%,

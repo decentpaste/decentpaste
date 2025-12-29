@@ -111,16 +111,20 @@ impl ClipboardMonitor {
         });
     }
 
+    #[allow(dead_code)]
     pub async fn stop(&self) {
         let mut running = self.running.write().await;
         *running = false;
     }
 
+    /// Set the last known hash to prevent the monitor from treating
+    /// received clipboard content as a local change (echo prevention).
     pub async fn set_last_hash(&self, hash: String) {
         let mut last = self.last_hash.write().await;
         *last = Some(hash);
     }
 
+    #[allow(dead_code)]
     pub async fn get_last_hash(&self) -> Option<String> {
         let last = self.last_hash.read().await;
         last.clone()

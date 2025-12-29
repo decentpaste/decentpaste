@@ -1,6 +1,6 @@
 [package]
 name = "decentpaste-app"
-version = "0.3.5"
+version = "0.4.0"
 description = "Cross-platform clipboard sharing over P2P network"
 authors = ["you"]
 edition = "2021"
@@ -22,6 +22,7 @@ tauri-plugin-process = "2"
 tauri-plugin-stronghold = "2"
 tauri-plugin-clipboard-manager = "2"
 tauri-plugin-os = "2"
+tauri-plugin-decentshare = { path = "../tauri-plugin-decentshare" }
 iota_stronghold = "2.1"  # For accessing snapshot encryption work factor
 
 # Serialization

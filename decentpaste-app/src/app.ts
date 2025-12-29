@@ -190,13 +190,26 @@ class App {
         return;
       }
 
-      // Refresh peers button - triggers reconnection to discovered peers
+      // Refresh peers button - triggers reconnection to paired devices
       if (target.closest('#btn-refresh-peers')) {
         try {
-          await commands.reconnectPeers();
-          store.addToast('Reconnecting to peers...', 'info');
+          // Show connecting state for all paired peers
+          store.setAllPeersConnecting();
+
+          // Awaitable refresh - returns when all dials complete or timeout
+          const summary = await commands.refreshConnections();
+
+          if (summary.connected === summary.total_peers) {
+            store.addToast(`Connected to all ${summary.connected} device(s)`, 'success');
+          } else if (summary.connected > 0) {
+            store.addToast(`Connected to ${summary.connected}/${summary.total_peers} devices`, 'info');
+          } else if (summary.total_peers > 0) {
+            store.addToast(`No devices online (${summary.total_peers} paired)`, 'info');
+          } else {
+            store.addToast('No paired devices', 'info');
+          }
         } catch (error) {
-          store.addToast(`Failed to reconnect: ${getErrorMessage(error)}`, 'error');
+          store.addToast(`Refresh failed: ${getErrorMessage(error)}`, 'error');
         }
         return;
       }
@@ -651,6 +664,11 @@ class App {
       store.updatePeerName(payload.peerId, payload.deviceName);
     });
 
+    // Connection status updates for UI indicators
+    eventManager.on('peerConnectionStatus', (payload) => {
+      store.updatePeerConnection(payload.peer_id, payload.status);
+    });
+
     eventManager.on('clipboardReceived', (entry) => {
       store.addClipboardEntry(entry);
 
@@ -758,16 +776,66 @@ class App {
   /**
    * Load app data after vault unlock or setup completion.
    * Called when vaultStatus transitions to 'Unlocked'.
+   *
+   * Also processes any pending shared content that was received
+   * via Android share intent while the vault was locked.
    */
   private async loadDataAfterUnlock(): Promise<void> {
     store.set('isLoading', true);
     try {
       await this.loadInitialData();
-      store.addToast('Data loaded successfully', 'success');
+
+      // Process any pending share intent content (Android "share with" feature)
+      await this.processPendingShare();
+
+      // Only show "Data loaded" toast if there was no pending share
+      // (pendingShare toast is more informative)
+      if (!store.get('pendingShare')) {
+        store.addToast('Data loaded successfully', 'success');
+      }
     } catch (error) {
       console.error('Failed to load data after unlock:', error);
       store.addToast('Failed to load some data', 'error');
       store.set('isLoading', false);
+    }
+  }
+
+  /**
+   * Process any pending shared content from Android share intent.
+   * This is called after vault unlock to handle content that arrived while locked.
+   */
+  private async processPendingShare(): Promise<void> {
+    const pendingShare = store.get('pendingShare');
+    if (!pendingShare) return;
+
+    console.log('Processing pending share after vault unlock');
+
+    try {
+      store.addToast('Sharing with your devices...', 'info');
+
+      const result = await commands.handleSharedContent(pendingShare);
+
+      // Clear the pending share on success
+      store.set('pendingShare', null);
+
+      // Format message from DTO and determine toast type
+      const message = commands.formatShareResultMessage(result);
+      const toastType = result.peersReached > 0 ? 'success' : 'info';
+      store.addToast(message, toastType);
+    } catch (error) {
+      console.error('Failed to process pending share:', error);
+
+      const errorMessage = String(error);
+
+      // Only clear pending share for permanent errors (no peers configured)
+      // For transient errors (network issues), keep it for potential retry
+      if (errorMessage.includes('NoPeersAvailable')) {
+        store.set('pendingShare', null);
+        store.addToast('No paired devices. Pair a device first.', 'error');
+      } else {
+        // Keep pendingShare for potential retry, but notify user
+        store.addToast('Failed to share. Will retry when network is available.', 'error');
+      }
     }
   }
 
@@ -803,6 +871,7 @@ class App {
     store.subscribe('currentView', () => this.render());
     store.subscribe('discoveredPeers', () => this.renderPeersList());
     store.subscribe('pairedPeers', () => this.renderPeersList());
+    store.subscribe('peerConnections', () => this.renderPeersList());
     store.subscribe('clipboardHistory', () => this.renderClipboardHistory());
     store.subscribe('toasts', () => this.renderToasts());
     store.subscribe('showPairingModal', () => this.renderPairingModal());
@@ -967,7 +1036,7 @@ class App {
         <nav class="relative z-10 pb-safe-bottom" style="background: rgba(17, 17, 19, 0.9); backdrop-filter: blur(12px); border-top: 1px solid rgba(255, 255, 255, 0.06);">
           <div class="flex justify-around py-2">
             ${this.renderNavItem('dashboard', 'home', 'Home')}
-            ${this.renderNavItem('peers', 'users', 'Peers')}
+            ${this.renderNavItem('peers', 'users', 'Devices')}
             ${this.renderNavItem('settings', 'settings', 'Settings')}
           </div>
         </nav>
@@ -1635,13 +1704,28 @@ class App {
 
   private renderPairedPeer(peer: PairedPeer): string {
     const safeName = escapeHtml(peer.device_name);
+    const connections = store.get('peerConnections');
+    const status = connections.get(peer.peer_id) || 'disconnected';
+
+    const statusClass = {
+      connected: 'status-connected',
+      connecting: 'status-connecting',
+      disconnected: 'status-disconnected',
+    }[status];
+
+    const statusText = status === 'connected' ? 'Online' : status === 'connecting' ? 'Connecting...' : 'Offline';
+
     return `
       <div class="card p-3 flex items-center justify-between">
         <div class="flex items-center gap-3">
-          <div class="icon-container-green">
+          <div class="icon-container-green relative">
             ${icon('monitor', 18)}
+            <span class="status-dot ${statusClass} absolute -bottom-0.5 -right-0.5"></span>
           </div>
-          <p class="text-sm font-medium text-white">${safeName}</p>
+          <div>
+            <p class="text-sm font-medium text-white">${safeName}</p>
+            <p class="text-xs text-white/40">${statusText}</p>
+          </div>
         </div>
         <button
           data-unpair="${peer.peer_id}"

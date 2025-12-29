@@ -1,5 +1,10 @@
+use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicBool, AtomicUsize};
 use std::sync::Arc;
-use tokio::sync::{mpsc, RwLock};
+
+use chrono::{DateTime, Utc};
+use serde::Serialize;
+use tokio::sync::{mpsc, Notify, RwLock};
 use tracing::{debug, warn};
 
 use crate::clipboard::ClipboardEntry;
@@ -8,6 +13,30 @@ use crate::network::{DiscoveredPeer, NetworkCommand, NetworkStatus};
 use crate::security::PairingSession;
 use crate::storage::{AppSettings, DeviceIdentity, PairedPeer};
 use crate::vault::{VaultManager, VaultStatus};
+
+// =============================================================================
+// Connection State Types
+// =============================================================================
+
+/// Connection status for a paired peer.
+/// Used for per-device tracking and UI status indicators.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ConnectionStatus {
+    /// Peer is connected (libp2p connection + gossipsub subscribed)
+    Connected,
+    /// Dial attempt in progress
+    Connecting,
+    /// Not connected
+    Disconnected,
+}
+
+/// Connection state for a single peer.
+#[derive(Debug, Clone)]
+pub struct PeerConnectionState {
+    pub status: ConnectionStatus,
+    pub last_connected: Option<DateTime<Utc>>,
+}
 
 /// Clipboard content received while app was in background (Android)
 #[derive(Debug, Clone)]
@@ -30,10 +59,35 @@ pub struct AppState {
     pub pending_clipboard: Arc<RwLock<Option<PendingClipboard>>>,
     /// Whether the app is currently in foreground (tracked for mobile)
     pub is_foreground: Arc<RwLock<bool>>,
+    /// Peers confirmed ready to receive broadcast messages.
+    /// This is protocol-agnostic - the network layer determines what "ready" means.
+    /// Currently: gossipsub topic subscription. Future: could be any protocol.
+    pub ready_peers: Arc<RwLock<HashSet<String>>>,
     /// Current vault authentication status
     pub vault_status: Arc<RwLock<VaultStatus>>,
     /// VaultManager instance for encrypted storage (only present when vault is open)
     pub vault_manager: Arc<RwLock<Option<VaultManager>>>,
+
+    // =========================================================================
+    // Connection Management State
+    // =========================================================================
+
+    /// Per-peer connection state for paired peers.
+    /// Maps peer_id -> connection state (status + last_connected time).
+    /// Used for UI status indicators and smart reconnection.
+    pub peer_connections: Arc<RwLock<HashMap<String, PeerConnectionState>>>,
+
+    /// Guard against concurrent reconnection attempts.
+    /// Only one ensure_connected() operation runs at a time.
+    pub reconnect_in_progress: AtomicBool,
+
+    /// Count of pending dial attempts during reconnection.
+    /// Decremented as connections succeed or fail.
+    pub pending_dials: AtomicUsize,
+
+    /// Notified when all pending dials complete.
+    /// Used by ensure_connected() to await completion.
+    pub dials_complete_notify: Arc<Notify>,
 }
 
 impl AppState {
@@ -49,21 +103,37 @@ impl AppState {
             network_command_tx: Arc::new(RwLock::new(None)),
             pending_clipboard: Arc::new(RwLock::new(None)),
             is_foreground: Arc::new(RwLock::new(true)), // Assume foreground at start
+            ready_peers: Arc::new(RwLock::new(HashSet::new())), // No peers ready initially
             vault_status: Arc::new(RwLock::new(VaultStatus::NotSetup)), // Vault starts as not setup
             vault_manager: Arc::new(RwLock::new(None)), // No vault manager until unlocked
+
+            // Connection management
+            peer_connections: Arc::new(RwLock::new(HashMap::new())),
+            reconnect_in_progress: AtomicBool::new(false),
+            pending_dials: AtomicUsize::new(0),
+            dials_complete_notify: Arc::new(Notify::new()),
         }
     }
 
     pub async fn add_clipboard_entry(&self, entry: ClipboardEntry) {
-        let added = {
+        let modified = {
             let mut history = self.clipboard_history.write().await;
 
-            // Check for duplicates by hash
-            if history.iter().any(|e| e.content_hash == entry.content_hash) {
-                return;
+            // Check for existing entry with same content hash
+            if let Some(idx) = history
+                .iter()
+                .position(|e| e.content_hash == entry.content_hash)
+            {
+                // Update existing entry with new metadata and move to front
+                // This keeps history clean while allowing re-sharing same content
+                history.remove(idx);
+                debug!(
+                    "Updated existing clipboard entry (moved to front): {}",
+                    &entry.content_hash[..8]
+                );
             }
 
-            // Add to front
+            // Add to front (either new entry or updated existing)
             history.insert(0, entry);
 
             // Trim to max size from settings
@@ -73,7 +143,7 @@ impl AppState {
         };
 
         // Flush-on-write: persist clipboard history immediately
-        if added {
+        if modified {
             if let Err(e) = self.flush_clipboard_history().await {
                 warn!("Failed to flush clipboard history: {}", e);
             }

@@ -42,6 +42,17 @@ pub enum NetworkEvent {
     PeerConnected(ConnectedPeer),
     PeerDisconnected(String), // peer_id
 
+    // Readiness events (protocol-agnostic)
+    // Currently triggered by gossipsub subscription, but could be any protocol
+    /// A peer is now ready to receive broadcast messages
+    PeerReady {
+        peer_id: String,
+    },
+    /// A peer is no longer ready to receive broadcast messages
+    PeerNotReady {
+        peer_id: String,
+    },
+
     // Pairing events
     PairingRequestReceived {
         session_id: String,
@@ -74,5 +85,6 @@ pub enum NetworkEvent {
 
     // Status events
     StatusChanged(NetworkStatus),
+    #[allow(dead_code)]
     Error(String),
 }
