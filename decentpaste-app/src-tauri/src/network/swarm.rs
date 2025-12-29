@@ -11,13 +11,6 @@ use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 
-/// Maximum number of connection retries per peer
-const MAX_CONNECTION_RETRIES: u32 = 5;
-/// Base delay for exponential backoff (first retry delay)
-const BASE_RETRY_DELAY: Duration = Duration::from_millis(500);
-/// Maximum delay between retries (caps the exponential growth)
-const MAX_RETRY_DELAY: Duration = Duration::from_secs(8);
-
 use super::behaviour::{
     DecentPasteBehaviour, PairingRequest as ReqPairingRequest,
     PairingResponse as ReqPairingResponse,
@@ -83,16 +76,6 @@ pub enum NetworkCommand {
     },
 }
 
-/// Tracks retry state for a peer connection with exponential backoff
-#[derive(Debug, Clone)]
-struct PeerRetryState {
-    address: Multiaddr,
-    retry_count: u32,
-    next_retry: Instant,
-    /// Current backoff delay (doubles each retry, capped at MAX_RETRY_DELAY)
-    current_delay: Duration,
-}
-
 pub struct NetworkManager {
     swarm: Swarm<DecentPasteBehaviour>,
     command_rx: mpsc::Receiver<NetworkCommand>,
@@ -100,8 +83,6 @@ pub struct NetworkManager {
     discovered_peers: HashMap<PeerId, DiscoveredPeer>,
     connected_peers: HashMap<PeerId, ConnectedPeer>,
     pending_responses: HashMap<PeerId, ResponseChannel<ReqPairingResponse>>,
-    /// Tracks peers that need connection retries
-    pending_retries: HashMap<PeerId, PeerRetryState>,
     /// Peers confirmed ready for broadcast (currently: subscribed to clipboard topic).
     /// This is protocol-specific tracking; the protocol-agnostic state is in AppState.ready_peers.
     ready_peers: HashMap<PeerId, Instant>,
@@ -141,7 +122,6 @@ impl NetworkManager {
             discovered_peers: HashMap::new(),
             connected_peers: HashMap::new(),
             pending_responses: HashMap::new(),
-            pending_retries: HashMap::new(),
             ready_peers: HashMap::new(),
             device_name,
         })
@@ -177,9 +157,6 @@ impl NetworkManager {
             .send(NetworkEvent::StatusChanged(NetworkStatus::Connecting))
             .await;
 
-        // Interval for processing connection retries
-        let mut retry_interval = tokio::time::interval(Duration::from_millis(500));
-
         loop {
             tokio::select! {
                 // Handle swarm events
@@ -191,47 +168,6 @@ impl NetworkManager {
                 Some(command) = self.command_rx.recv() => {
                     self.handle_command(command).await;
                 }
-
-                // Process pending retries
-                _ = retry_interval.tick() => {
-                    self.process_pending_retries();
-                }
-            }
-        }
-    }
-
-    /// Process pending connection retries
-    fn process_pending_retries(&mut self) {
-        let now = Instant::now();
-        let mut to_retry = Vec::new();
-
-        // Find peers that are ready to retry
-        for (peer_id, state) in &self.pending_retries {
-            if now >= state.next_retry {
-                to_retry.push((*peer_id, state.address.clone(), state.retry_count));
-            }
-        }
-
-        // Process retries
-        for (peer_id, addr, retry_count) in to_retry {
-            // Remove from pending (will be re-added if it fails again)
-            self.pending_retries.remove(&peer_id);
-
-            // Skip if already connected
-            if self.connected_peers.contains_key(&peer_id) {
-                debug!("Skipping retry for {} - already connected", peer_id);
-                continue;
-            }
-
-            info!(
-                "Retrying connection to {} (attempt {}/{})",
-                peer_id,
-                retry_count + 1,
-                MAX_CONNECTION_RETRIES
-            );
-
-            if let Err(e) = self.swarm.dial(addr) {
-                warn!("Failed to initiate retry dial to {}: {}", peer_id, e);
             }
         }
     }
@@ -635,9 +571,6 @@ impl NetworkManager {
             SwarmEvent::ConnectionEstablished { peer_id, .. } => {
                 debug!("Connection established with {}", peer_id);
 
-                // Clear any pending retries for this peer
-                self.pending_retries.remove(&peer_id);
-
                 // Add peer to gossipsub mesh explicitly to ensure immediate message delivery
                 // This is critical for reconnecting peers after restart
                 self.swarm
@@ -694,52 +627,8 @@ impl NetworkManager {
             }
 
             SwarmEvent::OutgoingConnectionError { peer_id, error, .. } => {
+                // Just log the error - mDNS will rediscover peers when they become available
                 warn!("Outgoing connection error to {:?}: {}", peer_id, error);
-
-                // Schedule retry with exponential backoff if we have the peer's address
-                if let Some(peer_id) = peer_id {
-                    if let Some(discovered) = self.discovered_peers.get(&peer_id) {
-                        // Get current state or initialize for first retry
-                        let current_state = self.pending_retries.get(&peer_id);
-                        let current_retry = current_state.map(|s| s.retry_count).unwrap_or(0);
-                        let current_delay = current_state
-                            .map(|s| s.current_delay)
-                            .unwrap_or(BASE_RETRY_DELAY);
-
-                        if current_retry < MAX_CONNECTION_RETRIES {
-                            if let Ok(addr) = discovered.addresses[0].parse::<Multiaddr>() {
-                                // Calculate next delay with exponential backoff (capped)
-                                let next_delay = std::cmp::min(
-                                    current_delay.saturating_mul(2),
-                                    MAX_RETRY_DELAY,
-                                );
-
-                                info!(
-                                    "Scheduling retry {} for peer {} in {:?} (next delay: {:?})",
-                                    current_retry + 1,
-                                    peer_id,
-                                    current_delay,
-                                    next_delay
-                                );
-                                self.pending_retries.insert(
-                                    peer_id,
-                                    PeerRetryState {
-                                        address: addr,
-                                        retry_count: current_retry + 1,
-                                        next_retry: Instant::now() + current_delay,
-                                        current_delay: next_delay,
-                                    },
-                                );
-                            }
-                        } else {
-                            warn!(
-                                "Max retries ({}) exceeded for peer {}",
-                                MAX_CONNECTION_RETRIES, peer_id
-                            );
-                            self.pending_retries.remove(&peer_id);
-                        }
-                    }
-                }
             }
 
             SwarmEvent::IncomingConnectionError { error, .. } => {
@@ -891,10 +780,6 @@ impl NetworkManager {
 
             NetworkCommand::ReconnectPeers { paired_peer_addresses } => {
                 info!("Reconnecting to peers (app resumed from background)");
-
-                // Only clear pending retries - don't clear connected_peers as that
-                // drops valid connections and causes a brief disconnection window
-                self.pending_retries.clear();
 
                 // Re-populate ready_peers for already-connected peers.
                 // This is needed because ready_peers is cleared on app pause, but
