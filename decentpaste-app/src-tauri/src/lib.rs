@@ -174,7 +174,9 @@ pub fn run() {
                         let tx = tx_arc.read().await;
                         if let Some(tx) = tx.as_ref() {
                             if let Err(e) = tx
-                                .send(NetworkCommand::ReconnectPeers { paired_peer_addresses })
+                                .send(NetworkCommand::ReconnectPeers {
+                                    paired_peer_addresses,
+                                })
                                 .await
                             {
                                 error!("Failed to send reconnect command: {}", e);
@@ -410,9 +412,8 @@ pub async fn start_network_services(
     });
 
     // Start clipboard monitor (shared via Arc for echo prevention)
-    let clipboard_monitor = std::sync::Arc::new(ClipboardMonitor::new(
-        settings.clipboard_poll_interval_ms,
-    ));
+    let clipboard_monitor =
+        std::sync::Arc::new(ClipboardMonitor::new(settings.clipboard_poll_interval_ms));
     clipboard_monitor
         .start(app_handle.clone(), clipboard_tx)
         .await;
@@ -628,11 +629,7 @@ pub async fn start_network_services(
                 NetworkEvent::PeerReady { peer_id } => {
                     let mut ready = state.ready_peers.write().await;
                     ready.insert(peer_id.clone());
-                    debug!(
-                        "Peer {} now ready ({} total ready)",
-                        peer_id,
-                        ready.len()
-                    );
+                    debug!("Peer {} now ready ({} total ready)", peer_id, ready.len());
                 }
 
                 NetworkEvent::PeerNotReady { peer_id } => {
@@ -940,10 +937,7 @@ pub async fn start_network_services(
                                         // Check if we should queue for background (mobile only)
                                         #[cfg(any(target_os = "android", target_os = "ios"))]
                                         let is_foreground = *state.is_foreground.read().await;
-                                        #[cfg(not(any(
-                                            target_os = "android",
-                                            target_os = "ios"
-                                        )))]
+                                        #[cfg(not(any(target_os = "android", target_os = "ios")))]
                                         let is_foreground = true;
 
                                         if is_foreground {
@@ -963,10 +957,7 @@ pub async fn start_network_services(
                                         } else {
                                             // Mobile background: queue clipboard silently (no notification)
                                             // Clipboard will be copied when app resumes
-                                            #[cfg(any(
-                                                target_os = "android",
-                                                target_os = "ios"
-                                            ))]
+                                            #[cfg(any(target_os = "android", target_os = "ios"))]
                                             {
                                                 info!(
                                                     "App in background, queuing clipboard from {} (silent)",
@@ -979,9 +970,7 @@ pub async fn start_network_services(
                                                         state.pending_clipboard.write().await;
                                                     *pending = Some(PendingClipboard {
                                                         content: content.clone(),
-                                                        from_device: msg
-                                                            .origin_device_name
-                                                            .clone(),
+                                                        from_device: msg.origin_device_name.clone(),
                                                     });
                                                 }
                                             }
@@ -998,8 +987,8 @@ pub async fn start_network_services(
                                         state.add_clipboard_entry(entry.clone()).await;
 
                                         // Emit to frontend
-                                        let _ = app_handle_network
-                                            .emit("clipboard-received", entry);
+                                        let _ =
+                                            app_handle_network.emit("clipboard-received", entry);
 
                                         break;
                                     }

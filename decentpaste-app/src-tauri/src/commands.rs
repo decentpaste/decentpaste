@@ -1052,10 +1052,7 @@ async fn wait_for_peers_ready(state: &AppState, timeout: Duration) -> usize {
 
         // Check how many target peers are ready
         let ready = state.ready_peers.read().await;
-        let ready_count = target_peers
-            .iter()
-            .filter(|p| ready.contains(*p))
-            .count();
+        let ready_count = target_peers.iter().filter(|p| ready.contains(*p)).count();
 
         // Return immediately when at least one peer is ready
         // Other peers may be offline - we'll send to whoever is available
@@ -1074,10 +1071,7 @@ async fn wait_for_peers_ready(state: &AppState, timeout: Duration) -> usize {
     // Timeout - return count anyway (graceful degradation)
     // Message will still be added to history for later sync
     let ready = state.ready_peers.read().await;
-    let ready_count = target_peers
-        .iter()
-        .filter(|p| ready.contains(*p))
-        .count();
+    let ready_count = target_peers.iter().filter(|p| ready.contains(*p)).count();
 
     debug!(
         "Timeout after {:?}: {}/{} peers ready",

@@ -45,9 +45,13 @@ pub enum NetworkEvent {
     // Readiness events (protocol-agnostic)
     // Currently triggered by gossipsub subscription, but could be any protocol
     /// A peer is now ready to receive broadcast messages
-    PeerReady { peer_id: String },
+    PeerReady {
+        peer_id: String,
+    },
     /// A peer is no longer ready to receive broadcast messages
-    PeerNotReady { peer_id: String },
+    PeerNotReady {
+        peer_id: String,
+    },
 
     // Pairing events
     PairingRequestReceived {

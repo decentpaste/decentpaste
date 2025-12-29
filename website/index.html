@@ -615,9 +615,7 @@
           <!-- Steps -->
           <div class="grid grid-cols-1 md:grid-cols-3 gap-8 relative">
             <!-- Connecting Line -->
-            <div
-              class="hidden md:block absolute top-12 left-[16%] right-[16%] h-px bg-gradient-to-r from-teal-500/50 via-orange-500/50 to-teal-500/50"
-            ></div>
+            <div class="step-connector-line hidden md:block absolute top-12 left-[16%] right-[16%] h-px"></div>
 
             <!-- Step 1 -->
             <div class="text-center fade-in-up">
@@ -868,36 +866,70 @@
                 </div>
               </div>
               <div class="download-formats">
-                <a
-                  href="https://github.com/decentpaste/decentpaste/releases/latest"
-                  class="download-format-btn"
-                  data-format="exe"
-                >
-                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                    />
-                  </svg>
-                  <span class="format-name">.exe</span>
-                  <span class="format-desc">Installer</span>
-                </a>
-                <a
-                  href="https://github.com/decentpaste/decentpaste/releases/latest"
-                  class="download-format-btn"
-                  data-format="msi"
-                >
-                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                    />
-                  </svg>
-                  <span class="format-name">.msi</span>
-                  <span class="format-desc">Windows Installer</span>
-                </a>
+                <div class="download-format-wrapper">
+                  <a
+                    href="https://github.com/decentpaste/decentpaste/releases/latest"
+                    class="download-format-btn"
+                    data-format="exe"
+                  >
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                      />
+                    </svg>
+                    <span class="format-name">.exe</span>
+                    <span class="format-desc">Installer</span>
+                  </a>
+                  <a
+                    href="#"
+                    class="signature-link"
+                    data-sig-for="exe"
+                    title="Download signature file for verification"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"
+                      />
+                    </svg>
+                    <span class="sig-text">.sig</span>
+                  </a>
+                </div>
+                <div class="download-format-wrapper">
+                  <a
+                    href="https://github.com/decentpaste/decentpaste/releases/latest"
+                    class="download-format-btn"
+                    data-format="msi"
+                  >
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                      />
+                    </svg>
+                    <span class="format-name">.msi</span>
+                    <span class="format-desc">Windows Installer</span>
+                  </a>
+                  <a
+                    href="#"
+                    class="signature-link"
+                    data-sig-for="msi"
+                    title="Download signature file for verification"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"
+                      />
+                    </svg>
+                    <span class="sig-text">.sig</span>
+                  </a>
+                </div>
               </div>
             </div>
 
@@ -917,36 +949,70 @@
                 </div>
               </div>
               <div class="download-formats">
-                <a
-                  href="https://github.com/decentpaste/decentpaste/releases/latest"
-                  class="download-format-btn"
-                  data-format="dmg-arm"
-                >
-                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                    />
-                  </svg>
-                  <span class="format-name">.dmg</span>
-                  <span class="format-desc">Apple Silicon</span>
-                </a>
-                <a
-                  href="https://github.com/decentpaste/decentpaste/releases/latest"
-                  class="download-format-btn"
-                  data-format="dmg-intel"
-                >
-                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                    />
-                  </svg>
-                  <span class="format-name">.dmg</span>
-                  <span class="format-desc">Intel</span>
-                </a>
+                <div class="download-format-wrapper">
+                  <a
+                    href="https://github.com/decentpaste/decentpaste/releases/latest"
+                    class="download-format-btn"
+                    data-format="dmg-arm"
+                  >
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                      />
+                    </svg>
+                    <span class="format-name">.dmg</span>
+                    <span class="format-desc">Apple Silicon</span>
+                  </a>
+                  <a
+                    href="#"
+                    class="signature-link"
+                    data-sig-for="dmg-arm"
+                    title="Download signature file for verification"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"
+                      />
+                    </svg>
+                    <span class="sig-text">.sig</span>
+                  </a>
+                </div>
+                <div class="download-format-wrapper">
+                  <a
+                    href="https://github.com/decentpaste/decentpaste/releases/latest"
+                    class="download-format-btn"
+                    data-format="dmg-intel"
+                  >
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                      />
+                    </svg>
+                    <span class="format-name">.dmg</span>
+                    <span class="format-desc">Intel</span>
+                  </a>
+                  <a
+                    href="#"
+                    class="signature-link"
+                    data-sig-for="dmg-intel"
+                    title="Download signature file for verification"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"
+                      />
+                    </svg>
+                    <span class="sig-text">.sig</span>
+                  </a>
+                </div>
               </div>
             </div>
 
@@ -966,51 +1032,102 @@
                 </div>
               </div>
               <div class="download-formats download-formats-3">
-                <a
-                  href="https://github.com/decentpaste/decentpaste/releases/latest"
-                  class="download-format-btn"
-                  data-format="appimage"
-                >
-                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                    />
-                  </svg>
-                  <span class="format-name">.AppImage</span>
-                  <span class="format-desc">Universal</span>
-                </a>
-                <a
-                  href="https://github.com/decentpaste/decentpaste/releases/latest"
-                  class="download-format-btn"
-                  data-format="deb"
-                >
-                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                    />
-                  </svg>
-                  <span class="format-name">.deb</span>
-                  <span class="format-desc">Debian</span>
-                </a>
-                <a
-                  href="https://github.com/decentpaste/decentpaste/releases/latest"
-                  class="download-format-btn"
-                  data-format="rpm"
-                >
-                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                    />
-                  </svg>
-                  <span class="format-name">.rpm</span>
-                  <span class="format-desc">Fedora</span>
-                </a>
+                <div class="download-format-wrapper">
+                  <a
+                    href="https://github.com/decentpaste/decentpaste/releases/latest"
+                    class="download-format-btn"
+                    data-format="appimage"
+                  >
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                      />
+                    </svg>
+                    <span class="format-name">.AppImage</span>
+                    <span class="format-desc">Universal</span>
+                  </a>
+                  <a
+                    href="#"
+                    class="signature-link"
+                    data-sig-for="appimage"
+                    title="Download signature file for verification"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"
+                      />
+                    </svg>
+                    <span class="sig-text">.sig</span>
+                  </a>
+                </div>
+                <div class="download-format-wrapper">
+                  <a
+                    href="https://github.com/decentpaste/decentpaste/releases/latest"
+                    class="download-format-btn"
+                    data-format="deb"
+                  >
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                      />
+                    </svg>
+                    <span class="format-name">.deb</span>
+                    <span class="format-desc">Debian</span>
+                  </a>
+                  <a
+                    href="#"
+                    class="signature-link"
+                    data-sig-for="deb"
+                    title="Download signature file for verification"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"
+                      />
+                    </svg>
+                    <span class="sig-text">.sig</span>
+                  </a>
+                </div>
+                <div class="download-format-wrapper">
+                  <a
+                    href="https://github.com/decentpaste/decentpaste/releases/latest"
+                    class="download-format-btn"
+                    data-format="rpm"
+                  >
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                      />
+                    </svg>
+                    <span class="format-name">.rpm</span>
+                    <span class="format-desc">Fedora</span>
+                  </a>
+                  <a
+                    href="#"
+                    class="signature-link"
+                    data-sig-for="rpm"
+                    title="Download signature file for verification"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"
+                      />
+                    </svg>
+                    <span class="sig-text">.sig</span>
+                  </a>
+                </div>
               </div>
             </div>
 
@@ -1030,21 +1147,38 @@
                 </div>
               </div>
               <div class="download-formats download-formats-1">
-                <a
-                  href="https://github.com/decentpaste/decentpaste/releases/latest"
-                  class="download-format-btn"
-                  data-format="apk"
-                >
-                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                    />
-                  </svg>
-                  <span class="format-name">.apk</span>
-                  <span class="format-desc">Direct Install</span>
-                </a>
+                <div class="download-format-wrapper">
+                  <a
+                    href="https://github.com/decentpaste/decentpaste/releases/latest"
+                    class="download-format-btn"
+                    data-format="apk"
+                  >
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                      />
+                    </svg>
+                    <span class="format-name">.apk</span>
+                    <span class="format-desc">Direct Install</span>
+                  </a>
+                  <a
+                    href="#"
+                    class="signature-link"
+                    data-sig-for="apk"
+                    title="Download signature file for verification"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"
+                      />
+                    </svg>
+                    <span class="sig-text">.sig</span>
+                  </a>
+                </div>
               </div>
             </div>
 

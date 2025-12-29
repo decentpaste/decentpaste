@@ -301,7 +301,11 @@ impl NetworkManager {
                                 peer_id: peer_id.to_string(),
                             })
                             .await;
-                        debug!("Peer {} is now ready ({} total ready)", peer_id, self.ready_peers.len());
+                        debug!(
+                            "Peer {} is now ready ({} total ready)",
+                            peer_id,
+                            self.ready_peers.len()
+                        );
                     }
 
                     // Announce our device name now that the peer is subscribed
@@ -334,7 +338,11 @@ impl NetworkManager {
                                 peer_id: peer_id.to_string(),
                             })
                             .await;
-                        debug!("Peer {} is no longer ready ({} remaining)", peer_id, self.ready_peers.len());
+                        debug!(
+                            "Peer {} is no longer ready ({} remaining)",
+                            peer_id,
+                            self.ready_peers.len()
+                        );
                     }
                 }
                 gossipsub::Event::GossipsubNotSupported { peer_id } => {
@@ -616,7 +624,11 @@ impl NetworkManager {
                             peer_id: peer_id.to_string(),
                         })
                         .await;
-                    debug!("Peer {} no longer ready (disconnected), {} remaining", peer_id, self.ready_peers.len());
+                    debug!(
+                        "Peer {} no longer ready (disconnected), {} remaining",
+                        peer_id,
+                        self.ready_peers.len()
+                    );
                 }
 
                 self.connected_peers.remove(&peer_id);
@@ -778,7 +790,9 @@ impl NetworkManager {
                 }
             }
 
-            NetworkCommand::ReconnectPeers { paired_peer_addresses } => {
+            NetworkCommand::ReconnectPeers {
+                paired_peer_addresses,
+            } => {
                 info!("Reconnecting to peers (app resumed from background)");
 
                 // Re-populate ready_peers for already-connected peers.
@@ -816,7 +830,8 @@ impl NetworkManager {
                 }
 
                 // Track which peers we've attempted to dial
-                let mut dialed_peers: std::collections::HashSet<PeerId> = std::collections::HashSet::new();
+                let mut dialed_peers: std::collections::HashSet<PeerId> =
+                    std::collections::HashSet::new();
 
                 // First, try to dial discovered peers (freshest addresses from mDNS)
                 for (peer_id, peer) in &self.discovered_peers {
@@ -826,7 +841,10 @@ impl NetworkManager {
                     }
                     if let Some(addr_str) = peer.addresses.first() {
                         if let Ok(addr) = addr_str.parse::<Multiaddr>() {
-                            info!("Attempting to reconnect to discovered peer {} at {}", peer_id, addr);
+                            info!(
+                                "Attempting to reconnect to discovered peer {} at {}",
+                                peer_id, addr
+                            );
                             if let Err(e) = self.swarm.dial(addr) {
                                 warn!("Failed to initiate reconnection to {}: {}", peer_id, e);
                             }
@@ -840,7 +858,9 @@ impl NetworkManager {
                 for (peer_id_str, addresses) in &paired_peer_addresses {
                     if let Ok(peer_id) = peer_id_str.parse::<PeerId>() {
                         // Skip if already connected or already dialed
-                        if self.connected_peers.contains_key(&peer_id) || dialed_peers.contains(&peer_id) {
+                        if self.connected_peers.contains_key(&peer_id)
+                            || dialed_peers.contains(&peer_id)
+                        {
                             continue;
                         }
 
@@ -852,7 +872,10 @@ impl NetworkManager {
                                     peer_id, addr
                                 );
                                 if let Err(e) = self.swarm.dial(addr.clone()) {
-                                    warn!("Failed to dial paired peer {} at {}: {}", peer_id, addr, e);
+                                    warn!(
+                                        "Failed to dial paired peer {} at {}: {}",
+                                        peer_id, addr, e
+                                    );
                                 } else {
                                     dialed_peers.insert(peer_id);
                                     break; // Only try one address per peer

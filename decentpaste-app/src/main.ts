@@ -1,6 +1,12 @@
 import './styles.css';
 import { initApp } from './app';
-import { reconnectPeers, processPendingClipboard, flushVault, handleSharedContent, setAppVisibility } from './api/commands';
+import {
+  reconnectPeers,
+  processPendingClipboard,
+  flushVault,
+  handleSharedContent,
+  setAppVisibility,
+} from './api/commands';
 import { store } from './state/store';
 import { checkForUpdates } from './api/updater';
 import { isDesktop, isMobile } from './utils/platform';
@@ -84,10 +90,7 @@ async function checkForPendingShare(): Promise<void> {
       return; // Success - exit
     } catch (error) {
       const delay = baseDelay * Math.pow(2, attempt);
-      console.warn(
-        `Failed to check pending share (attempt ${attempt + 1}/${maxRetries}):`,
-        error
-      );
+      console.warn(`Failed to check pending share (attempt ${attempt + 1}/${maxRetries}):`, error);
 
       if (attempt < maxRetries - 1) {
         await new Promise((resolve) => setTimeout(resolve, delay));
