@@ -1018,7 +1018,7 @@ class App {
         <nav class="relative z-10 pb-safe-bottom" style="background: rgba(17, 17, 19, 0.9); backdrop-filter: blur(12px); border-top: 1px solid rgba(255, 255, 255, 0.06);">
           <div class="flex justify-around py-2">
             ${this.renderNavItem('dashboard', 'home', 'Home')}
-            ${this.renderNavItem('peers', 'users', 'Peers')}
+            ${this.renderNavItem('peers', 'users', 'Devices')}
             ${this.renderNavItem('settings', 'settings', 'Settings')}
           </div>
         </nav>
