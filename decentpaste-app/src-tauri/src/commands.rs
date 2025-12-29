@@ -1087,8 +1087,8 @@ async fn get_connection_summary(state: &AppState) -> ConnectionSummary {
 
 /// Handle shared content received from Android share intent.
 ///
-/// This command is called by the frontend after receiving a "share-received" event
-/// from the decentshare plugin. It:
+/// This command is called by the frontend after detecting pending share content
+/// via getPendingShare() polling from the decentshare plugin. It:
 /// 1. Verifies the vault is unlocked
 /// 2. Ensures paired peers are connected (awaitable, with timeout)
 /// 3. Shares the content with all connected paired peers
