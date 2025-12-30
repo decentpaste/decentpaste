@@ -771,12 +771,14 @@ async function populateDownloadLinks() {
     });
 
     // Update signature links - each .sig URL is just the binary URL + '.sig'
+    // Exception: Android APK uses .idsig (APK Signature Scheme v4)
     document.querySelectorAll('.signature-link[data-sig-for]').forEach((sigLink) => {
       const format = sigLink.getAttribute('data-sig-for');
       const binaryUrl = data.assets?.[format];
 
       if (binaryUrl) {
-        sigLink.href = binaryUrl + '.sig';
+        const sigExtension = format === 'apk' ? '.idsig' : '.sig';
+        sigLink.href = binaryUrl + sigExtension;
         sigLink.style.display = '';
       } else {
         // Hide signature link if no binary URL
