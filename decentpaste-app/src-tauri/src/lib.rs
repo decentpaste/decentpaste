@@ -17,9 +17,9 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use clipboard::{ClipboardChange, ClipboardEntry, ClipboardMonitor};
 use network::{ClipboardMessage, NetworkCommand, NetworkEvent, NetworkManager};
-use state::{AppState, ConnectionStatus, PeerConnectionState};
 #[cfg(any(target_os = "android", target_os = "ios"))]
 use state::PendingClipboard;
+use state::{AppState, ConnectionStatus, PeerConnectionState};
 use storage::{init_data_dir, load_settings};
 use vault::{VaultManager, VaultStatus};
 
@@ -47,13 +47,23 @@ pub fn run() {
         warn!("Failed to set Stronghold work factor: {:?}", e);
     }
 
-    let builder = tauri::Builder::default()
+    let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_decentshare::init());
+
+    #[cfg(desktop)]
+    {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            let _ = app
+                .get_webview_window("main")
+                .expect("no main window")
+                .set_focus();
+        }));
+    }
 
     // Notification plugin is desktop-only (mobile can't receive notifications
     // when backgrounded because network connections are terminated)
@@ -623,7 +633,10 @@ pub async fn start_network_services(
 
                     // Note: We don't mark as Connected here - wait for PeerReady
                     // which indicates gossipsub subscription is complete
-                    debug!("Peer {} connected (awaiting gossipsub subscribe)", peer.peer_id);
+                    debug!(
+                        "Peer {} connected (awaiting gossipsub subscribe)",
+                        peer.peer_id
+                    );
                 }
 
                 NetworkEvent::PeerDisconnected(ref peer_id) => {
@@ -642,10 +655,13 @@ pub async fn start_network_services(
                     }
 
                     // Emit status change to frontend
-                    let _ = app_handle_network.emit("peer-connection-status", serde_json::json!({
-                        "peer_id": peer_id,
-                        "status": "disconnected"
-                    }));
+                    let _ = app_handle_network.emit(
+                        "peer-connection-status",
+                        serde_json::json!({
+                            "peer_id": peer_id,
+                            "status": "disconnected"
+                        }),
+                    );
 
                     // Also emit legacy event for compatibility
                     let _ = app_handle_network.emit("peer-disconnected", peer_id);
@@ -681,10 +697,13 @@ pub async fn start_network_services(
                     }
 
                     // Emit status change to frontend
-                    let _ = app_handle_network.emit("peer-connection-status", serde_json::json!({
-                        "peer_id": peer_id,
-                        "status": "connected"
-                    }));
+                    let _ = app_handle_network.emit(
+                        "peer-connection-status",
+                        serde_json::json!({
+                            "peer_id": peer_id,
+                            "status": "connected"
+                        }),
+                    );
 
                     debug!("Peer {} now ready (gossipsub subscribed)", peer_id);
                 }
@@ -705,10 +724,13 @@ pub async fn start_network_services(
                     }
 
                     // Emit status change to frontend
-                    let _ = app_handle_network.emit("peer-connection-status", serde_json::json!({
-                        "peer_id": peer_id,
-                        "status": "disconnected"
-                    }));
+                    let _ = app_handle_network.emit(
+                        "peer-connection-status",
+                        serde_json::json!({
+                            "peer_id": peer_id,
+                            "status": "disconnected"
+                        }),
+                    );
 
                     debug!("Peer {} no longer ready (gossipsub unsubscribed)", peer_id);
                 }
