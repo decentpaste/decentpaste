@@ -270,10 +270,7 @@ class Store {
    * Update connection status for a peer.
    * Used to track online/offline status for UI indicators.
    */
-  updatePeerConnection(
-    peerId: string,
-    status: 'connected' | 'connecting' | 'disconnected',
-  ): void {
+  updatePeerConnection(peerId: string, status: 'connected' | 'connecting' | 'disconnected'): void {
     const connections = new Map(this.state.peerConnections);
     connections.set(peerId, status);
     this.set('peerConnections', connections);
