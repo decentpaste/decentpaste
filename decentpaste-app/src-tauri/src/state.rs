@@ -71,7 +71,6 @@ pub struct AppState {
     // =========================================================================
     // Connection Management State
     // =========================================================================
-
     /// Per-peer connection state for paired peers.
     /// Maps peer_id -> connection state (status + last_connected time).
     /// Used for UI status indicators and smart reconnection.

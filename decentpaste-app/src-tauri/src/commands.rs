@@ -961,10 +961,7 @@ pub struct ConnectionSummary {
 /// not fire-and-forget like the old reconnect_peers command.
 pub async fn ensure_connected(state: &AppState, timeout: Duration) -> ConnectionSummary {
     // Guard: only one reconnection at a time
-    if state
-        .reconnect_in_progress
-        .swap(true, Ordering::SeqCst)
-    {
+    if state.reconnect_in_progress.swap(true, Ordering::SeqCst) {
         // Already reconnecting - wait for it to finish
         let _ = tokio::time::timeout(timeout, state.dials_complete_notify.notified()).await;
         return get_connection_summary(state).await;
