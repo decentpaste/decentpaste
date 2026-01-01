@@ -47,7 +47,7 @@ pub fn run() {
         warn!("Failed to set Stronghold work factor: {:?}", e);
     }
 
-    let mut builder = tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -56,14 +56,12 @@ pub fn run() {
         .plugin(tauri_plugin_decentshare::init());
 
     #[cfg(desktop)]
-    {
-        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            let _ = app
-                .get_webview_window("main")
-                .expect("no main window")
-                .set_focus();
-        }));
-    }
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        let _ = app
+            .get_webview_window("main")
+            .expect("no main window")
+            .set_focus();
+    }));
 
     // Notification plugin is desktop-only (mobile can't receive notifications
     // when backgrounded because network connections are terminated)
@@ -839,10 +837,8 @@ pub async fn start_network_services(
                         let device_identity = state.device_identity.read().await;
                         if let Some(ref identity) = *device_identity {
                             if let Some(ref our_private_key) = identity.private_key {
-                                match security::derive_shared_secret(
-                                    our_private_key,
-                                    &peer_pubkey,
-                                ) {
+                                match security::derive_shared_secret(our_private_key, &peer_pubkey)
+                                {
                                     Ok(derived) => derived,
                                     Err(e) => {
                                         error!("Failed to derive shared secret: {}", e);
