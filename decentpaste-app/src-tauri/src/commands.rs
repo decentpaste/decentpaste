@@ -395,33 +395,15 @@ pub async fn confirm_pairing(
     }
 
     if is_initiator {
-        // Initiator: Derive shared secret using X25519 ECDH
+        // Initiator: Send confirmation to responder
+        // The actual derivation happens in lib.rs when handling PairingComplete
         let device_identity = state.device_identity.read().await;
         let identity = device_identity
             .as_ref()
             .ok_or(DecentPasteError::NotInitialized)?;
 
-        // Get the peer's public key from the session
-        let peer_public_key = {
-            let sessions = state.pairing_sessions.read().await;
-            sessions
-                .iter()
-                .find(|s| s.session_id == session_id)
-                .and_then(|s| s.peer_public_key.clone())
-                .ok_or_else(|| DecentPasteError::Pairing("Peer public key not found".into()))?
-        };
-
-        // Derive shared secret using ECDH: our_private_key + their_public_key
-        let our_private_key = identity
-            .private_key
-            .as_ref()
-            .ok_or_else(|| DecentPasteError::Pairing("Private key not found".into()))?;
-
-        let shared_secret =
-            crate::security::derive_shared_secret(our_private_key, &peer_public_key)?;
-
         tracing::debug!(
-            "Initiator derived shared secret via ECDH, sending confirm to peer {}",
+            "Initiator confirmed PIN, sending confirm to peer {}",
             peer_id
         );
 
@@ -431,7 +413,6 @@ pub async fn confirm_pairing(
                 peer_id: peer_id.clone(),
                 session_id: session_id.clone(),
                 success: true,
-                shared_secret: Some(shared_secret), // Send for verification (responder will also derive)
                 device_name: identity.device_name.clone(),
             })
             .await
