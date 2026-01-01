@@ -46,7 +46,6 @@ pub struct PairingResponse {
 pub struct PairingConfirm {
     pub session_id: String,
     pub success: bool,
-    pub shared_secret: Option<Vec<u8>>, // Encrypted shared secret
     pub error: Option<String>,
     pub device_name: Option<String>, // Sender's device name
 }

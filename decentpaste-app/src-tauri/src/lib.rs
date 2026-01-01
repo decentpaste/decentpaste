@@ -805,13 +805,11 @@ pub async fn start_network_services(
                     session_id,
                     peer_id,
                     device_name,
-                    shared_secret: received_secret,
                 } => {
                     // Get the device name, peer's public key, and cached addresses from the session
                     let final_device_name: String;
                     let peer_public_key: Option<Vec<u8>>;
                     let session_peer_addresses: Vec<String>;
-                    let is_responder: bool;
                     {
                         let mut sessions = state.pairing_sessions.write().await;
                         if let Some(session) =
@@ -829,100 +827,67 @@ pub async fn start_network_services(
                             peer_public_key = session.peer_public_key.clone();
                             // Use cached addresses from session (captured at pairing start, before mDNS could expire)
                             session_peer_addresses = session.peer_addresses.clone();
-                            is_responder = !session.is_initiator;
                         } else {
                             final_device_name = device_name.clone();
                             peer_public_key = None;
                             session_peer_addresses = Vec::new();
-                            is_responder = false;
                         }
                     }
 
-                    // Derive shared secret using ECDH if we're the responder
-                    // (Initiator already derived and sent it; responder derives independently)
-                    let shared_secret = if is_responder {
-                        if let Some(peer_pubkey) = peer_public_key {
-                            let device_identity = state.device_identity.read().await;
-                            if let Some(ref identity) = *device_identity {
-                                if let Some(ref our_private_key) = identity.private_key {
-                                    match security::derive_shared_secret(
-                                        our_private_key,
-                                        &peer_pubkey,
-                                    ) {
-                                        Ok(derived) => {
-                                            // Verify it matches what initiator sent
-                                            if derived != received_secret {
-                                                error!("ECDH verification failed: derived secret doesn't match received - possible MITM attack");
-                                                // Fail the pairing - this is a security issue
-                                                let mut sessions =
-                                                    state.pairing_sessions.write().await;
-                                                if let Some(session) = sessions
-                                                    .iter_mut()
-                                                    .find(|s| s.session_id == session_id)
-                                                {
-                                                    session.state = security::PairingState::Failed(
-                                                        "Key verification failed".into(),
-                                                    );
-                                                }
-                                                let _ = app_handle_network.emit(
-                                                    "pairing-failed",
-                                                    serde_json::json!({
-                                                        "sessionId": session_id,
-                                                        "error": "Key verification failed - secrets don't match",
-                                                    }),
-                                                );
-                                                continue; // Skip adding to paired peers
-                                            }
-                                            derived
-                                        }
-                                        Err(e) => {
-                                            error!("Failed to derive shared secret: {}", e);
-                                            let _ = app_handle_network.emit(
-                                                "pairing-failed",
-                                                serde_json::json!({
-                                                    "sessionId": session_id,
-                                                    "error": "Failed to derive shared secret",
-                                                }),
-                                            );
-                                            continue;
-                                        }
+                    // Derive shared secret using ECDH
+                    let shared_secret = if let Some(peer_pubkey) = peer_public_key {
+                        let device_identity = state.device_identity.read().await;
+                        if let Some(ref identity) = *device_identity {
+                            if let Some(ref our_private_key) = identity.private_key {
+                                match security::derive_shared_secret(
+                                    our_private_key,
+                                    &peer_pubkey,
+                                ) {
+                                    Ok(derived) => derived,
+                                    Err(e) => {
+                                        error!("Failed to derive shared secret: {}", e);
+                                        let _ = app_handle_network.emit(
+                                            "pairing-failed",
+                                            serde_json::json!({
+                                                "sessionId": session_id,
+                                                "error": "Failed to derive shared secret",
+                                            }),
+                                        );
+                                        continue;
                                     }
-                                } else {
-                                    error!("No private key available for ECDH derivation");
-                                    let _ = app_handle_network.emit(
-                                        "pairing-failed",
-                                        serde_json::json!({
-                                            "sessionId": session_id,
-                                            "error": "Device identity incomplete",
-                                        }),
-                                    );
-                                    continue;
                                 }
                             } else {
-                                error!("No device identity for ECDH derivation");
+                                error!("No private key available for ECDH derivation");
                                 let _ = app_handle_network.emit(
                                     "pairing-failed",
                                     serde_json::json!({
                                         "sessionId": session_id,
-                                        "error": "Device identity not found",
+                                        "error": "Device identity incomplete",
                                     }),
                                 );
                                 continue;
                             }
                         } else {
-                            error!("No peer public key for ECDH derivation");
+                            error!("No device identity for ECDH derivation");
                             let _ = app_handle_network.emit(
                                 "pairing-failed",
                                 serde_json::json!({
                                     "sessionId": session_id,
-                                    "error": "Peer public key missing",
+                                    "error": "Device identity not found",
                                 }),
                             );
                             continue;
                         }
                     } else {
-                        // Initiator already derived the secret
-                        received_secret
+                        error!("No peer public key for ECDH derivation");
+                        let _ = app_handle_network.emit(
+                            "pairing-failed",
+                            serde_json::json!({
+                                "sessionId": session_id,
+                                "error": "Peer public key missing",
+                            }),
+                        );
+                        continue;
                     };
 
                     // Use addresses cached in session (captured at pairing start, survives mDNS expiry)

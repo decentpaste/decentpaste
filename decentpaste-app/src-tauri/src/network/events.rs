@@ -69,7 +69,6 @@ pub enum NetworkEvent {
         session_id: String,
         peer_id: String,
         device_name: String,
-        shared_secret: Vec<u8>,
     },
     PairingFailed {
         session_id: String,

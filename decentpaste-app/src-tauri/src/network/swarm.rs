@@ -45,7 +45,6 @@ pub enum NetworkCommand {
         peer_id: String,
         session_id: String,
         success: bool,
-        shared_secret: Option<Vec<u8>>,
         device_name: String,
     },
     BroadcastClipboard {
@@ -402,47 +401,39 @@ impl NetworkManager {
                                                 .unwrap_or_else(|| "Unknown Device".to_string());
 
                                             if confirm.success {
-                                                if let Some(shared_secret) =
-                                                    confirm.shared_secret.clone()
-                                                {
-                                                    // Send success acknowledgment back
-                                                    let ack = super::protocol::PairingConfirm {
-                                                        session_id: confirm.session_id.clone(),
-                                                        success: true,
-                                                        shared_secret: Some(shared_secret.clone()),
-                                                        error: None,
-                                                        device_name: None, // Not needed in ack
-                                                    };
-                                                    let ack_msg = ProtocolMessage::Pairing(
-                                                        PairingMessage::Confirm(ack),
-                                                    );
-                                                    if let Ok(message) = ack_msg.to_bytes() {
-                                                        let response =
-                                                            ReqPairingResponse { message };
-                                                        let _ = self
-                                                            .swarm
-                                                            .behaviour_mut()
-                                                            .request_response
-                                                            .send_response(channel, response);
-                                                    }
-
-                                                    // Emit pairing complete event for responder
+                                                // Send success acknowledgment back
+                                                let ack = super::protocol::PairingConfirm {
+                                                    session_id: confirm.session_id.clone(),
+                                                    success: true,
+                                                    error: None,
+                                                    device_name: None, // Not needed in ack
+                                                };
+                                                let ack_msg = ProtocolMessage::Pairing(
+                                                    PairingMessage::Confirm(ack),
+                                                );
+                                                if let Ok(message) = ack_msg.to_bytes() {
+                                                    let response = ReqPairingResponse { message };
                                                     let _ = self
-                                                        .event_tx
-                                                        .send(NetworkEvent::PairingComplete {
-                                                            session_id: confirm.session_id,
-                                                            peer_id: peer.to_string(),
-                                                            device_name: initiator_device_name,
-                                                            shared_secret,
-                                                        })
-                                                        .await;
+                                                        .swarm
+                                                        .behaviour_mut()
+                                                        .request_response
+                                                        .send_response(channel, response);
                                                 }
+
+                                                // Emit pairing complete event for responder
+                                                let _ = self
+                                                    .event_tx
+                                                    .send(NetworkEvent::PairingComplete {
+                                                        session_id: confirm.session_id,
+                                                        peer_id: peer.to_string(),
+                                                        device_name: initiator_device_name,
+                                                    })
+                                                    .await;
                                             } else {
                                                 // Send failure acknowledgment
                                                 let ack = super::protocol::PairingConfirm {
                                                     session_id: confirm.session_id.clone(),
                                                     success: false,
-                                                    shared_secret: None,
                                                     error: confirm.error.clone(),
                                                     device_name: None,
                                                 };
@@ -496,17 +487,14 @@ impl NetworkManager {
                                         }
                                         PairingMessage::Confirm(confirm) => {
                                             if confirm.success {
-                                                if let Some(secret) = confirm.shared_secret {
-                                                    let _ = self
-                                                        .event_tx
-                                                        .send(NetworkEvent::PairingComplete {
-                                                            session_id: confirm.session_id,
-                                                            peer_id: peer.to_string(),
-                                                            device_name: "Unknown".to_string(),
-                                                            shared_secret: secret,
-                                                        })
-                                                        .await;
-                                                }
+                                                let _ = self
+                                                    .event_tx
+                                                    .send(NetworkEvent::PairingComplete {
+                                                        session_id: confirm.session_id,
+                                                        peer_id: peer.to_string(),
+                                                        device_name: "Unknown".to_string(),
+                                                    })
+                                                    .await;
                                             } else {
                                                 let _ = self
                                                     .event_tx
@@ -733,7 +721,6 @@ impl NetworkManager {
                         let confirm = super::protocol::PairingConfirm {
                             session_id,
                             success: false,
-                            shared_secret: None,
                             error: Some("Pairing rejected by user".to_string()),
                             device_name: None,
                         };
@@ -756,7 +743,6 @@ impl NetworkManager {
                 peer_id,
                 session_id,
                 success,
-                shared_secret,
                 device_name,
             } => {
                 // This is sent as a NEW request from initiator to responder after PIN confirmation
@@ -764,7 +750,6 @@ impl NetworkManager {
                     let confirm = super::protocol::PairingConfirm {
                         session_id,
                         success,
-                        shared_secret,
                         error: None,
                         device_name: Some(device_name),
                     };
