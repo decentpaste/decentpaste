@@ -99,6 +99,12 @@ pub fn run() {
                         }
                     });
                 }
+
+                use tauri_plugin_autostart::MacosLauncher;
+                app.handle().plugin(tauri_plugin_autostart::init(
+                    MacosLauncher::LaunchAgent,
+                    None,
+                ))?;
             }
 
             // Initialize app state

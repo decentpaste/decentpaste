@@ -623,6 +623,19 @@ class App {
         }
         return;
       }
+
+      // Autostart toggle (desktop only - launch at login)
+      if (target.id === 'autostart-toggle') {
+        const checked = (target as HTMLInputElement).checked;
+        try {
+          const { setAutostart } = await import('./api/autostart');
+          await setAutostart(checked);
+        } catch (error) {
+          store.addToast(`Failed to update autostart: ${getErrorMessage(error)}`, 'error');
+          (target as HTMLInputElement).checked = !checked;
+        }
+        return;
+      }
     });
 
     // Handle blur events for device name input
@@ -943,6 +956,17 @@ class App {
     if (container && !container.classList.contains('no-stagger')) {
       // Let initial animations play, then disable for future updates
       setTimeout(() => container.classList.add('no-stagger'), 400);
+    }
+
+    // Initialize autostart toggle state (desktop only)
+    const autostartToggle = document.getElementById('autostart-toggle') as HTMLInputElement | null;
+    if (autostartToggle) {
+      import('./api/autostart')
+        .then(({ getAutostart }) => getAutostart())
+        .then((enabled) => {
+          autostartToggle.checked = enabled;
+        })
+        .catch(console.error);
     }
   }
 
@@ -1322,6 +1346,33 @@ class App {
             </div>
           </div>
         </div>
+
+        ${
+          isDesktop()
+            ? `<!-- System (desktop only) -->
+        <div class="mb-6">
+          <div class="flex items-center gap-2 mb-3">
+            <div class="icon-container-purple" style="width: 1.5rem; height: 1.5rem; border-radius: 0.5rem;">
+              ${icon('settings', 12)}
+            </div>
+            <h2 class="text-sm font-semibold text-white/80 tracking-tight font-display">System</h2>
+          </div>
+          <div class="card overflow-hidden">
+            <label class="flex items-center justify-between p-4 cursor-pointer hover:bg-white/[0.02] transition-colors">
+              <div>
+                <span class="text-sm text-white/70 block">Launch at login</span>
+                <span class="text-xs text-white/40">Start DecentPaste on system startup</span>
+              </div>
+              <input
+                type="checkbox"
+                id="autostart-toggle"
+                class="checkbox"
+              />
+            </label>
+          </div>
+        </div>`
+            : ''
+        }
 
         ${
           isDesktop()
