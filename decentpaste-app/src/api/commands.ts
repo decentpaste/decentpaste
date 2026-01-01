@@ -32,6 +32,31 @@ export async function reconnectPeers(): Promise<void> {
   return invoke('reconnect_peers');
 }
 
+/** Summary of connection status after refresh */
+export interface ConnectionSummary {
+  total_peers: number;
+  connected: number;
+  failed: number;
+}
+
+/**
+ * Refresh connections to all paired peers.
+ * This is an awaitable operation that returns when all dial attempts complete or timeout.
+ * Use this for the refresh button instead of reconnectPeers for better feedback.
+ */
+export async function refreshConnections(): Promise<ConnectionSummary> {
+  return invoke('refresh_connections');
+}
+
+/**
+ * Update app visibility state in the backend.
+ * This ensures backend is the single source of truth for foreground state.
+ * Call this when document.visibilityState changes.
+ */
+export async function setAppVisibility(visible: boolean): Promise<void> {
+  return invoke('set_app_visibility', { visible });
+}
+
 /** Response from processPendingClipboard */
 export interface PendingClipboardResponse {
   content: string;
@@ -171,4 +196,59 @@ export async function resetVault(): Promise<void> {
  */
 export async function flushVault(): Promise<void> {
   return invoke('flush_vault');
+}
+
+// ============================================================================
+// Share Intent Handling - For Android "share with" functionality
+// ============================================================================
+
+/**
+ * Result of handling shared content from Android share intent.
+ * This is a DTO - the UI decides how to present these values to the user.
+ */
+export interface ShareResult {
+  /** Total number of paired peers */
+  totalPeers: number;
+  /** Number of peers that were online and received the content */
+  peersReached: number;
+  /** Number of peers that were offline */
+  peersOffline: number;
+  /** Whether the content was added to clipboard history */
+  addedToHistory: boolean;
+}
+
+/**
+ * Format a ShareResult DTO into a user-friendly message.
+ * Centralizes the message logic so UI can present it consistently.
+ */
+export function formatShareResultMessage(result: ShareResult): string {
+  if (result.peersReached === result.totalPeers) {
+    // All peers received the content
+    return `Sent to ${result.totalPeers} device(s)`;
+  } else if (result.peersReached > 0) {
+    // Some peers received, some offline
+    return `Sent to ${result.peersReached}/${result.totalPeers}. ${result.peersOffline} offline.`;
+  } else {
+    // No peers reachable - saved to history for later sync
+    return `Saved to history. ${result.totalPeers} device(s) offline.`;
+  }
+}
+
+/**
+ * Handle shared content received from Android share intent.
+ *
+ * This is called by the frontend after detecting pending share content
+ * via getPendingShare() polling from the decentshare plugin. It:
+ * 1. Verifies the vault is unlocked
+ * 2. Ensures peers are connected (awaitable, with timeout)
+ * 3. Shares the content with all connected paired peers
+ * 4. Adds the content to clipboard history
+ *
+ * @param content - The shared text content
+ * @returns DTO with peer counts - UI decides how to present this
+ * @throws VaultLocked if vault is not unlocked
+ * @throws NoPeersAvailable if there are no paired peers
+ */
+export async function handleSharedContent(content: string): Promise<ShareResult> {
+  return invoke('handle_shared_content', { content });
 }

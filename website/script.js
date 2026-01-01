@@ -19,6 +19,9 @@ class NetworkGraph {
     this.hoveredNode = null;
     this.animationId = null;
     this.dpr = window.devicePixelRatio || 1;
+    this.isVisible = true;
+    this.isPaused = false;
+    this.prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     // Physics settings
     this.physics = {
@@ -48,7 +51,67 @@ class NetworkGraph {
     this.createNodes();
     this.createEdges();
     this.bindEvents();
-    this.animate();
+    this.setupVisibilityObserver();
+    this.setupReducedMotionListener();
+
+    // If reduced motion is preferred, just draw once without animation
+    if (this.prefersReducedMotion) {
+      this.draw();
+    } else {
+      this.animate();
+    }
+  }
+
+  setupVisibilityObserver() {
+    // Use Intersection Observer to pause animation when off-screen
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          this.isVisible = entry.isIntersecting;
+          if (this.isVisible && !this.isPaused && !this.prefersReducedMotion) {
+            // Resume animation when visible
+            if (!this.animationId) {
+              this.animate();
+            }
+          }
+        });
+      },
+      { threshold: 0.1 },
+    );
+    observer.observe(this.canvas);
+  }
+
+  setupReducedMotionListener() {
+    // Listen for changes in reduced motion preference
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    mediaQuery.addEventListener('change', (e) => {
+      this.prefersReducedMotion = e.matches;
+      if (e.matches) {
+        // Stop animation and draw static state
+        this.pause();
+        this.draw();
+      } else if (this.isVisible) {
+        // Resume animation
+        this.resume();
+      }
+    });
+  }
+
+  pause() {
+    this.isPaused = true;
+    if (this.animationId) {
+      cancelAnimationFrame(this.animationId);
+      this.animationId = null;
+    }
+  }
+
+  resume() {
+    if (this.isPaused && !this.prefersReducedMotion) {
+      this.isPaused = false;
+      if (this.isVisible) {
+        this.animate();
+      }
+    }
   }
 
   resize() {
@@ -590,6 +653,12 @@ class NetworkGraph {
   }
 
   animate() {
+    // Skip animation if not visible or paused
+    if (!this.isVisible || this.isPaused || this.prefersReducedMotion) {
+      this.animationId = null;
+      return;
+    }
+
     this.updatePhysics();
     this.spawnDataPacket();
     this.updateDataPackets();
@@ -700,9 +769,29 @@ async function populateDownloadLinks() {
         btn.classList.add('download-format-unavailable');
       }
     });
+
+    // Update signature links - each .sig URL is just the binary URL + '.sig'
+    // Exception: Android APK uses .idsig (APK Signature Scheme v4)
+    document.querySelectorAll('.signature-link[data-sig-for]').forEach((sigLink) => {
+      const format = sigLink.getAttribute('data-sig-for');
+      const binaryUrl = data.assets?.[format];
+
+      if (binaryUrl) {
+        const sigExtension = format === 'apk' ? '.idsig' : '.sig';
+        sigLink.href = binaryUrl + sigExtension;
+        sigLink.style.display = '';
+      } else {
+        // Hide signature link if no binary URL
+        sigLink.style.display = 'none';
+      }
+    });
   } catch (error) {
     console.warn('Could not load downloads.json:', error.message);
     // Buttons keep their fallback href (GitHub releases page)
+    // Hide all signature links on error
+    document.querySelectorAll('.signature-link').forEach((sigLink) => {
+      sigLink.style.display = 'none';
+    });
   }
 }
 

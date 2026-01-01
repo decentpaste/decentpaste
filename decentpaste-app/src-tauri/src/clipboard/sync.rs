@@ -1,7 +1,5 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::time::Instant;
 use uuid::Uuid;
 
 use crate::security::hash_content;
@@ -54,87 +52,5 @@ impl ClipboardEntry {
         } else {
             format!("{}...", &self.content[..max_length])
         }
-    }
-}
-
-const RECENT_HASH_TTL_SECS: u64 = 10;
-const MAX_RECENT_HASHES: usize = 100;
-
-pub struct SyncManager {
-    recent_hashes: HashMap<String, Instant>,
-    local_hash: Option<String>,
-}
-
-impl SyncManager {
-    pub fn new() -> Self {
-        Self {
-            recent_hashes: HashMap::new(),
-            local_hash: None,
-        }
-    }
-
-    pub fn should_broadcast(&mut self, content_hash: &str, is_local: bool) -> bool {
-        // Clean up expired hashes
-        self.cleanup_expired();
-
-        // Don't broadcast if:
-        // 1. Hash matches recent received content (loop prevention)
-        if self.recent_hashes.contains_key(content_hash) {
-            return false;
-        }
-
-        // 2. Hash matches last broadcast (no change)
-        if self.local_hash.as_ref() == Some(&content_hash.to_string()) {
-            return false;
-        }
-
-        // 3. Content is from received message (!is_local)
-        if !is_local {
-            return false;
-        }
-
-        // Update local hash
-        self.local_hash = Some(content_hash.to_string());
-
-        true
-    }
-
-    pub fn on_received(&mut self, content_hash: &str) -> bool {
-        // Clean up expired hashes
-        self.cleanup_expired();
-
-        // Track hash to prevent echo
-        self.recent_hashes
-            .insert(content_hash.to_string(), Instant::now());
-
-        // Don't apply if hash matches current clipboard
-        if self.local_hash.as_ref() == Some(&content_hash.to_string()) {
-            return false;
-        }
-
-        // Update local hash to prevent echo on next poll
-        self.local_hash = Some(content_hash.to_string());
-
-        true
-    }
-
-    fn cleanup_expired(&mut self) {
-        let now = Instant::now();
-        self.recent_hashes
-            .retain(|_, time| now.duration_since(*time).as_secs() < RECENT_HASH_TTL_SECS);
-
-        // Also limit size
-        if self.recent_hashes.len() > MAX_RECENT_HASHES {
-            // Remove oldest entries
-            let mut entries: Vec<_> = self.recent_hashes.drain().collect();
-            entries.sort_by_key(|(_, time)| *time);
-            self.recent_hashes = entries.into_iter().skip(MAX_RECENT_HASHES / 2).collect();
-        }
-    }
-}
-
-impl Default for SyncManager {
-    fn default() -> Self {
-        Self::new()
     }
 }

@@ -1,7 +1,7 @@
 {
   "name": "decentpaste-app",
   "private": true,
-  "version": "0.3.3",
+  "version": "0.4.1",
   "type": "module",
   "license": "Apache-2.0",
   "scripts": {
@@ -13,13 +13,16 @@
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-autostart": "^2.5.1",
     "@tauri-apps/plugin-clipboard-manager": "^2",
     "@tauri-apps/plugin-notification": "^2.3.3",
     "@tauri-apps/plugin-opener": "^2",
+    "@tauri-apps/plugin-os": "^2.3.2",
     "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-stronghold": "^2",
     "@tauri-apps/plugin-updater": "^2.9.0",
-    "lucide": "^0.555.0"
+    "lucide": "^0.555.0",
+    "tauri-plugin-decentshare-api": "file:./tauri-plugin-decentshare"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.17",

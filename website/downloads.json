@@ -1,14 +1,14 @@
 {
-  "version": "0.3.3",
-  "tag": "v0.3.3",
+  "version": "0.4.1",
+  "tag": "v0.4.1",
   "assets": {
-    "exe": "https://github.com/decentpaste/decentpaste/releases/download/v0.3.3/DecentPaste_0.3.3_x64-setup.exe",
-    "msi": "https://github.com/decentpaste/decentpaste/releases/download/v0.3.3/DecentPaste_0.3.3_x64_en-US.msi",
-    "appimage": "https://github.com/decentpaste/decentpaste/releases/download/v0.3.3/DecentPaste_0.3.3_amd64.AppImage",
-    "deb": "https://github.com/decentpaste/decentpaste/releases/download/v0.3.3/DecentPaste_0.3.3_amd64.deb",
-    "rpm": "https://github.com/decentpaste/decentpaste/releases/download/v0.3.3/DecentPaste-0.3.3-1.x86_64.rpm",
-    "dmg-arm": "https://github.com/decentpaste/decentpaste/releases/download/v0.3.3/DecentPaste_0.3.3_aarch64.dmg",
-    "dmg-intel": "https://github.com/decentpaste/decentpaste/releases/download/v0.3.3/DecentPaste_0.3.3_x64.dmg",
-    "apk": "https://github.com/decentpaste/decentpaste/releases/download/v0.3.3/DecentPaste_0.3.3.apk"
+    "exe": "https://github.com/decentpaste/decentpaste/releases/download/v0.4.1/DecentPaste_0.4.1_x64-setup.exe",
+    "msi": "https://github.com/decentpaste/decentpaste/releases/download/v0.4.1/DecentPaste_0.4.1_x64_en-US.msi",
+    "appimage": "https://github.com/decentpaste/decentpaste/releases/download/v0.4.1/DecentPaste_0.4.1_amd64.AppImage",
+    "deb": "https://github.com/decentpaste/decentpaste/releases/download/v0.4.1/DecentPaste_0.4.1_amd64.deb",
+    "rpm": "https://github.com/decentpaste/decentpaste/releases/download/v0.4.1/DecentPaste-0.4.1-1.x86_64.rpm",
+    "dmg-arm": "https://github.com/decentpaste/decentpaste/releases/download/v0.4.1/DecentPaste_0.4.1_aarch64.dmg",
+    "dmg-intel": "https://github.com/decentpaste/decentpaste/releases/download/v0.4.1/DecentPaste_0.4.1_x64.dmg",
+    "apk": "https://github.com/decentpaste/decentpaste/releases/download/v0.4.1/DecentPaste_0.4.1.apk"
   }
 }

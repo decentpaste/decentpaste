@@ -20,8 +20,13 @@ jobs:
             args: '--target x86_64-apple-darwin'
           - platform: 'ubuntu-22.04'
             args: ''
+          - platform: 'ubuntu-22.04-arm'
+            args: ''
           - platform: 'windows-latest'
             args: ''
+          - platform: 'windows-latest'
+            args: '--target aarch64-pc-windows-msvc'
+            rust_targets: 'aarch64-pc-windows-msvc'
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
@@ -34,14 +39,14 @@ jobs:
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
-          # Both targets only needed on macOS runners
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          # Additional targets for cross-compilation (macOS universal, Windows ARM64)
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || matrix.rust_targets || '' }}
 
       - name: Install dependencies (Ubuntu only)
-        if: matrix.platform == 'ubuntu-22.04'
+        if: startsWith(matrix.platform, 'ubuntu')
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
 
       - name: Install Apple certificate (macOS)
         if: matrix.platform == 'macos-latest'
@@ -68,6 +73,12 @@ jobs:
           # Verify the identity is available
           security find-identity -v -p codesigning build.keychain
           rm certificate.p12
+
+      - name: Build plugin JS bindings
+        working-directory: decentpaste-app/tauri-plugin-decentshare
+        run: |
+          yarn install
+          yarn build
 
       - name: Install frontend dependencies
         working-directory: decentpaste-app

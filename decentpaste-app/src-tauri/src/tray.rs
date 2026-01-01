@@ -2,9 +2,6 @@
 //!
 //! This module provides system tray functionality for desktop platforms.
 //! On mobile platforms (Android/iOS), all functions are no-ops.
-
-use std::sync::Arc;
-
 /// Setup system tray with menu and click handlers (desktop only)
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub fn setup_tray(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
@@ -25,16 +22,16 @@ pub fn setup_tray(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Erro
     // Create menu items
     let show_item = MenuItem::with_id(app, "show", "Show DecentPaste", true, None::<&str>)?;
     let sync_label = if sync_enabled {
-        "Clipboard Sync: On"
+        "Auto Sync: On"
     } else {
-        "Clipboard Sync: Paused"
+        "Auto Sync: Off"
     };
     let sync_item = MenuItem::with_id(app, "sync_toggle", sync_label, true, None::<&str>)?;
     let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&show_item, &sync_item, &quit_item])?;
 
     // Keep a reference to the sync menu item for dynamic updates
-    let sync_item = Arc::new(sync_item);
+    let sync_item = std::sync::Arc::new(sync_item);
     let sync_item_clone = sync_item.clone();
 
     // Build tray with icon from app resources
@@ -96,9 +93,9 @@ pub fn setup_tray(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Erro
 
                     // Update the menu item text
                     let new_label = if new_state {
-                        "Clipboard Sync: On"
+                        "Auto Sync: On"
                     } else {
-                        "Clipboard Sync: Paused"
+                        "Auto Sync: Off"
                     };
                     let _ = sync_item.set_text(new_label);
 
@@ -113,11 +110,5 @@ pub fn setup_tray(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Erro
         .build(app)?;
 
     info!("System tray initialized");
-    Ok(())
-}
-
-/// No-op for mobile platforms
-#[cfg(any(target_os = "android", target_os = "ios"))]
-pub fn setup_tray(_app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }

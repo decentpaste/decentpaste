@@ -11,11 +11,6 @@ use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 
-/// Maximum number of connection retries per peer
-const MAX_CONNECTION_RETRIES: u32 = 3;
-/// Delay between connection retries
-const RETRY_DELAY: Duration = Duration::from_secs(2);
-
 use super::behaviour::{
     DecentPasteBehaviour, PairingRequest as ReqPairingRequest,
     PairingResponse as ReqPairingResponse,
@@ -50,17 +45,25 @@ pub enum NetworkCommand {
         peer_id: String,
         session_id: String,
         success: bool,
-        shared_secret: Option<Vec<u8>>,
         device_name: String,
     },
     BroadcastClipboard {
         message: ClipboardMessage,
     },
+    #[allow(dead_code)]
     GetPeers,
-    /// Force reconnection to all discovered peers (used after app resume from background)
-    ReconnectPeers,
+    /// Force reconnection to all discovered peers (used after app resume from background).
+    /// Also attempts to reconnect to paired peers using their last-known addresses
+    /// as fallback when mDNS hasn't rediscovered them yet.
+    ReconnectPeers {
+        /// Paired peers with their last-known addresses (from vault).
+        /// Used as fallback when peer is not in discovered_peers.
+        /// Format: Vec<(peer_id, Vec<address>)>
+        paired_peer_addresses: Vec<(String, Vec<String>)>,
+    },
     /// Re-emit PeerDiscovered event for a specific peer (used after unpairing to make peer
     /// appear in discovered list again)
+    #[allow(dead_code)]
     RefreshPeer {
         peer_id: String,
     },
@@ -72,14 +75,6 @@ pub enum NetworkCommand {
     },
 }
 
-/// Tracks retry state for a peer connection
-#[derive(Debug, Clone)]
-struct PeerRetryState {
-    address: Multiaddr,
-    retry_count: u32,
-    next_retry: Instant,
-}
-
 pub struct NetworkManager {
     swarm: Swarm<DecentPasteBehaviour>,
     command_rx: mpsc::Receiver<NetworkCommand>,
@@ -87,8 +82,9 @@ pub struct NetworkManager {
     discovered_peers: HashMap<PeerId, DiscoveredPeer>,
     connected_peers: HashMap<PeerId, ConnectedPeer>,
     pending_responses: HashMap<PeerId, ResponseChannel<ReqPairingResponse>>,
-    /// Tracks peers that need connection retries
-    pending_retries: HashMap<PeerId, PeerRetryState>,
+    /// Peers confirmed ready for broadcast (currently: subscribed to clipboard topic).
+    /// This is protocol-specific tracking; the protocol-agnostic state is in AppState.ready_peers.
+    ready_peers: HashMap<PeerId, Instant>,
     /// Current device name (updated when settings change)
     device_name: String,
 }
@@ -125,7 +121,7 @@ impl NetworkManager {
             discovered_peers: HashMap::new(),
             connected_peers: HashMap::new(),
             pending_responses: HashMap::new(),
-            pending_retries: HashMap::new(),
+            ready_peers: HashMap::new(),
             device_name,
         })
     }
@@ -141,7 +137,9 @@ impl NetworkManager {
         }
 
         // Start listening on all interfaces
-        let listen_addr: Multiaddr = "/ip4/0.0.0.0/tcp/0".parse().unwrap();
+        // Use a fixed port (31773) so cached addresses remain valid across app restarts.
+        // This enables reliable reconnection when mDNS is slow or unavailable.
+        let listen_addr: Multiaddr = "/ip4/0.0.0.0/tcp/31773".parse().unwrap();
         if let Err(e) = self.swarm.listen_on(listen_addr) {
             error!("Failed to start listening: {}", e);
             let _ = self
@@ -158,9 +156,6 @@ impl NetworkManager {
             .send(NetworkEvent::StatusChanged(NetworkStatus::Connecting))
             .await;
 
-        // Interval for processing connection retries
-        let mut retry_interval = tokio::time::interval(Duration::from_millis(500));
-
         loop {
             tokio::select! {
                 // Handle swarm events
@@ -172,47 +167,6 @@ impl NetworkManager {
                 Some(command) = self.command_rx.recv() => {
                     self.handle_command(command).await;
                 }
-
-                // Process pending retries
-                _ = retry_interval.tick() => {
-                    self.process_pending_retries();
-                }
-            }
-        }
-    }
-
-    /// Process pending connection retries
-    fn process_pending_retries(&mut self) {
-        let now = Instant::now();
-        let mut to_retry = Vec::new();
-
-        // Find peers that are ready to retry
-        for (peer_id, state) in &self.pending_retries {
-            if now >= state.next_retry {
-                to_retry.push((*peer_id, state.address.clone(), state.retry_count));
-            }
-        }
-
-        // Process retries
-        for (peer_id, addr, retry_count) in to_retry {
-            // Remove from pending (will be re-added if it fails again)
-            self.pending_retries.remove(&peer_id);
-
-            // Skip if already connected
-            if self.connected_peers.contains_key(&peer_id) {
-                debug!("Skipping retry for {} - already connected", peer_id);
-                continue;
-            }
-
-            info!(
-                "Retrying connection to {} (attempt {}/{})",
-                peer_id,
-                retry_count + 1,
-                MAX_CONNECTION_RETRIES
-            );
-
-            if let Err(e) = self.swarm.dial(addr) {
-                warn!("Failed to initiate retry dial to {}: {}", peer_id, e);
             }
         }
     }
@@ -334,6 +288,25 @@ impl NetworkManager {
                 gossipsub::Event::Subscribed { peer_id, topic } => {
                     info!("Peer {} subscribed to topic {}", peer_id, topic);
 
+                    // Mark peer as ready when they subscribe to the clipboard topic
+                    // This is the protocol-specific trigger for "readiness"
+                    if topic.to_string().contains("clipboard") {
+                        self.ready_peers.insert(peer_id, Instant::now());
+
+                        // Emit protocol-agnostic "ready" event to AppState
+                        let _ = self
+                            .event_tx
+                            .send(NetworkEvent::PeerReady {
+                                peer_id: peer_id.to_string(),
+                            })
+                            .await;
+                        debug!(
+                            "Peer {} is now ready ({} total ready)",
+                            peer_id,
+                            self.ready_peers.len()
+                        );
+                    }
+
                     // Announce our device name now that the peer is subscribed
                     // This ensures they receive our current name
                     let local_peer_id = self.swarm.local_peer_id().to_string();
@@ -352,6 +325,24 @@ impl NetworkManager {
                 }
                 gossipsub::Event::Unsubscribed { peer_id, topic } => {
                     info!("Peer {} unsubscribed from topic {}", peer_id, topic);
+
+                    // Mark peer as not ready when they unsubscribe from clipboard topic
+                    if topic.to_string().contains("clipboard") {
+                        self.ready_peers.remove(&peer_id);
+
+                        // Emit protocol-agnostic "not ready" event to AppState
+                        let _ = self
+                            .event_tx
+                            .send(NetworkEvent::PeerNotReady {
+                                peer_id: peer_id.to_string(),
+                            })
+                            .await;
+                        debug!(
+                            "Peer {} is no longer ready ({} remaining)",
+                            peer_id,
+                            self.ready_peers.len()
+                        );
+                    }
                 }
                 gossipsub::Event::GossipsubNotSupported { peer_id } => {
                     warn!("Peer {} does not support gossipsub", peer_id);
@@ -410,47 +401,39 @@ impl NetworkManager {
                                                 .unwrap_or_else(|| "Unknown Device".to_string());
 
                                             if confirm.success {
-                                                if let Some(shared_secret) =
-                                                    confirm.shared_secret.clone()
-                                                {
-                                                    // Send success acknowledgment back
-                                                    let ack = super::protocol::PairingConfirm {
-                                                        session_id: confirm.session_id.clone(),
-                                                        success: true,
-                                                        shared_secret: Some(shared_secret.clone()),
-                                                        error: None,
-                                                        device_name: None, // Not needed in ack
-                                                    };
-                                                    let ack_msg = ProtocolMessage::Pairing(
-                                                        PairingMessage::Confirm(ack),
-                                                    );
-                                                    if let Ok(message) = ack_msg.to_bytes() {
-                                                        let response =
-                                                            ReqPairingResponse { message };
-                                                        let _ = self
-                                                            .swarm
-                                                            .behaviour_mut()
-                                                            .request_response
-                                                            .send_response(channel, response);
-                                                    }
-
-                                                    // Emit pairing complete event for responder
+                                                // Send success acknowledgment back
+                                                let ack = super::protocol::PairingConfirm {
+                                                    session_id: confirm.session_id.clone(),
+                                                    success: true,
+                                                    error: None,
+                                                    device_name: None, // Not needed in ack
+                                                };
+                                                let ack_msg = ProtocolMessage::Pairing(
+                                                    PairingMessage::Confirm(ack),
+                                                );
+                                                if let Ok(message) = ack_msg.to_bytes() {
+                                                    let response = ReqPairingResponse { message };
                                                     let _ = self
-                                                        .event_tx
-                                                        .send(NetworkEvent::PairingComplete {
-                                                            session_id: confirm.session_id,
-                                                            peer_id: peer.to_string(),
-                                                            device_name: initiator_device_name,
-                                                            shared_secret,
-                                                        })
-                                                        .await;
+                                                        .swarm
+                                                        .behaviour_mut()
+                                                        .request_response
+                                                        .send_response(channel, response);
                                                 }
+
+                                                // Emit pairing complete event for responder
+                                                let _ = self
+                                                    .event_tx
+                                                    .send(NetworkEvent::PairingComplete {
+                                                        session_id: confirm.session_id,
+                                                        peer_id: peer.to_string(),
+                                                        device_name: initiator_device_name,
+                                                    })
+                                                    .await;
                                             } else {
                                                 // Send failure acknowledgment
                                                 let ack = super::protocol::PairingConfirm {
                                                     session_id: confirm.session_id.clone(),
                                                     success: false,
-                                                    shared_secret: None,
                                                     error: confirm.error.clone(),
                                                     device_name: None,
                                                 };
@@ -504,17 +487,14 @@ impl NetworkManager {
                                         }
                                         PairingMessage::Confirm(confirm) => {
                                             if confirm.success {
-                                                if let Some(secret) = confirm.shared_secret {
-                                                    let _ = self
-                                                        .event_tx
-                                                        .send(NetworkEvent::PairingComplete {
-                                                            session_id: confirm.session_id,
-                                                            peer_id: peer.to_string(),
-                                                            device_name: "Unknown".to_string(),
-                                                            shared_secret: secret,
-                                                        })
-                                                        .await;
-                                                }
+                                                let _ = self
+                                                    .event_tx
+                                                    .send(NetworkEvent::PairingComplete {
+                                                        session_id: confirm.session_id,
+                                                        peer_id: peer.to_string(),
+                                                        device_name: "Unknown".to_string(),
+                                                    })
+                                                    .await;
                                             } else {
                                                 let _ = self
                                                     .event_tx
@@ -587,9 +567,6 @@ impl NetworkManager {
             SwarmEvent::ConnectionEstablished { peer_id, .. } => {
                 debug!("Connection established with {}", peer_id);
 
-                // Clear any pending retries for this peer
-                self.pending_retries.remove(&peer_id);
-
                 // Add peer to gossipsub mesh explicitly to ensure immediate message delivery
                 // This is critical for reconnecting peers after restart
                 self.swarm
@@ -627,6 +604,21 @@ impl NetworkManager {
                     .remove_explicit_peer(&peer_id);
                 debug!("Removed {} from gossipsub explicit peers", peer_id);
 
+                // Peer is no longer ready when disconnected
+                if self.ready_peers.remove(&peer_id).is_some() {
+                    let _ = self
+                        .event_tx
+                        .send(NetworkEvent::PeerNotReady {
+                            peer_id: peer_id.to_string(),
+                        })
+                        .await;
+                    debug!(
+                        "Peer {} no longer ready (disconnected), {} remaining",
+                        peer_id,
+                        self.ready_peers.len()
+                    );
+                }
+
                 self.connected_peers.remove(&peer_id);
                 let _ = self
                     .event_tx
@@ -635,44 +627,8 @@ impl NetworkManager {
             }
 
             SwarmEvent::OutgoingConnectionError { peer_id, error, .. } => {
+                // Just log the error - mDNS will rediscover peers when they become available
                 warn!("Outgoing connection error to {:?}: {}", peer_id, error);
-
-                // Schedule retry if we have the peer's address and haven't exceeded max retries
-                if let Some(peer_id) = peer_id {
-                    if let Some(discovered) = self.discovered_peers.get(&peer_id) {
-                        // Get current retry count
-                        let current_retry = self
-                            .pending_retries
-                            .get(&peer_id)
-                            .map(|s| s.retry_count)
-                            .unwrap_or(0);
-
-                        if current_retry < MAX_CONNECTION_RETRIES {
-                            if let Ok(addr) = discovered.addresses[0].parse::<Multiaddr>() {
-                                info!(
-                                    "Scheduling retry {} for peer {} in {:?}",
-                                    current_retry + 1,
-                                    peer_id,
-                                    RETRY_DELAY
-                                );
-                                self.pending_retries.insert(
-                                    peer_id,
-                                    PeerRetryState {
-                                        address: addr,
-                                        retry_count: current_retry + 1,
-                                        next_retry: Instant::now() + RETRY_DELAY,
-                                    },
-                                );
-                            }
-                        } else {
-                            warn!(
-                                "Max retries ({}) exceeded for peer {}",
-                                MAX_CONNECTION_RETRIES, peer_id
-                            );
-                            self.pending_retries.remove(&peer_id);
-                        }
-                    }
-                }
             }
 
             SwarmEvent::IncomingConnectionError { error, .. } => {
@@ -765,7 +721,6 @@ impl NetworkManager {
                         let confirm = super::protocol::PairingConfirm {
                             session_id,
                             success: false,
-                            shared_secret: None,
                             error: Some("Pairing rejected by user".to_string()),
                             device_name: None,
                         };
@@ -788,7 +743,6 @@ impl NetworkManager {
                 peer_id,
                 session_id,
                 success,
-                shared_secret,
                 device_name,
             } => {
                 // This is sent as a NEW request from initiator to responder after PIN confirmation
@@ -796,7 +750,6 @@ impl NetworkManager {
                     let confirm = super::protocol::PairingConfirm {
                         session_id,
                         success,
-                        shared_secret,
                         error: None,
                         device_name: Some(device_name),
                     };
@@ -822,14 +775,50 @@ impl NetworkManager {
                 }
             }
 
-            NetworkCommand::ReconnectPeers => {
-                info!("Reconnecting to all discovered peers (app resumed from background)");
+            NetworkCommand::ReconnectPeers {
+                paired_peer_addresses,
+            } => {
+                info!("Reconnecting to peers (app resumed from background)");
 
-                // Only clear pending retries - don't clear connected_peers as that
-                // drops valid connections and causes a brief disconnection window
-                self.pending_retries.clear();
+                // Re-populate ready_peers for already-connected peers.
+                // This is needed because ready_peers is cleared on app pause, but
+                // connections may survive the pause. Without this, wait_for_peers_ready()
+                // would timeout even though peers are actually connected and subscribed.
+                let mesh_peers: std::collections::HashSet<PeerId> = self
+                    .swarm
+                    .behaviour()
+                    .gossipsub
+                    .all_mesh_peers()
+                    .cloned()
+                    .collect();
 
-                // Try to dial discovered peers that aren't already connected
+                for peer_id in &mesh_peers {
+                    if !self.ready_peers.contains_key(peer_id) {
+                        self.ready_peers.insert(*peer_id, Instant::now());
+                        info!("Re-added mesh peer {} to ready_peers on reconnect", peer_id);
+
+                        // Emit PeerReady event so AppState.ready_peers is also updated
+                        let _ = self
+                            .event_tx
+                            .send(NetworkEvent::PeerReady {
+                                peer_id: peer_id.to_string(),
+                            })
+                            .await;
+                    }
+                }
+
+                if !mesh_peers.is_empty() {
+                    info!(
+                        "Re-populated {} ready peers from gossipsub mesh",
+                        mesh_peers.len()
+                    );
+                }
+
+                // Track which peers we've attempted to dial
+                let mut dialed_peers: std::collections::HashSet<PeerId> =
+                    std::collections::HashSet::new();
+
+                // First, try to dial discovered peers (freshest addresses from mDNS)
                 for (peer_id, peer) in &self.discovered_peers {
                     // Skip peers that are already connected
                     if self.connected_peers.contains_key(peer_id) {
@@ -837,13 +826,56 @@ impl NetworkManager {
                     }
                     if let Some(addr_str) = peer.addresses.first() {
                         if let Ok(addr) = addr_str.parse::<Multiaddr>() {
-                            info!("Attempting to reconnect to {} at {}", peer_id, addr);
+                            info!(
+                                "Attempting to reconnect to discovered peer {} at {}",
+                                peer_id, addr
+                            );
                             if let Err(e) = self.swarm.dial(addr) {
                                 warn!("Failed to initiate reconnection to {}: {}", peer_id, e);
+                            }
+                            dialed_peers.insert(*peer_id);
+                        }
+                    }
+                }
+
+                // Then, try paired peers using their last-known addresses as fallback
+                // This handles the case where mDNS expired but we still have cached addresses
+                for (peer_id_str, addresses) in &paired_peer_addresses {
+                    if let Ok(peer_id) = peer_id_str.parse::<PeerId>() {
+                        // Skip if already connected or already dialed
+                        if self.connected_peers.contains_key(&peer_id)
+                            || dialed_peers.contains(&peer_id)
+                        {
+                            continue;
+                        }
+
+                        // Try the first available address
+                        for addr_str in addresses {
+                            if let Ok(addr) = addr_str.parse::<Multiaddr>() {
+                                info!(
+                                    "Attempting to reconnect to paired peer {} using cached address {}",
+                                    peer_id, addr
+                                );
+                                if let Err(e) = self.swarm.dial(addr.clone()) {
+                                    warn!(
+                                        "Failed to dial paired peer {} at {}: {}",
+                                        peer_id, addr, e
+                                    );
+                                } else {
+                                    dialed_peers.insert(peer_id);
+                                    break; // Only try one address per peer
+                                }
                             }
                         }
                     }
                 }
+
+                info!(
+                    "Reconnection initiated: {} peers dialed ({} discovered, {} from vault cache)",
+                    dialed_peers.len(),
+                    self.discovered_peers.len(),
+                    paired_peer_addresses.len()
+                );
             }
 
             NetworkCommand::StartListening | NetworkCommand::StopListening => {

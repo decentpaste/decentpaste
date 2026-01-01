@@ -84,19 +84,24 @@ Custom skills available via slash commands:
 decentpaste/
 ├── decentpaste-app/              # Main Tauri application
 │   ├── src/                      # Frontend (TypeScript + Tailwind v4)
+│   │   ├── main.ts               # Entry point + share intent handling
 │   │   ├── app.ts                # All UI (Dashboard, Peers, Settings, auth views)
 │   │   ├── api/commands.ts       # Tauri command wrappers
 │   │   ├── api/events.ts         # Event listeners
 │   │   └── state/store.ts        # Reactive state
-│   └── src-tauri/src/            # Backend (Rust)
-│       ├── lib.rs                # App initialization, spawns network & clipboard tasks
-│       ├── commands.rs           # All Tauri command handlers
-│       ├── state.rs              # AppState + flush helper methods
-│       ├── network/              # libp2p (mDNS, gossipsub, request-response)
-│       ├── clipboard/            # Polling monitor + sync deduplication
-│       ├── security/             # AES-GCM encryption, X25519 identity, PIN pairing
-│       ├── vault/                # Stronghold encrypted storage lifecycle
-│       └── storage/              # Settings & peer types
+│   ├── src-tauri/src/            # Backend (Rust)
+│   │   ├── lib.rs                # App initialization, spawns network & clipboard tasks
+│   │   ├── commands.rs           # All Tauri command handlers
+│   │   ├── state.rs              # AppState + flush helper methods
+│   │   ├── network/              # libp2p (mDNS, gossipsub, request-response)
+│   │   ├── clipboard/            # Polling monitor + sync deduplication
+│   │   ├── security/             # AES-GCM encryption, X25519 identity, PIN pairing
+│   │   ├── vault/                # Stronghold encrypted storage lifecycle
+│   │   └── storage/              # Settings & peer types
+│   └── tauri-plugin-decentshare/ # Android "share with" plugin
+│       ├── src/                  # Plugin Rust code
+│       ├── android/              # Kotlin intent handler
+│       └── guest-js/             # TypeScript bindings
 ├── website/                      # Landing page
 └── .claude/skills/               # Claude Code skills
 ```
@@ -200,9 +205,29 @@ Device names propagate through:
 
 ### Mobile (Android & iOS)
 
-- **Clipboard outgoing**: Auto-monitoring disabled; use "Share Clipboard" button
+- **Clipboard outgoing**: Auto-monitoring disabled. Two options:
+  - Use in-app "Share Now" button to send current clipboard
+  - On Android: Use system share sheet from any app → DecentPaste (via `tauri-plugin-decentshare`)
 - **Clipboard incoming**: Only syncs when app is in foreground; connections drop when backgrounded
 - When app resumes: automatically reconnects to peers via `reconnect_peers`
+
+### Android Share Intent
+
+The `tauri-plugin-decentshare` enables sharing text directly from any Android app:
+
+1. User selects text in any app → Share → DecentPaste
+2. Plugin's `onNewIntent()` captures the shared text
+3. Frontend polls for pending share via `getPendingShare()` command
+4. If vault locked: stores in `pendingShare` state, processes after unlock
+5. If vault unlocked: calls `handle_shared_content` which:
+   - Triggers `ensure_connected()` with 3s timeout
+   - Dials only disconnected peers (event-driven, no polling)
+   - Returns honest status: "Sent to 2/3. 1 offline."
+
+Key files:
+- `tauri-plugin-decentshare/android/.../DecentsharePlugin.kt` - Kotlin intent handler
+- `src/main.ts` - `checkForPendingShare()` function
+- `src-tauri/src/commands.rs` - `handle_shared_content` command
 
 ### Desktop
 
@@ -214,6 +239,7 @@ Device names propagate through:
 - **Text only** - No image/file support yet
 - **Local network only** - mDNS doesn't work across networks
 - **Mobile background** - Network connections drop when app is backgrounded
+- **iOS share extension** - Not yet implemented (Android share intent works via `tauri-plugin-decentshare`)
 
 ## See Also
 

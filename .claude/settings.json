@@ -12,5 +12,17 @@
     ],
     "ask": []
   },
-  "outputStyle": "Explanatory"
+  "outputStyle": "Explanatory",
+  "lsp": {
+    "typescript": {
+      "command": "typescript-language-server",
+      "args": ["--stdio"],
+      "filePatterns": ["*.ts", "*.tsx"]
+    },
+    "rust": {
+      "command": "rust-analyzer",
+      "args": [],
+      "filePatterns": ["*.rs"]
+    }
+  }
 }

@@ -57,18 +57,24 @@ async function build() {
     stdio: 'inherit',
   });
 
-  // 3. Minify HTML
+  // 3. Minify HTML files
   console.log('📄 Minifying HTML...');
-  let html = readFileSync(join(ROOT, 'index.html'), 'utf-8');
 
-  // Update CSS path for production (dist/output.css -> output.css)
-  html = html.replace('href="dist/output.css"', 'href="output.css"');
+  const htmlFiles = ['index.html', 'privacy.html'];
+  for (const file of htmlFiles) {
+    try {
+      let html = readFileSync(join(ROOT, file), 'utf-8');
 
-  // Update JS path for production (script.js -> script.js - will be in same folder)
-  // No change needed if script.js is referenced without path
+      // Update CSS path for production (dist/output.css -> output.css)
+      html = html.replace('href="dist/output.css"', 'href="output.css"');
 
-  const minifiedHTML = await minifyHTML(html, htmlMinifyOptions);
-  writeFileSync(join(DIST, 'index.html'), minifiedHTML);
+      const minifiedHTML = await minifyHTML(html, htmlMinifyOptions);
+      writeFileSync(join(DIST, file), minifiedHTML);
+      console.log(`   ✓ ${file}`);
+    } catch (err) {
+      console.log(`   ⚠ ${file} not found, skipping`);
+    }
+  }
 
   // 4. Minify JavaScript
   console.log('⚡ Minifying JavaScript...');

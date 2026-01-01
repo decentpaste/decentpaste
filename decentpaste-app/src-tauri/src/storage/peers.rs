@@ -27,6 +27,11 @@ pub struct PairedPeer {
     pub shared_secret: Vec<u8>,
     pub paired_at: DateTime<Utc>,
     pub last_seen: Option<DateTime<Utc>>,
+    /// Last known network addresses for this peer (from mDNS discovery).
+    /// Used as fallback when mDNS hasn't rediscovered the peer yet.
+    /// Stored as strings (Multiaddr format) for serialization compatibility.
+    #[serde(default)]
+    pub last_known_addresses: Vec<String>,
 }
 
 /// Initialize the data directory using Tauri's path resolver.

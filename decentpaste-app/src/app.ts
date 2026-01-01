@@ -7,6 +7,7 @@ import { icon, type IconName } from './components/icons';
 import { $, escapeHtml, formatTime, truncate } from './utils/dom';
 import { getErrorMessage } from './utils/error';
 import { notifyClipboardReceived, notifyMinimizedToTray } from './utils/notifications';
+import { isDesktop } from './utils/platform';
 import { checkForUpdates, downloadAndInstallUpdate, formatBytes, getDownloadPercentage } from './api/updater';
 import type { ClipboardEntry, DiscoveredPeer, PairedPeer } from './api/types';
 // ?url suffix prevents race condition where Tauri webview loads before Vite is ready,
@@ -96,6 +97,20 @@ class App {
         return;
       }
 
+      // Sync toggle on Dashboard
+      if (target.closest('#dashboard-sync-toggle')) {
+        const currentSettings = store.get('settings');
+        const newEnabled = !currentSettings.auto_sync_enabled;
+        const settings = { ...currentSettings, auto_sync_enabled: newEnabled };
+        try {
+          await commands.updateSettings(settings);
+          store.set('settings', settings);
+        } catch (error) {
+          store.addToast(`Failed to update settings: ${getErrorMessage(error)}`, 'error');
+        }
+        return;
+      }
+
       // Copy buttons with visual feedback animation
       const copyEl = target.closest('[data-copy]');
       if (copyEl) {
@@ -175,13 +190,26 @@ class App {
         return;
       }
 
-      // Refresh peers button - triggers reconnection to discovered peers
+      // Refresh peers button - triggers reconnection to paired devices
       if (target.closest('#btn-refresh-peers')) {
         try {
-          await commands.reconnectPeers();
-          store.addToast('Reconnecting to peers...', 'info');
+          // Show connecting state for all paired peers
+          store.setAllPeersConnecting();
+
+          // Awaitable refresh - returns when all dials complete or timeout
+          const summary = await commands.refreshConnections();
+
+          if (summary.connected === summary.total_peers) {
+            store.addToast(`Connected to all ${summary.connected} device(s)`, 'success');
+          } else if (summary.connected > 0) {
+            store.addToast(`Connected to ${summary.connected}/${summary.total_peers} devices`, 'info');
+          } else if (summary.total_peers > 0) {
+            store.addToast(`No devices online (${summary.total_peers} paired)`, 'info');
+          } else {
+            store.addToast('No paired devices', 'info');
+          }
         } catch (error) {
-          store.addToast(`Failed to reconnect: ${getErrorMessage(error)}`, 'error');
+          store.addToast(`Refresh failed: ${getErrorMessage(error)}`, 'error');
         }
         return;
       }
@@ -538,20 +566,6 @@ class App {
     this.root.addEventListener('change', async (e) => {
       const target = e.target as HTMLInputElement | HTMLSelectElement;
 
-      // Auto-sync toggle (Settings page and Dashboard)
-      if (target.id === 'auto-sync-toggle' || target.id === 'dashboard-sync-toggle') {
-        const checked = (target as HTMLInputElement).checked;
-        const settings = { ...store.get('settings'), auto_sync_enabled: checked };
-        try {
-          await commands.updateSettings(settings);
-          store.set('settings', settings);
-        } catch (error) {
-          store.addToast(`Failed to update settings: ${getErrorMessage(error)}`, 'error');
-          (target as HTMLInputElement).checked = !checked; // Revert
-        }
-        return;
-      }
-
       // Auto-lock timer select
       if (target.id === 'auto-lock-select') {
         const value = parseInt((target as HTMLSelectElement).value, 10);
@@ -609,6 +623,19 @@ class App {
         }
         return;
       }
+
+      // Autostart toggle (desktop only - launch at login)
+      if (target.id === 'autostart-toggle') {
+        const checked = (target as HTMLInputElement).checked;
+        try {
+          const { setAutostart } = await import('./api/autostart');
+          await setAutostart(checked);
+        } catch (error) {
+          store.addToast(`Failed to update autostart: ${getErrorMessage(error)}`, 'error');
+          (target as HTMLInputElement).checked = !checked;
+        }
+        return;
+      }
     });
 
     // Handle blur events for device name input
@@ -648,6 +675,11 @@ class App {
 
     eventManager.on('peerNameUpdated', (payload) => {
       store.updatePeerName(payload.peerId, payload.deviceName);
+    });
+
+    // Connection status updates for UI indicators
+    eventManager.on('peerConnectionStatus', (payload) => {
+      store.updatePeerConnection(payload.peer_id, payload.status);
     });
 
     eventManager.on('clipboardReceived', (entry) => {
@@ -757,16 +789,66 @@ class App {
   /**
    * Load app data after vault unlock or setup completion.
    * Called when vaultStatus transitions to 'Unlocked'.
+   *
+   * Also processes any pending shared content that was received
+   * via Android share intent while the vault was locked.
    */
   private async loadDataAfterUnlock(): Promise<void> {
     store.set('isLoading', true);
     try {
       await this.loadInitialData();
-      store.addToast('Data loaded successfully', 'success');
+
+      // Process any pending share intent content (Android "share with" feature)
+      await this.processPendingShare();
+
+      // Only show "Data loaded" toast if there was no pending share
+      // (pendingShare toast is more informative)
+      if (!store.get('pendingShare')) {
+        store.addToast('Data loaded successfully', 'success');
+      }
     } catch (error) {
       console.error('Failed to load data after unlock:', error);
       store.addToast('Failed to load some data', 'error');
       store.set('isLoading', false);
+    }
+  }
+
+  /**
+   * Process any pending shared content from Android share intent.
+   * This is called after vault unlock to handle content that arrived while locked.
+   */
+  private async processPendingShare(): Promise<void> {
+    const pendingShare = store.get('pendingShare');
+    if (!pendingShare) return;
+
+    console.log('Processing pending share after vault unlock');
+
+    try {
+      store.addToast('Sharing with your devices...', 'info');
+
+      const result = await commands.handleSharedContent(pendingShare);
+
+      // Clear the pending share on success
+      store.set('pendingShare', null);
+
+      // Format message from DTO and determine toast type
+      const message = commands.formatShareResultMessage(result);
+      const toastType = result.peersReached > 0 ? 'success' : 'info';
+      store.addToast(message, toastType);
+    } catch (error) {
+      console.error('Failed to process pending share:', error);
+
+      const errorMessage = String(error);
+
+      // Only clear pending share for permanent errors (no peers configured)
+      // For transient errors (network issues), keep it for potential retry
+      if (errorMessage.includes('NoPeersAvailable')) {
+        store.set('pendingShare', null);
+        store.addToast('No paired devices. Pair a device first.', 'error');
+      } else {
+        // Keep pendingShare for potential retry, but notify user
+        store.addToast('Failed to share. Will retry when network is available.', 'error');
+      }
     }
   }
 
@@ -802,6 +884,7 @@ class App {
     store.subscribe('currentView', () => this.render());
     store.subscribe('discoveredPeers', () => this.renderPeersList());
     store.subscribe('pairedPeers', () => this.renderPeersList());
+    store.subscribe('peerConnections', () => this.renderPeersList());
     store.subscribe('clipboardHistory', () => this.renderClipboardHistory());
     store.subscribe('toasts', () => this.renderToasts());
     store.subscribe('showPairingModal', () => this.renderPairingModal());
@@ -817,12 +900,103 @@ class App {
       this.renderUpdateSection();
     });
     store.subscribe('updateProgress', () => this.renderUpdateSection());
-    // Re-render when settings change (for sync toggle and hide clipboard toggle)
-    store.subscribe('settings', () => this.render());
+    // Targeted settings updates - only update what actually depends on settings
+    store.subscribe('settings', () => this.handleSettingsChange());
+  }
+
+  /**
+   * Handle settings changes with targeted updates instead of full re-render.
+   * Only updates the specific UI elements that depend on settings.
+   */
+  private handleSettingsChange(): void {
+    const view = store.get('currentView');
+    const settings = store.get('settings');
+
+    if (view === 'dashboard') {
+      // Update the sync toggle card appearance
+      const syncToggle = $('#dashboard-sync-toggle');
+      if (syncToggle) {
+        const syncEnabled = settings.auto_sync_enabled;
+        const iconContainer = syncToggle.querySelector('div > div:first-child') as HTMLElement;
+        if (iconContainer) {
+          iconContainer.className = syncEnabled ? 'icon-container-teal' : 'icon-container-orange';
+          // Safe: icon() returns controlled SVG from Lucide library, not user input
+          iconContainer.innerHTML = icon(syncEnabled ? 'refreshCw' : 'wifiOff', 18);
+        }
+        const statusText = syncToggle.querySelector('p.text-xs');
+        if (statusText) {
+          statusText.textContent = syncEnabled ? 'On' : 'Off';
+        }
+      }
+
+      // Update visibility toggle button appearance
+      const visibilityBtn = $('#btn-toggle-visibility') as HTMLElement;
+      if (visibilityBtn) {
+        const hideContent = settings.hide_clipboard_content;
+        visibilityBtn.className = `flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all ${hideContent ? 'bg-teal-500/15 text-teal-400 border border-teal-500/30' : 'bg-white/5 text-white/50 border border-white/10 hover:bg-white/10 hover:text-white/70'}`;
+        // Safe: icon() returns controlled SVG from Lucide library, not user input
+        visibilityBtn.innerHTML = `${icon(hideContent ? 'eye' : 'eyeOff', 12)}<span>${hideContent ? 'Hidden' : 'Visible'}</span>`;
+        visibilityBtn.title = hideContent ? 'Show content' : 'Hide content';
+      }
+
+      // Update clipboard items content visibility (without re-rendering entire list)
+      this.updateClipboardContentVisibility();
+    } else if (view === 'settings') {
+      // Settings view updates itself via input change handlers
+      // Only need to update if navigating to settings with stale data
+    }
+  }
+
+  /**
+   * Post-render setup: disable stagger animations after they complete
+   * to prevent replay on subsequent updates.
+   */
+  private postRender(): void {
+    const container = $('#clipboard-history-list');
+    if (container && !container.classList.contains('no-stagger')) {
+      // Let initial animations play, then disable for future updates
+      setTimeout(() => container.classList.add('no-stagger'), 400);
+    }
+
+    // Initialize autostart toggle state (desktop only)
+    const autostartToggle = document.getElementById('autostart-toggle') as HTMLInputElement | null;
+    if (autostartToggle) {
+      import('./api/autostart')
+        .then(({ getAutostart }) => getAutostart())
+        .then((enabled) => {
+          autostartToggle.checked = enabled;
+        })
+        .catch(console.error);
+    }
+  }
+
+  /**
+   * Update clipboard item content visibility without full re-render.
+   */
+  private updateClipboardContentVisibility(): void {
+    const hideContent = store.get('settings').hide_clipboard_content;
+    const history = store.get('clipboardHistory');
+    const container = $('#clipboard-history-list');
+
+    if (!container) return;
+
+    const items = container.querySelectorAll('.clipboard-item');
+    items.forEach((item, index) => {
+      const contentEl = item.querySelector('p.text-sm');
+      if (contentEl && history[index]) {
+        const content = history[index].content;
+        contentEl.textContent = hideContent ? '••••••••••••••••' : truncate(content, 120);
+        contentEl.classList.toggle('select-none', hideContent);
+        contentEl.classList.toggle('font-mono', hideContent);
+      }
+    });
   }
 
   private render(): void {
     const state = store.getState();
+
+    // Schedule post-render setup after DOM updates
+    queueMicrotask(() => this.postRender());
 
     if (state.isLoading) {
       this.root.innerHTML = `
@@ -863,13 +1037,13 @@ class App {
         <!-- Header -->
         <header class="relative z-10 px-4 py-1 pt-safe-top border-b" style="background: rgba(17, 17, 19, 0.8); backdrop-filter: blur(12px); border-color: rgba(255, 255, 255, 0.06);">
           <div class="flex items-center justify-between">
-            <div class="flex items-center gap-3">
+            <button class="flex items-center gap-3 hover:opacity-80 transition-opacity" data-nav="dashboard">
               <img src="${logoDark}" alt="DecentPaste Logo" class="w-12 h-12" />
-              <div>
-                <h1 class="font-semibold text-white text-sm tracking-tight">DecentPaste</h1>
+              <div class="text-left">
+                <h1 class="font-display font-semibold text-white text-sm tracking-tight">DecentPaste</h1>
                 <p class="text-xs text-white/40">${state.settings.device_name}</p>
               </div>
-            </div>
+            </button>
             <!-- Lock Button with teal icon container styling -->
             <button id="btn-lock-vault" class="icon-container-teal hover:scale-105 transition-transform" style="width: 2.25rem; height: 2.25rem;" title="Lock vault">
               ${icon('lock', 16)}
@@ -886,7 +1060,7 @@ class App {
         <nav class="relative z-10 pb-safe-bottom" style="background: rgba(17, 17, 19, 0.9); backdrop-filter: blur(12px); border-top: 1px solid rgba(255, 255, 255, 0.06);">
           <div class="flex justify-around py-2">
             ${this.renderNavItem('dashboard', 'home', 'Home')}
-            ${this.renderNavItem('peers', 'users', 'Peers')}
+            ${this.renderNavItem('peers', 'users', 'Devices')}
             ${this.renderNavItem('settings', 'settings', 'Settings')}
           </div>
         </nav>
@@ -913,7 +1087,8 @@ class App {
     const currentView = store.get('currentView');
     const isActive = currentView === view;
     const updateStatus = store.get('updateStatus');
-    const showBadge = view === 'settings' && updateStatus === 'available';
+    // Only show update badge on desktop (mobile uses app stores)
+    const showBadge = view === 'settings' && updateStatus === 'available' && isDesktop();
 
     return `
       <button
@@ -950,61 +1125,50 @@ class App {
     const allItems = state.clipboardHistory;
     const syncEnabled = state.settings.auto_sync_enabled;
     const hideContent = state.settings.hide_clipboard_content;
+    const pairedCount = state.pairedPeers.length;
 
     return `
       <div class="flex flex-col h-full">
         <!-- Sticky Top Section -->
         <div class="flex-shrink-0 p-4 pb-0">
-          <!-- Stats Grid -->
-          <div class="grid grid-cols-2 gap-3 mb-6">
-            <!-- Sync Toggle Card -->
-            <div class="card p-4">
+          <!-- Quick Actions -->
+          <div class="grid grid-cols-2 gap-3 mb-3">
+            <!-- Auto Sync Toggle Card -->
+            <button id="dashboard-sync-toggle" class="card p-4 w-full text-left cursor-pointer hover:bg-white/[0.03] transition-colors">
               <div class="flex items-center gap-3">
                 <div class="${syncEnabled ? 'icon-container-teal' : 'icon-container-orange'}">
                   ${icon(syncEnabled ? 'refreshCw' : 'wifiOff', 18)}
                 </div>
                 <div class="flex-1 min-w-0">
-                  <p class="text-sm font-medium text-white">Sync</p>
-                  <p class="text-xs text-white/40">${syncEnabled ? 'Active' : 'Paused'}</p>
+                  <p class="text-sm font-medium text-white">Auto Sync</p>
+                  <p class="text-xs text-white/40">${syncEnabled ? 'On' : 'Off'}</p>
                 </div>
-                <label class="relative inline-block w-10 h-6 flex-shrink-0">
-                  <input
-                    type="checkbox"
-                    id="dashboard-sync-toggle"
-                    ${syncEnabled ? 'checked' : ''}
-                    class="peer sr-only"
-                  />
-                  <span class="absolute inset-0 bg-white/10 rounded-full cursor-pointer transition-colors peer-checked:bg-teal-500/50"></span>
-                  <span class="absolute left-1 top-1 w-4 h-4 bg-white/60 rounded-full transition-transform peer-checked:translate-x-4 peer-checked:bg-white"></span>
-                </label>
               </div>
-            </div>
-            <!-- Clipboard Count Card -->
-            <div class="card p-4">
+            </button>
+            <!-- Paired Devices Card -->
+            <button class="card p-4 w-full text-left hover:bg-white/[0.03] transition-colors" data-nav="peers">
               <div class="flex items-center gap-3">
-                <div class="icon-container-teal">
-                  ${icon('clipboard', 18)}
+                <div class="icon-container-purple">
+                  ${icon('monitor', 18)}
                 </div>
-                <div>
-                  <p id="clipboard-count" class="text-2xl font-bold text-white tracking-tight">${historyCount}</p>
-                  <p class="text-xs text-white/40">Clipboard Items</p>
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm font-medium text-white">Devices</p>
+                  <p id="paired-count" class="text-xs text-white/40">${pairedCount} paired</p>
+                </div>
+                <div class="text-white/30">
+                  ${icon('chevronRight', 16)}
                 </div>
               </div>
-            </div>
-          </div>
-
-          <!-- Quick Actions -->
-          <div class="mb-6">
-            <h2 class="text-sm font-semibold text-white/80 mb-3 tracking-tight">Quick Actions</h2>
-            <button id="btn-share-clipboard" class="btn-primary w-full">
-              ${icon('share', 18)}
-              <span>Share Clipboard</span>
             </button>
           </div>
+          <button id="btn-share-clipboard" class="btn-primary w-full mb-6">
+            ${icon('share', 18)}
+            <span>Share Now</span>
+          </button>
 
           <!-- Clipboard History Header -->
           <div class="flex items-center justify-between mb-3">
-            <h2 class="text-sm font-semibold text-white/80 tracking-tight">Clipboard History</h2>
+            <h2 class="text-sm font-semibold text-white/80 tracking-tight font-display">Clipboard History <span id="clipboard-count" class="text-white/30 font-normal">(${historyCount})</span></h2>
             <div class="flex items-center gap-1.5 flex-shrink-0">
               <button id="btn-toggle-visibility" class="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all ${hideContent ? 'bg-teal-500/15 text-teal-400 border border-teal-500/30' : 'bg-white/5 text-white/50 border border-white/10 hover:bg-white/10 hover:text-white/70'}" title="${hideContent ? 'Show content' : 'Hide content'}">
                 ${icon(hideContent ? 'eye' : 'eyeOff', 12)}
@@ -1019,7 +1183,7 @@ class App {
         </div>
 
         <!-- Scrollable Clipboard History (Full List) -->
-        <div class="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
+        <div class="flex-1 min-h-0 overflow-y-auto px-4 pb-4 pt-1">
           <div id="clipboard-history-list" class="space-y-2">
             ${allItems.length > 0 ? allItems.map((item) => this.renderClipboardItem(item, hideContent)).join('') : this.renderEmptyState('No clipboard items yet', 'Copy something to get started')}
           </div>
@@ -1041,7 +1205,7 @@ class App {
             <div class="icon-container-green" style="width: 1.5rem; height: 1.5rem; border-radius: 0.5rem;">
               ${icon('link', 12)}
             </div>
-            <h2 class="text-sm font-semibold text-white/80 tracking-tight">Paired Devices</h2>
+            <h2 class="text-sm font-semibold text-white/80 tracking-tight font-display">Paired Devices</h2>
             <span class="text-xs text-white/30 ml-auto">${pairedPeers.length}</span>
           </div>
           <div id="paired-peers" class="space-y-2">
@@ -1055,7 +1219,7 @@ class App {
             <div class="icon-container-orange" style="width: 1.5rem; height: 1.5rem; border-radius: 0.5rem;">
               ${icon('wifi', 12)}
             </div>
-            <h2 class="text-sm font-semibold text-white/80 tracking-tight">Discovered Devices</h2>
+            <h2 class="text-sm font-semibold text-white/80 tracking-tight font-display">Discovered Devices</h2>
             <span class="text-xs text-white/30 ml-auto mr-2">${discoveredPeers.length}</span>
             <button id="btn-refresh-peers" class="p-1.5 rounded-lg text-white/40 hover:text-teal-400 hover:bg-teal-500/10 transition-all" title="Refresh">
               ${icon('refreshCw', 14)}
@@ -1082,7 +1246,7 @@ class App {
             <div class="icon-container-purple" style="width: 1.5rem; height: 1.5rem; border-radius: 0.5rem;">
               ${icon('monitor', 12)}
             </div>
-            <h2 class="text-sm font-semibold text-white/80 tracking-tight">Device</h2>
+            <h2 class="text-sm font-semibold text-white/80 tracking-tight font-display">Device</h2>
           </div>
           <div class="card p-4">
             <div class="flex items-center gap-3">
@@ -1094,10 +1258,10 @@ class App {
                   id="device-name-input"
                   type="text"
                   value="${settings.device_name}"
-                  class="input w-full font-semibold text-white"
+                  class="input w-full font-semibold text-white font-display"
                   style="padding: 0.5rem 0.75rem;"
                 />
-                <p class="text-xs text-white/30 mt-1 font-mono">${deviceInfo?.device_id?.slice(0, 16) || 'Unknown'}...</p>
+                <p class="text-xs text-white/30 mt-1 font-mono tracking-wider">${deviceInfo?.device_id?.slice(0, 16) || 'Unknown'}...</p>
               </div>
             </div>
           </div>
@@ -1109,19 +1273,9 @@ class App {
             <div class="icon-container-green" style="width: 1.5rem; height: 1.5rem; border-radius: 0.5rem;">
               ${icon('refreshCw', 12)}
             </div>
-            <h2 class="text-sm font-semibold text-white/80 tracking-tight">Sync</h2>
+            <h2 class="text-sm font-semibold text-white/80 tracking-tight font-display">Sync</h2>
           </div>
           <div class="card overflow-hidden">
-            <label class="flex items-center justify-between p-4 cursor-pointer hover:bg-white/[0.02] transition-colors">
-              <span class="text-sm text-white/70">Auto-sync clipboard</span>
-              <input
-                type="checkbox"
-                id="auto-sync-toggle"
-                ${settings.auto_sync_enabled ? 'checked' : ''}
-                class="checkbox"
-              />
-            </label>
-            <div class="divider"></div>
             <label class="flex items-center justify-between p-4 cursor-pointer hover:bg-white/[0.02] transition-colors">
               <span class="text-sm text-white/70">Show notifications</span>
               <input
@@ -1140,7 +1294,7 @@ class App {
             <div class="icon-container-blue" style="width: 1.5rem; height: 1.5rem; border-radius: 0.5rem;">
               ${icon('history', 12)}
             </div>
-            <h2 class="text-sm font-semibold text-white/80 tracking-tight">History</h2>
+            <h2 class="text-sm font-semibold text-white/80 tracking-tight font-display">History</h2>
           </div>
           <div class="card overflow-hidden">
             <div class="flex items-center justify-between p-4">
@@ -1173,7 +1327,7 @@ class App {
             <div class="icon-container-teal" style="width: 1.5rem; height: 1.5rem; border-radius: 0.5rem;">
               ${icon('lock', 12)}
             </div>
-            <h2 class="text-sm font-semibold text-white/80 tracking-tight">Security</h2>
+            <h2 class="text-sm font-semibold text-white/80 tracking-tight font-display">Security</h2>
           </div>
           <div class="card overflow-hidden">
             <div class="flex items-center justify-between p-4">
@@ -1193,18 +1347,49 @@ class App {
           </div>
         </div>
 
-        <!-- Updates -->
+        ${
+          isDesktop()
+            ? `<!-- System (desktop only) -->
+        <div class="mb-6">
+          <div class="flex items-center gap-2 mb-3">
+            <div class="icon-container-purple" style="width: 1.5rem; height: 1.5rem; border-radius: 0.5rem;">
+              ${icon('settings', 12)}
+            </div>
+            <h2 class="text-sm font-semibold text-white/80 tracking-tight font-display">System</h2>
+          </div>
+          <div class="card overflow-hidden">
+            <label class="flex items-center justify-between p-4 cursor-pointer hover:bg-white/[0.02] transition-colors">
+              <div>
+                <span class="text-sm text-white/70 block">Launch at login</span>
+                <span class="text-xs text-white/40">Start DecentPaste on system startup</span>
+              </div>
+              <input
+                type="checkbox"
+                id="autostart-toggle"
+                class="checkbox"
+              />
+            </label>
+          </div>
+        </div>`
+            : ''
+        }
+
+        ${
+          isDesktop()
+            ? `<!-- Updates (desktop only - mobile uses app stores) -->
         <div class="mb-6">
           <div class="flex items-center gap-2 mb-3">
             <div class="icon-container-blue" style="width: 1.5rem; height: 1.5rem; border-radius: 0.5rem;">
               ${icon('download', 12)}
             </div>
-            <h2 class="text-sm font-semibold text-white/80 tracking-tight">Updates</h2>
+            <h2 class="text-sm font-semibold text-white/80 tracking-tight font-display">Updates</h2>
           </div>
           <div id="update-section" class="card overflow-hidden">
             ${this.renderUpdateContent()}
           </div>
-        </div>
+        </div>`
+            : ''
+        }
 
         <!-- About -->
         <div>
@@ -1212,7 +1397,7 @@ class App {
             <div class="icon-container-orange" style="width: 1.5rem; height: 1.5rem; border-radius: 0.5rem;">
               ${icon('clipboard', 12)}
             </div>
-            <h2 class="text-sm font-semibold text-white/80 tracking-tight">About</h2>
+            <h2 class="text-sm font-semibold text-white/80 tracking-tight font-display">About</h2>
           </div>
           <div class="card p-4">
             <div class="flex items-center gap-3">
@@ -1252,7 +1437,7 @@ class App {
             <div class="w-20 h-20 rounded-2xl mx-auto mb-4 flex items-center justify-center glow-teal" style="background: linear-gradient(135deg, rgba(20, 184, 166, 0.2) 0%, rgba(13, 148, 136, 0.1) 100%); border: 1px solid rgba(20, 184, 166, 0.3);">
               ${icon('lock', 36, 'text-teal-400')}
             </div>
-            <h1 class="text-xl font-semibold text-white mb-1">Welcome back</h1>
+            <h1 class="text-xl font-semibold text-white mb-1 font-display">Welcome back</h1>
             <p class="text-white/50 text-sm">${escapeHtml(deviceName)}</p>
           </div>
 
@@ -1331,7 +1516,7 @@ class App {
           <div class="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center glow-teal" style="background: linear-gradient(135deg, rgba(20, 184, 166, 0.2) 0%, rgba(13, 148, 136, 0.1) 100%); border: 1px solid rgba(20, 184, 166, 0.3);">
             ${icon('monitor', 28, 'text-teal-400')}
           </div>
-          <h2 class="text-xl font-semibold text-white mb-2">Name Your Device</h2>
+          <h2 class="text-xl font-semibold text-white mb-2 font-display">Name Your Device</h2>
           <p class="text-white/50 text-sm">This name will be visible to other devices on your network</p>
         </div>
 
@@ -1360,7 +1545,7 @@ class App {
           <div class="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center" style="background: linear-gradient(135deg, rgba(20, 184, 166, 0.2) 0%, rgba(13, 148, 136, 0.1) 100%); border: 1px solid rgba(20, 184, 166, 0.3);">
             ${icon('key', 28, 'text-teal-400')}
           </div>
-          <h2 class="text-xl font-semibold text-white mb-2">Create Your PIN</h2>
+          <h2 class="text-xl font-semibold text-white mb-2 font-display">Create Your PIN</h2>
           <p class="text-white/50 text-sm">Choose a 4-8 digit PIN to secure your vault</p>
         </div>
 
@@ -1421,7 +1606,7 @@ class App {
             <!-- Logo -->
             <div class="text-center mb-6">
               <img src="${logoDark}" alt="DecentPaste Logo" class="w-16 h-16 mx-auto mb-2" />
-              <h1 class="text-lg font-semibold text-white tracking-tight">Welcome to DecentPaste</h1>
+              <h1 class="text-lg font-semibold text-white tracking-tight font-display">Welcome to DecentPaste</h1>
             </div>
 
             ${progressIndicator}
@@ -1451,7 +1636,7 @@ class App {
               ${icon('alertTriangle', 28, 'text-red-400')}
             </div>
 
-            <h2 class="text-xl font-semibold text-white mb-2">Reset Vault?</h2>
+            <h2 class="text-xl font-semibold text-white mb-2 font-display">Reset Vault?</h2>
             <p class="text-white/50 text-sm mb-4">This will permanently delete all your data:</p>
 
             <!-- Warning List -->
@@ -1518,7 +1703,7 @@ class App {
               ${icon('trash', 22, 'text-red-400')}
             </div>
 
-            <h2 class="text-lg font-semibold text-white mb-1">Clear History?</h2>
+            <h2 class="text-lg font-semibold text-white mb-1 font-display">Clear History?</h2>
             <p class="text-white/50 text-sm mb-5">
               This will delete ${count} clipboard ${count === 1 ? 'item' : 'items'}. This action cannot be undone.
             </p>
@@ -1542,17 +1727,18 @@ class App {
     const isLocal = item.is_local;
     // Escape HTML to prevent XSS attacks from malicious clipboard content
     const safeContent = hideContent ? '••••••••••••••••' : escapeHtml(truncate(item.content, 120));
+    const itemClass = isLocal ? 'clipboard-item-local' : 'clipboard-item-remote';
     return `
-      <div class="card p-3 group cursor-pointer clipboard-item" data-id="${item.id}" style="transition: all 0.2s ease;">
+      <div class="card p-3 group cursor-pointer clipboard-item ${itemClass}" data-id="${item.id}">
         <div class="flex items-start justify-between gap-3">
           <div class="flex-1 min-w-0">
-            <p class="text-sm text-white/90 break-words line-clamp-2 leading-relaxed ${hideContent ? 'select-none' : ''}">${safeContent}</p>
+            <p class="text-sm text-white/90 break-words line-clamp-2 leading-relaxed ${hideContent ? 'select-none font-mono' : ''}">${safeContent}</p>
             <div class="flex items-center gap-2 mt-2">
               <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${isLocal ? 'bg-teal-500/10 text-teal-400' : 'bg-orange-500/10 text-orange-400'}">
                 ${isLocal ? icon('monitor', 10) : icon('download', 10)}
                 ${isLocal ? 'Local' : escapeHtml(item.origin_device_name)}
               </span>
-              <span class="text-xs text-white/30">${formatTime(item.timestamp)}</span>
+              <span class="text-xs text-white/30 font-mono">${formatTime(item.timestamp)}</span>
             </div>
           </div>
           <button
@@ -1569,13 +1755,28 @@ class App {
 
   private renderPairedPeer(peer: PairedPeer): string {
     const safeName = escapeHtml(peer.device_name);
+    const connections = store.get('peerConnections');
+    const status = connections.get(peer.peer_id) || 'disconnected';
+
+    const statusClass = {
+      connected: 'status-connected',
+      connecting: 'status-connecting',
+      disconnected: 'status-disconnected',
+    }[status];
+
+    const statusText = status === 'connected' ? 'Online' : status === 'connecting' ? 'Connecting...' : 'Offline';
+
     return `
       <div class="card p-3 flex items-center justify-between">
         <div class="flex items-center gap-3">
-          <div class="icon-container-green">
+          <div class="icon-container-green relative">
             ${icon('monitor', 18)}
+            <span class="status-dot ${statusClass} absolute -bottom-0.5 -right-0.5"></span>
           </div>
-          <p class="text-sm font-medium text-white">${safeName}</p>
+          <div>
+            <p class="text-sm font-medium text-white">${safeName}</p>
+            <p class="text-xs text-white/40">${statusText}</p>
+          </div>
         </div>
         <button
           data-unpair="${peer.peer_id}"
@@ -1613,12 +1814,12 @@ class App {
 
   private renderEmptyState(title: string, subtitle: string): string {
     return `
-      <div class="text-center py-12">
-        <div class="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06);">
-          ${icon('clipboard', 24, 'text-white/20')}
+      <div class="empty-state text-center py-12">
+        <div class="empty-state-icon">
+          ${icon('clipboard', 28, 'text-white/25')}
         </div>
-        <p class="text-white/50 text-sm font-medium">${title}</p>
-        <p class="text-white/30 text-xs mt-1">${subtitle}</p>
+        <p class="text-white/60 text-sm font-semibold tracking-tight">${title}</p>
+        <p class="text-white/35 text-xs mt-1.5">${subtitle}</p>
       </div>
     `;
   }
@@ -1669,7 +1870,7 @@ class App {
           <div class="icon-container-teal icon-container-lg mx-auto mb-4" style="width: 4rem; height: 4rem;">
             ${icon('link', 28)}
           </div>
-          <h3 class="text-lg font-semibold text-white mb-2 tracking-tight">Pairing Request</h3>
+          <h3 class="text-lg font-semibold text-white mb-2 tracking-tight font-display">Pairing Request</h3>
           <p class="text-white/50 mb-6">${safePeerName || 'A device'} wants to pair with you</p>
           <div class="flex gap-3">
             <button id="btn-reject-pairing" class="btn-secondary flex-1" style="touch-action: manipulation">
@@ -1711,7 +1912,7 @@ class App {
           <div class="icon-container-green icon-container-lg mx-auto mb-4" style="width: 4rem; height: 4rem;">
             ${icon('check', 28)}
           </div>
-          <h3 class="text-lg font-semibold text-white mb-2 tracking-tight">Confirm PIN</h3>
+          <h3 class="text-lg font-semibold text-white mb-2 tracking-tight font-display">Confirm PIN</h3>
           <p class="text-white/50 mb-6">Verify this PIN matches on both devices</p>
           <div class="pin-display mx-auto mb-6">
             ${pinDigits}
@@ -1725,7 +1926,7 @@ class App {
           <div class="mx-auto mb-4">
             ${icon('loader', 48, 'text-teal-400 animate-spin')}
           </div>
-          <h3 class="text-lg font-semibold text-white mb-2 tracking-tight">Pairing...</h3>
+          <h3 class="text-lg font-semibold text-white mb-2 tracking-tight font-display">Pairing...</h3>
           <p class="text-white/50 mb-4">Waiting for ${safePeerName || 'device'} to respond</p>
           <p class="text-xs text-white/30 mb-6">Make sure the app is open on the other device</p>
           <button id="btn-cancel-pairing" class="btn-secondary" style="touch-action: manipulation">
@@ -1775,6 +1976,12 @@ class App {
       if (content) {
         content.innerHTML = this.renderPeersView();
       }
+    } else if (view === 'dashboard') {
+      // Update the paired count on dashboard
+      const countEl = $('#paired-count');
+      if (countEl) {
+        countEl.textContent = `${store.get('pairedPeers').length} paired`;
+      }
     }
   }
 
@@ -1784,19 +1991,31 @@ class App {
       const history = store.get('clipboardHistory');
       const hideContent = store.get('settings').hide_clipboard_content;
 
-      // Update the clipboard count in stats
+      // Update the clipboard count in header
       const countEl = $('#clipboard-count');
       if (countEl) {
-        countEl.textContent = String(history.length);
+        countEl.textContent = `(${history.length})`;
       }
 
       // Update the full clipboard history list
       const container = $('#clipboard-history-list');
       if (container) {
+        // Check if this is an update (container already has no-stagger class)
+        const isUpdate = container.classList.contains('no-stagger');
+
         container.innerHTML =
           history.length > 0
             ? history.map((item) => this.renderClipboardItem(item, hideContent)).join('')
             : this.renderEmptyState('No clipboard items yet', 'Copy something to get started');
+
+        // If this is an update, immediately re-add no-stagger to prevent animations
+        // If this is initial render, add no-stagger after animations complete
+        if (isUpdate) {
+          container.classList.add('no-stagger');
+        } else {
+          // First render: let animations play, then disable for future updates
+          setTimeout(() => container.classList.add('no-stagger'), 400);
+        }
       }
     }
   }
@@ -1930,6 +2149,9 @@ class App {
   }
 
   private renderUpdateSection(): void {
+    // Updates section only exists on desktop
+    if (!isDesktop()) return;
+
     const view = store.get('currentView');
     if (view === 'settings') {
       const container = $('#update-section');
@@ -1940,6 +2162,9 @@ class App {
   }
 
   private renderUpdateBadge(): void {
+    // Update badge only relevant on desktop
+    if (!isDesktop()) return;
+
     const status = store.get('updateStatus');
     const badge = $('#nav-settings-badge');
     if (badge) {

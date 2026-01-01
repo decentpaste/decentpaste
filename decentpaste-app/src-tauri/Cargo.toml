@@ -1,6 +1,6 @@
 [package]
 name = "decentpaste-app"
-version = "0.3.3"
+version = "0.4.1"
 description = "Cross-platform clipboard sharing over P2P network"
 authors = ["you"]
 edition = "2021"
@@ -21,6 +21,8 @@ tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 tauri-plugin-stronghold = "2"
 tauri-plugin-clipboard-manager = "2"
+tauri-plugin-os = "2"
+tauri-plugin-decentshare = { path = "../tauri-plugin-decentshare" }
 iota_stronghold = "2.1"  # For accessing snapshot encryption work factor
 
 # Serialization
@@ -69,3 +71,5 @@ async-trait = "0.1"
 # Desktop-only plugins (notifications don't work on mobile - network dies when backgrounded)
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-notification = "2"
+tauri-plugin-single-instance = "2"
+tauri-plugin-autostart = "2"

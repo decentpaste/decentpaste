@@ -1,0 +1,489 @@
+<!doctype html>
+<html lang="en" class="scroll-smooth">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Privacy Policy - DecentPaste</title>
+    <meta
+      name="description"
+      content="DecentPaste Privacy Policy. Learn how we protect your privacy with end-to-end encryption, local storage, and zero cloud servers."
+    />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
+    <meta name="theme-color" content="#0a0a0b" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="DecentPaste" />
+    <meta name="mobile-web-app-capable" content="yes" />
+
+    <!-- Canonical URL -->
+    <link rel="canonical" href="https://decentpaste.com/privacy" />
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Privacy Policy - DecentPaste" />
+    <meta
+      property="og:description"
+      content="DecentPaste Privacy Policy. Learn how we protect your privacy with end-to-end encryption, local storage, and zero cloud servers."
+    />
+    <meta property="og:url" content="https://decentpaste.com/privacy" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="DecentPaste" />
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="assets/logo_dark.svg" />
+    <link rel="icon" type="image/x-icon" href="assets/favicon.ico" />
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+
+    <!-- Fonts - matching app typography (Outfit + Plus Jakarta Sans) -->
+    <!-- Preconnect to Google Fonts CDN for faster font loading -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Preload critical font files for LCP optimization -->
+    <link
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@700;800&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap"
+    />
+    <!-- Load fonts with print media trick for non-blocking loading -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@700;800&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+      media="print"
+      onload="this.media = 'all'"
+    />
+    <!-- Fallback for browsers with JS disabled -->
+    <noscript>
+      <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@700;800&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap"
+        rel="stylesheet"
+      />
+    </noscript>
+
+    <!-- Built Tailwind CSS -->
+    <link rel="stylesheet" href="dist/output.css" />
+  </head>
+  <body class="font-sans antialiased bg-[#0a0a0b] text-white overflow-x-hidden">
+    <!-- Gradient Background Orbs -->
+    <div class="fixed inset-0 -z-10 overflow-hidden">
+      <div
+        class="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-teal-500/20 rounded-full blur-[120px] animate-float"
+      ></div>
+      <div
+        class="absolute top-[30%] right-[-15%] w-[500px] h-[500px] bg-orange-500/15 rounded-full blur-[100px] animate-float-delayed"
+      ></div>
+    </div>
+
+    <!-- Navigation -->
+    <nav id="navbar" class="fixed top-0 w-full z-50 bg-[#0a0a0b]/80 backdrop-blur-xl border-b border-white/10">
+      <div class="max-w-6xl mx-auto px-6 lg:px-8">
+        <div class="flex justify-between h-20 items-center">
+          <!-- Logo -->
+          <a href="/" class="flex items-center gap-3 group" aria-label="DecentPaste home">
+            <img
+              src="assets/logo_dark.svg"
+              alt="DecentPaste logo"
+              class="h-12 w-12 transition-transform duration-300 group-hover:scale-110"
+              width="48"
+              height="48"
+              fetchpriority="high"
+              decoding="async"
+            />
+            <span class="font-bold text-xl tracking-tight">DecentPaste</span>
+          </a>
+
+          <!-- Back to Home -->
+          <a
+            href="/"
+            class="text-white/60 hover:text-white transition-colors duration-300 text-sm font-medium flex items-center gap-2"
+          >
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            Back to Home
+          </a>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="pt-32 pb-20" role="main">
+      <div class="max-w-3xl mx-auto px-6 lg:px-8">
+        <!-- Header -->
+        <div class="mb-16">
+          <h1 class="text-4xl md:text-5xl font-bold tracking-tighter mb-4">Privacy Policy</h1>
+          <p class="text-white/60">Last updated: December 25, 2024</p>
+        </div>
+
+        <!-- Privacy-First Notice -->
+        <div class="mb-12 p-6 rounded-2xl bg-gradient-to-br from-teal-500/10 to-teal-600/5 border border-teal-500/20">
+          <div class="flex items-start gap-4">
+            <div class="p-2 rounded-xl bg-teal-500/20">
+              <svg class="w-6 h-6 text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"
+                />
+              </svg>
+            </div>
+            <div>
+              <h2 class="text-lg font-semibold text-teal-400 mb-2">Privacy by Design</h2>
+              <p class="text-white/60 text-sm leading-relaxed">
+                DecentPaste is built from the ground up with privacy as a core principle. The app uses peer-to-peer
+                networking, end-to-end encryption, and local-only storage.
+                <strong class="text-white/80"
+                  >Your clipboard data never touches our servers because we don't have any.</strong
+                >
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Content -->
+        <div class="prose prose-invert prose-lg max-w-none">
+          <!-- The App Section -->
+          <section class="mb-12">
+            <h2 class="text-2xl font-bold mb-6 flex items-center gap-3">
+              <span class="w-8 h-8 rounded-lg bg-teal-500/20 flex items-center justify-center text-teal-400">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3"
+                  />
+                </svg>
+              </span>
+              The DecentPaste App
+            </h2>
+
+            <h3 class="text-xl font-semibold text-white/90 mt-8 mb-4">Data We Don't Collect</h3>
+            <p class="text-white/60 mb-4">
+              The DecentPaste application does not collect, transmit, or store any of your data on external servers.
+              Here's what stays on your device:
+            </p>
+            <ul class="space-y-3 text-white/60 mb-6">
+              <li class="flex items-start gap-3">
+                <svg
+                  class="w-5 h-5 text-teal-400 mt-0.5 shrink-0"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+                <span
+                  ><strong class="text-white/80">Clipboard content</strong> - Your copied text is encrypted and synced
+                  directly between your devices over your local network.</span
+                >
+              </li>
+              <li class="flex items-start gap-3">
+                <svg
+                  class="w-5 h-5 text-teal-400 mt-0.5 shrink-0"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+                <span
+                  ><strong class="text-white/80">Device identity keys</strong> - Your cryptographic keys are generated
+                  and stored locally in an encrypted vault.</span
+                >
+              </li>
+              <li class="flex items-start gap-3">
+                <svg
+                  class="w-5 h-5 text-teal-400 mt-0.5 shrink-0"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+                <span
+                  ><strong class="text-white/80">Paired device information</strong> - Information about your paired
+                  devices is stored locally.</span
+                >
+              </li>
+              <li class="flex items-start gap-3">
+                <svg
+                  class="w-5 h-5 text-teal-400 mt-0.5 shrink-0"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+                <span
+                  ><strong class="text-white/80">Usage analytics or telemetry</strong> - We don't track how you use the
+                  app. Zero analytics.</span
+                >
+              </li>
+            </ul>
+
+            <h3 class="text-xl font-semibold text-white/90 mt-8 mb-4">How Your Data is Protected</h3>
+            <div class="space-y-4 text-white/60">
+              <div class="p-4 rounded-xl bg-white/5 border border-white/10">
+                <h4 class="font-semibold text-white/80 mb-2">End-to-End Encryption (AES-256-GCM)</h4>
+                <p class="text-sm">
+                  All clipboard data is encrypted before transmission using AES-256-GCM, a military-grade encryption
+                  standard. Only your paired devices can decrypt the content.
+                </p>
+              </div>
+              <div class="p-4 rounded-xl bg-white/5 border border-white/10">
+                <h4 class="font-semibold text-white/80 mb-2">Secure Key Exchange (X25519 ECDH)</h4>
+                <p class="text-sm">
+                  When pairing devices, encryption keys are derived using X25519 elliptic curve Diffie-Hellman. The
+                  shared secret is mathematically computed on both devices - it's never transmitted over the network.
+                </p>
+              </div>
+              <div class="p-4 rounded-xl bg-white/5 border border-white/10">
+                <h4 class="font-semibold text-white/80 mb-2">Encrypted Local Storage (IOTA Stronghold)</h4>
+                <p class="text-sm">
+                  All sensitive data (keys, paired devices, clipboard history) is stored in an encrypted vault protected
+                  by your PIN. The vault uses Argon2id key derivation to protect against brute-force attacks.
+                </p>
+              </div>
+              <div class="p-4 rounded-xl bg-white/5 border border-white/10">
+                <h4 class="font-semibold text-white/80 mb-2">Local Network Only</h4>
+                <p class="text-sm">
+                  DecentPaste uses mDNS for device discovery and libp2p for peer-to-peer communication. Your data
+                  travels only over your local network - never through the internet or any external servers.
+                </p>
+              </div>
+            </div>
+
+            <h3 class="text-xl font-semibold text-white/90 mt-8 mb-4">No Accounts Required</h3>
+            <p class="text-white/60">
+              DecentPaste doesn't require you to create an account, provide an email address, or share any personal
+              information. You simply install the app, set a PIN, and start syncing.
+            </p>
+          </section>
+
+          <!-- The Website Section -->
+          <section class="mb-12">
+            <h2 class="text-2xl font-bold mb-6 flex items-center gap-3">
+              <span class="w-8 h-8 rounded-lg bg-orange-500/20 flex items-center justify-center text-orange-400">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418"
+                  />
+                </svg>
+              </span>
+              This Website (decentpaste.com)
+            </h2>
+
+            <p class="text-white/60 mb-6">
+              Unlike the app, this website uses analytics to help us understand how visitors discover and interact with
+              our landing page. This helps us improve the website experience.
+            </p>
+
+            <h3 class="text-xl font-semibold text-white/90 mt-8 mb-4">Analytics We Use</h3>
+            <p class="text-white/60 mb-4">
+              We use <strong class="text-white/80">Amplitude</strong> for website analytics. This may collect:
+            </p>
+            <ul class="space-y-2 text-white/60 mb-6">
+              <li class="flex items-start gap-3">
+                <span class="w-1.5 h-1.5 rounded-full bg-orange-400 mt-2.5 shrink-0"></span>
+                <span>Page views and navigation patterns</span>
+              </li>
+              <li class="flex items-start gap-3">
+                <span class="w-1.5 h-1.5 rounded-full bg-orange-400 mt-2.5 shrink-0"></span>
+                <span>Button clicks and interactions</span>
+              </li>
+              <li class="flex items-start gap-3">
+                <span class="w-1.5 h-1.5 rounded-full bg-orange-400 mt-2.5 shrink-0"></span>
+                <span>Download button clicks</span>
+              </li>
+              <li class="flex items-start gap-3">
+                <span class="w-1.5 h-1.5 rounded-full bg-orange-400 mt-2.5 shrink-0"></span>
+                <span>Session duration and web vitals</span>
+              </li>
+              <li class="flex items-start gap-3">
+                <span class="w-1.5 h-1.5 rounded-full bg-orange-400 mt-2.5 shrink-0"></span>
+                <span>Referrer information (how you found us)</span>
+              </li>
+              <li class="flex items-start gap-3">
+                <span class="w-1.5 h-1.5 rounded-full bg-orange-400 mt-2.5 shrink-0"></span>
+                <span>General device/browser information</span>
+              </li>
+            </ul>
+
+            <div class="p-4 rounded-xl bg-orange-500/10 border border-orange-500/20 text-sm text-white/60">
+              <strong class="text-orange-400">Note:</strong> This analytics is only on the website. The DecentPaste
+              application itself contains zero analytics or tracking.
+            </div>
+          </section>
+
+          <!-- Third Parties Section -->
+          <section class="mb-12">
+            <h2 class="text-2xl font-bold mb-6">Third-Party Services</h2>
+            <p class="text-white/60 mb-4">DecentPaste uses the following third-party services:</p>
+            <ul class="space-y-3 text-white/60">
+              <li class="flex items-start gap-3">
+                <span class="w-1.5 h-1.5 rounded-full bg-white/40 mt-2.5 shrink-0"></span>
+                <span
+                  ><strong class="text-white/80">GitHub</strong> - For hosting releases, source code, and issue
+                  tracking.</span
+                >
+              </li>
+              <li class="flex items-start gap-3">
+                <span class="w-1.5 h-1.5 rounded-full bg-white/40 mt-2.5 shrink-0"></span>
+                <span
+                  ><strong class="text-white/80">Amplitude</strong> - For website analytics only (not in the app).</span
+                >
+              </li>
+              <li class="flex items-start gap-3">
+                <span class="w-1.5 h-1.5 rounded-full bg-white/40 mt-2.5 shrink-0"></span>
+                <span
+                  ><strong class="text-white/80">Google Fonts</strong> - For loading the Outfit and Plus Jakarta Sans
+                  font families on this website.</span
+                >
+              </li>
+            </ul>
+          </section>
+
+          <!-- Open Source Section -->
+          <section class="mb-12">
+            <h2 class="text-2xl font-bold mb-6">Open Source Transparency</h2>
+            <p class="text-white/60 mb-4">
+              DecentPaste is fully open source under the Apache-2.0 license. You can audit our code yourself to verify
+              our privacy claims:
+            </p>
+            <a
+              href="https://github.com/decentpaste/decentpaste"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-white/80 hover:bg-white/10 hover:text-white transition-colors text-sm font-medium"
+            >
+              <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                <path
+                  d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"
+                />
+              </svg>
+              View Source on GitHub
+            </a>
+          </section>
+
+          <!-- Contact Section -->
+          <section class="mb-12">
+            <h2 class="text-2xl font-bold mb-6">Contact</h2>
+            <p class="text-white/60">
+              If you have questions about this privacy policy or DecentPaste's privacy practices, please open an issue
+              on our
+              <a
+                href="https://github.com/decentpaste/decentpaste/issues"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-teal-400 hover:text-teal-300 underline underline-offset-2"
+                >GitHub repository</a
+              >.
+            </p>
+          </section>
+
+          <!-- Changes Section -->
+          <section>
+            <h2 class="text-2xl font-bold mb-6">Changes to This Policy</h2>
+            <p class="text-white/60">
+              We may update this privacy policy from time to time. Any changes will be posted on this page with an
+              updated revision date. Since DecentPaste doesn't collect your email, we cannot notify you directly of
+              changes - please check back periodically.
+            </p>
+          </section>
+        </div>
+      </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="py-12 border-t border-white/10" role="contentinfo">
+      <div class="max-w-6xl mx-auto px-6 lg:px-8">
+        <div class="flex flex-col items-center gap-6">
+          <!-- Logo -->
+          <a href="/" class="flex items-center gap-3 hover:opacity-80 transition-opacity">
+            <img
+              src="assets/logo_dark.svg"
+              alt="DecentPaste logo"
+              class="h-10 w-10"
+              width="40"
+              height="40"
+              loading="lazy"
+              decoding="async"
+            />
+            <span class="font-semibold">DecentPaste</span>
+          </a>
+
+          <!-- Links -->
+          <div class="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-white/60">
+            <a
+              href="https://github.com/decentpaste/decentpaste"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="hover:text-white transition-colors"
+              >GitHub</a
+            >
+            <a
+              href="https://github.com/decentpaste/decentpaste#readme"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="hover:text-white transition-colors"
+              >Docs</a
+            >
+            <a
+              href="https://github.com/decentpaste/decentpaste/issues"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="hover:text-white transition-colors"
+              >Issues</a
+            >
+            <a href="privacy.html" class="text-white/60 hover:text-white transition-colors">Privacy</a>
+            <a
+              href="https://github.com/decentpaste/decentpaste/blob/main/LICENSE"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="hover:text-white transition-colors"
+              >License</a
+            >
+          </div>
+
+          <!-- Made with -->
+          <p class="text-sm text-white/50">Made with <span class="text-red-400">&#10084;</span> for privacy</p>
+        </div>
+      </div>
+    </footer>
+
+    <!-- Analytics - loaded async after page content (non-blocking) -->
+    <script>
+      // Defer Amplitude loading until after page is interactive
+      window.addEventListener('load', function () {
+        // Load Amplitude script asynchronously
+        var script = document.createElement('script');
+        script.src = 'https://cdn.amplitude.com/script/c49d6e4694d1749e2dad284c37a60c51.js';
+        script.async = true;
+        script.onload = function () {
+          if (window.amplitude) {
+            // Use lower sample rate for session replay to reduce overhead
+            window.amplitude.add(window.sessionReplay.plugin({ sampleRate: 0.1 }));
+            window.amplitude.init('c49d6e4694d1749e2dad284c37a60c51', {
+              fetchRemoteConfig: true,
+              autocapture: {
+                attribution: true,
+                fileDownloads: true,
+                formInteractions: true,
+                pageViews: true,
+                sessions: true,
+                elementInteractions: true,
+              },
+            });
+          }
+        };
+        document.body.appendChild(script);
+      });
+    </script>
+  </body>
+</html>

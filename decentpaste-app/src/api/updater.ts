@@ -1,19 +1,79 @@
 import { check, type Update } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
+import { platform, arch } from '@tauri-apps/plugin-os';
+import { getBundleType } from '@tauri-apps/api/app';
 import { store } from '../state/store';
 
 let currentUpdate: Update | null = null;
 
 /**
+ * Map OS plugin platform names to updater target names.
+ * The OS plugin uses "macos" but the updater uses "darwin".
+ */
+function mapPlatformToTarget(platformName: string): string {
+  switch (platformName) {
+    case 'macos':
+      return 'darwin';
+    default:
+      return platformName;
+  }
+}
+
+/**
+ * Map bundle type to target suffix.
+ * Some bundle types like "AppImage" need to be lowercased.
+ */
+function mapBundleType(bundleType: string | null): string | null {
+  if (!bundleType) return null;
+  return bundleType.toLowerCase();
+}
+
+/**
+ * Build the updater target string from Tauri platform APIs.
+ *
+ * This constructs targets like:
+ * - "linux-x86_64-deb" for Debian packages
+ * - "linux-x86_64-appimage" for AppImages
+ * - "windows-x86_64-nsis" for NSIS installers
+ * - "darwin-aarch64" for macOS (no bundle_type suffix needed)
+ *
+ * Using explicit targets ensures the updater fetches the correct artifact
+ * from the release manifest, matching how the app was originally installed.
+ */
+async function getUpdaterTarget(): Promise<string> {
+  const [os, architecture, bundleType] = await Promise.all([platform(), arch(), getBundleType()]);
+
+  // Map platform name (e.g., "macos" -> "darwin")
+  const targetOs = mapPlatformToTarget(os);
+
+  // Build base target: os-arch (e.g., "linux-x86_64")
+  let target = `${targetOs}-${architecture}`;
+
+  // Append bundle type for platforms with multiple installer formats
+  // This matches the keys in latest.json (e.g., "linux-x86_64-deb")
+  const mappedBundle = mapBundleType(bundleType);
+  if (mappedBundle) {
+    target = `${target}-${mappedBundle}`;
+  }
+
+  console.debug(`Updater target: ${target} (os=${os}, arch=${architecture}, bundle=${bundleType})`);
+  return target;
+}
+
+/**
  * Check for available updates.
- * Updates the store with the result.
+ * Uses platform info to select the correct update artifact.
  */
 export async function checkForUpdates(): Promise<void> {
   store.set('updateStatus', 'checking');
   store.set('updateError', null);
 
   try {
-    const update = await check();
+    // Get the appropriate target for this platform/installer combination
+    const target = await getUpdaterTarget();
+
+    // Pass explicit target to ensure correct artifact is selected
+    const update = await check({ target });
 
     if (update) {
       currentUpdate = update;

@@ -1,14 +1,17 @@
+use std::sync::atomic::Ordering;
+use std::time::Duration;
+
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 use tauri::State;
+use tracing::{debug, info, warn};
 
 use crate::clipboard::ClipboardEntry;
 use crate::error::{DecentPasteError, Result};
 use crate::network::{DiscoveredPeer, NetworkCommand, NetworkStatus};
 use crate::security::{generate_pin, PairingSession, PairingState};
-use crate::state::AppState;
+use crate::state::{AppState, ConnectionStatus, PeerConnectionState};
 use crate::storage::{save_settings, AppSettings, PairedPeer};
-use tracing::{debug, warn};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeviceInfo {
@@ -45,16 +48,39 @@ pub async fn stop_network(state: State<'_, AppState>) -> Result<()> {
     Ok(())
 }
 
-/// Force reconnection to all discovered peers.
+/// Force reconnection to all discovered and paired peers.
 /// Call this when the app resumes from background on mobile.
+/// Uses paired peers' last-known addresses as fallback when mDNS hasn't rediscovered them.
 #[tauri::command]
 pub async fn reconnect_peers(state: State<'_, AppState>) -> Result<()> {
+    // Get paired peers with their last-known addresses for reconnection fallback
+    let paired_peer_addresses: Vec<(String, Vec<String>)> = {
+        let peers = state.paired_peers.read().await;
+        peers
+            .iter()
+            .filter(|p| !p.last_known_addresses.is_empty())
+            .map(|p| (p.peer_id.clone(), p.last_known_addresses.clone()))
+            .collect()
+    };
+
     let tx = state.network_command_tx.read().await;
     if let Some(tx) = tx.as_ref() {
-        tx.send(NetworkCommand::ReconnectPeers)
-            .await
-            .map_err(|_| DecentPasteError::ChannelSend)?;
+        tx.send(NetworkCommand::ReconnectPeers {
+            paired_peer_addresses,
+        })
+        .await
+        .map_err(|_| DecentPasteError::ChannelSend)?;
     }
+    Ok(())
+}
+
+/// Update app visibility state (called from frontend on visibility change).
+/// This ensures backend is the single source of truth for foreground state.
+#[tauri::command]
+pub async fn set_app_visibility(state: State<'_, AppState>, visible: bool) -> Result<()> {
+    let mut fg = state.is_foreground.write().await;
+    *fg = visible;
+    debug!("App visibility set to: {}", visible);
     Ok(())
 }
 
@@ -195,9 +221,20 @@ pub async fn initiate_pairing(state: State<'_, AppState>, peer_id: String) -> Re
         return Err(DecentPasteError::AlreadyPaired(peer_id));
     }
 
-    // Create pairing session
+    // Capture peer addresses NOW before mDNS can expire during pairing flow
+    let peer_addresses = {
+        let discovered = state.discovered_peers.read().await;
+        discovered
+            .iter()
+            .find(|p| p.peer_id == peer_id)
+            .map(|p| p.addresses.clone())
+            .unwrap_or_default()
+    };
+
+    // Create pairing session with cached addresses
     let session_id = uuid::Uuid::new_v4().to_string();
-    let session = PairingSession::new(session_id.clone(), peer_id.clone(), true);
+    let session = PairingSession::new(session_id.clone(), peer_id.clone(), true)
+        .with_peer_addresses(peer_addresses);
 
     let mut sessions = state.pairing_sessions.write().await;
     sessions.push(session);
@@ -358,33 +395,15 @@ pub async fn confirm_pairing(
     }
 
     if is_initiator {
-        // Initiator: Derive shared secret using X25519 ECDH
+        // Initiator: Send confirmation to responder
+        // The actual derivation happens in lib.rs when handling PairingComplete
         let device_identity = state.device_identity.read().await;
         let identity = device_identity
             .as_ref()
             .ok_or(DecentPasteError::NotInitialized)?;
 
-        // Get the peer's public key from the session
-        let peer_public_key = {
-            let sessions = state.pairing_sessions.read().await;
-            sessions
-                .iter()
-                .find(|s| s.session_id == session_id)
-                .and_then(|s| s.peer_public_key.clone())
-                .ok_or_else(|| DecentPasteError::Pairing("Peer public key not found".into()))?
-        };
-
-        // Derive shared secret using ECDH: our_private_key + their_public_key
-        let our_private_key = identity
-            .private_key
-            .as_ref()
-            .ok_or_else(|| DecentPasteError::Pairing("Private key not found".into()))?;
-
-        let shared_secret =
-            crate::security::derive_shared_secret(our_private_key, &peer_public_key)?;
-
         tracing::debug!(
-            "Initiator derived shared secret via ECDH, sending confirm to peer {}",
+            "Initiator confirmed PIN, sending confirm to peer {}",
             peer_id
         );
 
@@ -394,7 +413,6 @@ pub async fn confirm_pairing(
                 peer_id: peer_id.clone(),
                 session_id: session_id.clone(),
                 success: true,
-                shared_secret: Some(shared_secret), // Send for verification (responder will also derive)
                 device_name: identity.device_name.clone(),
             })
             .await
@@ -709,14 +727,16 @@ pub async fn setup_vault(
         save_settings(&settings)?;
     }
 
-    // Emit vault status change
-    let _ = app_handle.emit("vault-status", VaultStatus::Unlocked);
-
-    // Start network and clipboard services now that vault is unlocked
+    // Start network and clipboard services BEFORE emitting event
+    // This ensures network_command_tx is set when frontend processes pending share
     if let Err(e) = crate::start_network_services(app_handle.clone()).await {
         tracing::error!("Failed to start network services: {}", e);
         // Don't fail the vault setup - services can be started later
     }
+
+    // Emit vault status change AFTER network is ready
+    // Frontend may immediately try to send pending share content on this event
+    let _ = app_handle.emit("vault-status", VaultStatus::Unlocked);
 
     info!("Vault setup completed successfully");
     Ok(())
@@ -766,14 +786,16 @@ pub async fn unlock_vault(
         *vault_status = VaultStatus::Unlocked;
     }
 
-    // Emit vault status change
-    let _ = app_handle.emit("vault-status", VaultStatus::Unlocked);
-
-    // Start network and clipboard services now that vault is unlocked
+    // Start network and clipboard services BEFORE emitting event
+    // This ensures network_command_tx is set when frontend processes pending share
     if let Err(e) = crate::start_network_services(app_handle.clone()).await {
         tracing::error!("Failed to start network services: {}", e);
         // Don't fail the unlock - services can be started later
     }
+
+    // Emit vault status change AFTER network is ready
+    // Frontend may immediately try to send pending share content on this event
+    let _ = app_handle.emit("vault-status", VaultStatus::Unlocked);
 
     info!("Vault unlocked successfully");
     Ok(())
@@ -872,4 +894,243 @@ pub async fn reset_vault(app_handle: AppHandle, state: State<'_, AppState>) -> R
 #[tauri::command]
 pub async fn flush_vault(state: State<'_, AppState>) -> Result<()> {
     state.flush_all_to_vault().await
+}
+
+// ============================================================================
+// Share Intent Handling - For Android "share with" functionality
+// ============================================================================
+
+/// Result of handling shared content from Android share intent.
+/// This is a DTO - the UI decides how to present these values to the user.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ShareResult {
+    /// Total number of paired peers
+    pub total_peers: usize,
+    /// Number of peers that were online and received the content
+    pub peers_reached: usize,
+    /// Number of peers that were offline
+    pub peers_offline: usize,
+    /// Whether the content was added to clipboard history
+    pub added_to_history: bool,
+}
+
+/// Summary of connection status after ensure_connected() completes.
+#[derive(Debug, Clone, Serialize)]
+pub struct ConnectionSummary {
+    /// Total number of paired peers
+    pub total_peers: usize,
+    /// Number of peers currently connected
+    pub connected: usize,
+    /// Number of peers that failed to connect
+    pub failed: usize,
+}
+
+// =============================================================================
+// Connection Management
+// =============================================================================
+
+/// Ensure all paired peers are connected.
+///
+/// This function:
+/// 1. Guards against concurrent reconnection attempts
+/// 2. Only dials peers that are currently disconnected
+/// 3. Waits for all dials to complete or timeout
+/// 4. Returns a summary of connection status
+///
+/// The function is awaitable - it returns when all dial attempts complete,
+/// not fire-and-forget like the old reconnect_peers command.
+pub async fn ensure_connected(state: &AppState, timeout: Duration) -> ConnectionSummary {
+    // Guard: only one reconnection at a time
+    if state.reconnect_in_progress.swap(true, Ordering::SeqCst) {
+        // Already reconnecting - wait for it to finish
+        let _ = tokio::time::timeout(timeout, state.dials_complete_notify.notified()).await;
+        return get_connection_summary(state).await;
+    }
+
+    let paired = state.paired_peers.read().await;
+    let total_peers = paired.len();
+
+    if total_peers == 0 {
+        state.reconnect_in_progress.store(false, Ordering::SeqCst);
+        return ConnectionSummary {
+            total_peers: 0,
+            connected: 0,
+            failed: 0,
+        };
+    }
+
+    // Find disconnected peers (status != Connected)
+    let to_dial: Vec<_> = {
+        let conns = state.peer_connections.read().await;
+        paired
+            .iter()
+            .filter(|p| {
+                conns
+                    .get(&p.peer_id)
+                    .map(|c| c.status != ConnectionStatus::Connected)
+                    .unwrap_or(true) // Not in map = disconnected
+            })
+            .cloned()
+            .collect()
+    };
+    drop(paired); // Release read lock before write
+
+    if to_dial.is_empty() {
+        // All peers already connected
+        state.reconnect_in_progress.store(false, Ordering::SeqCst);
+        return get_connection_summary(state).await;
+    }
+
+    // Mark as Connecting and count pending dials
+    {
+        let mut conns = state.peer_connections.write().await;
+        for peer in &to_dial {
+            // Get last_connected value before mutable borrow
+            let last_connected = conns.get(&peer.peer_id).and_then(|c| c.last_connected);
+            conns.insert(
+                peer.peer_id.clone(),
+                PeerConnectionState {
+                    status: ConnectionStatus::Connecting,
+                    last_connected,
+                },
+            );
+        }
+    }
+    state.pending_dials.store(to_dial.len(), Ordering::SeqCst);
+
+    debug!(
+        "Dialing {} disconnected peers (timeout: {:?})",
+        to_dial.len(),
+        timeout
+    );
+
+    // Collect addresses for reconnection
+    let addresses: Vec<(String, Vec<String>)> = to_dial
+        .iter()
+        .filter(|p| !p.last_known_addresses.is_empty())
+        .map(|p| (p.peer_id.clone(), p.last_known_addresses.clone()))
+        .collect();
+
+    // Trigger dials via network command
+    if let Some(tx) = state.network_command_tx.read().await.as_ref() {
+        let _ = tx
+            .send(NetworkCommand::ReconnectPeers {
+                paired_peer_addresses: addresses,
+            })
+            .await;
+    }
+
+    // Wait for all dials to complete OR timeout
+    let _ = tokio::time::timeout(timeout, state.dials_complete_notify.notified()).await;
+
+    // Mark any still-connecting peers as disconnected (timeout)
+    {
+        let mut conns = state.peer_connections.write().await;
+        for (_, conn) in conns.iter_mut() {
+            if conn.status == ConnectionStatus::Connecting {
+                conn.status = ConnectionStatus::Disconnected;
+            }
+        }
+    }
+
+    // Reset pending count and guard
+    state.pending_dials.store(0, Ordering::SeqCst);
+    state.reconnect_in_progress.store(false, Ordering::SeqCst);
+
+    get_connection_summary(state).await
+}
+
+/// Get a summary of current connection status for paired peers.
+async fn get_connection_summary(state: &AppState) -> ConnectionSummary {
+    let paired = state.paired_peers.read().await;
+    let conns = state.peer_connections.read().await;
+
+    let connected = paired
+        .iter()
+        .filter(|p| {
+            conns
+                .get(&p.peer_id)
+                .map(|c| c.status == ConnectionStatus::Connected)
+                .unwrap_or(false)
+        })
+        .count();
+
+    ConnectionSummary {
+        total_peers: paired.len(),
+        connected,
+        failed: paired.len() - connected,
+    }
+}
+
+/// Handle shared content received from Android share intent.
+///
+/// This command is called by the frontend after detecting pending share content
+/// via getPendingShare() polling from the decentshare plugin. It:
+/// 1. Verifies the vault is unlocked
+/// 2. Ensures paired peers are connected (awaitable, with timeout)
+/// 3. Shares the content with all connected paired peers
+/// 4. Adds the content to clipboard history
+/// 5. Returns honest messaging about delivery status
+///
+/// # Arguments
+/// * `content` - The shared text content
+///
+/// # Returns
+/// * `ShareResult` - Details about the sharing operation
+#[tauri::command]
+pub async fn handle_shared_content(
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+    content: String,
+) -> Result<ShareResult> {
+    use crate::vault::VaultStatus;
+
+    info!(
+        "Handling shared content from share intent ({} chars)",
+        content.len()
+    );
+
+    // 1. Check vault is unlocked
+    let vault_status = *state.vault_status.read().await;
+    if vault_status != VaultStatus::Unlocked {
+        return Err(DecentPasteError::VaultLocked);
+    }
+
+    // 2. Check we have paired peers
+    let paired_count = state.paired_peers.read().await.len();
+    if paired_count == 0 {
+        return Err(DecentPasteError::NoPeersAvailable);
+    }
+
+    // 3. Ensure connected (awaitable, 3s timeout)
+    // This dials disconnected peers and waits for connections to establish
+    let summary = ensure_connected(&state, Duration::from_secs(3)).await;
+
+    info!(
+        "Connection summary: {}/{} connected",
+        summary.connected, summary.total_peers
+    );
+
+    // 4. Share the content using existing share_clipboard_content logic
+    // This handles encryption, broadcast, and history
+    share_clipboard_content(app_handle.clone(), state.clone(), content).await?;
+
+    // 5. Return DTO - UI decides how to present this to user
+    Ok(ShareResult {
+        total_peers: summary.total_peers,
+        peers_reached: summary.connected,
+        peers_offline: summary.failed,
+        added_to_history: true,
+    })
+}
+
+/// Refresh connections to all paired peers.
+///
+/// This is an awaitable command that can be called from the UI refresh button.
+/// It triggers reconnection to disconnected peers and waits for completion.
+#[tauri::command]
+pub async fn refresh_connections(state: State<'_, AppState>) -> Result<ConnectionSummary> {
+    info!("Manual refresh connections requested");
+    Ok(ensure_connected(&state, Duration::from_secs(5)).await)
 }
