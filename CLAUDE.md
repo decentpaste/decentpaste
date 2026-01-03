@@ -94,7 +94,7 @@ decentpaste/
 │   │   ├── commands.rs           # All Tauri command handlers
 │   │   ├── state.rs              # AppState + flush helper methods
 │   │   ├── network/              # libp2p (mDNS, gossipsub, request-response)
-│   │   ├── clipboard/            # Polling monitor + sync deduplication
+│   │   ├── clipboard/            # Polling monitor + echo prevention
 │   │   ├── security/             # AES-GCM encryption, X25519 identity, PIN pairing
 │   │   ├── vault/                # Stronghold encrypted storage lifecycle
 │   │   └── storage/              # Settings & peer types
@@ -154,11 +154,11 @@ listen<MyPayload>('my-event', (e) => {
 
 ### Clipboard Sync Flow
 
-1. `ClipboardMonitor` polls every 500ms, hashes content with SHA-256
-2. If content changed & is local → encrypt separately for **each paired peer** using their specific shared secret
+1. `ClipboardMonitor` polls every 500ms (configurable), hashes content with SHA-256
+2. If hash differs from `last_hash` → encrypt separately for **each paired peer** using their specific shared secret
 3. Broadcast via gossipsub (one message per peer)
-4. Receiving peer decrypts with their shared secret, updates clipboard
-5. Hash tracked to prevent echo loops
+4. Receiving peer checks `origin_device_id` (rejects own messages), decrypts, updates clipboard
+5. Receiver calls `set_last_hash()` to prevent re-broadcasting received content
 
 ### Pairing (X25519 ECDH Key Exchange)
 
@@ -181,7 +181,7 @@ User PIN (4-8 digits)
        ▼
 ┌─────────────────────────┐
 │    Argon2id KDF         │ ← salt.bin (16 bytes, unique per install)
-│ Memory: 64MB, Time: 3   │
+│  m=64MB, t=3, p=4       │
 └─────────────────────────┘
        │
        ▼
@@ -203,13 +203,18 @@ Device names propagate through:
 
 ## Platform-Specific Notes
 
-### Mobile (Android & iOS)
+### Mobile
 
-- **Clipboard outgoing**: Auto-monitoring disabled. Two options:
-  - Use in-app "Share Now" button to send current clipboard
-  - On Android: Use system share sheet from any app → DecentPaste (via `tauri-plugin-decentshare`)
+**Android:**
+- **Clipboard outgoing**: Auto-monitoring disabled due to privacy restrictions. Two options:
+  - Use system share sheet from any app → DecentPaste (via `tauri-plugin-decentshare`) — recommended
+  - Use in-app "Share Now" button (requires clipboard access permission)
 - **Clipboard incoming**: Only syncs when app is in foreground; connections drop when backgrounded
 - When app resumes: automatically reconnects to peers via `reconnect_peers`
+
+**iOS:**
+- Basic Tauri iOS support exists but share extension not yet implemented
+- Same foreground-only limitations as Android
 
 ### Android Share Intent
 
@@ -244,4 +249,5 @@ Key files:
 ## See Also
 
 - `ARCHITECTURE.md` - Detailed architecture documentation with data flow diagrams
+- `SECURITY.md` - Security model, cryptographic stack, and threat considerations
 - `README.md` - User-facing documentation

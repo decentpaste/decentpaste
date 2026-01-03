@@ -241,18 +241,18 @@ The `DeviceAnnounce` message is broadcast via gossipsub when:
 - Hashes content with SHA-256 to detect changes
 - Emits `ClipboardChange` events when content changes
 
-#### `sync.rs` - SyncManager
+#### `sync.rs` - ClipboardEntry
 
-- Prevents echo/loops by tracking recent content hashes
-- Implements last-write-wins conflict resolution
-- Manages clipboard entry history
+- Defines `ClipboardEntry` struct (id, content, hash, timestamp, origin)
+- Provides constructors for local vs remote entries
+- Echo prevention is handled in `lib.rs` via `ClipboardMonitor.set_last_hash()`
 
 ### 3. Security Layer (`src/security/`)
 
 #### `crypto.rs`
 
 - `encrypt_content()` / `decrypt_content()` - AES-256-GCM encryption
-- `hash_content()` - SHA-256 hashing for deduplication
+- `hash_content()` - SHA-256 hashing for echo prevention and integrity verification
 
 #### `identity.rs`
 
@@ -375,7 +375,6 @@ Data is persisted immediately after every mutation (flush-on-write), ensuring no
 - **Per-installation salt** - Prevents rainbow table attacks
 - **Argon2id parameters** - 64 MB memory, 3 iterations makes brute-force expensive
 - **Memory isolation** - Stronghold uses secure memory allocation
-- **Zeroization** - Key material cleared from memory on lock
 
 ### 5. Storage Layer (`src/storage/`)
 
@@ -521,13 +520,12 @@ Single-file application with authentication and main views:
 ### Clipboard Sync Flow
 
 1. User copies text on Device A
-2. ClipboardMonitor detects change, computes hash
-3. SyncManager checks if content is new (not from another device)
-4. Content is encrypted with shared secret
-5. Encrypted message broadcast via gossipsub
-6. Device B receives message, decrypts with shared secret
-7. Device B's clipboard is updated
-8. SyncManager records hash to prevent echo
+2. ClipboardMonitor detects change (hash ≠ last_hash), updates last_hash
+3. Content is encrypted separately for each paired peer
+4. Encrypted messages broadcast via gossipsub
+5. Device B receives message, verifies it's not from self (origin_device_id check)
+6. Device B decrypts with shared secret, verifies hash
+7. Device B's clipboard is updated, last_hash set to prevent echo
 
 ### Pairing Flow (with X25519 ECDH Key Exchange)
 
@@ -559,12 +557,10 @@ Device A (Initiator)              Device B (Responder)
         │    ECDH(A_priv, B_pub)          │
         │    PairingConfirm              │
         │────────────────────────────────>│
-        │    {session_id, success,        │
-        │     shared_secret, device_name} │
+        │    {session_id, success}        │
         │                                │
         │                                │ 7. Derive shared_secret =
         │                                │    ECDH(B_priv, A_pub)
-        │                                │    Verify: derived == received
         │  8. PairingConfirm (ack)       │
         │<────────────────────────────────│
         │     {success}                   │
@@ -572,10 +568,9 @@ Device A (Initiator)              Device B (Responder)
         │ 9. Store pairing               │ 10. Store pairing
 ```
 
-**Security**: Both devices derive the same shared secret independently using ECDH.
-The secret sent in step 6 is for verification only - Device B also derives it locally
-and compares. Even if intercepted, an attacker cannot derive the secret without
-a private key.
+**Security**: Both devices derive the same shared secret **independently** using ECDH.
+The secret is **never transmitted** — only public keys are exchanged. Even if the
+network traffic is captured, an attacker cannot derive the secret without a private key.
 
 ### Encryption
 

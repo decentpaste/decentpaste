@@ -2,9 +2,12 @@
 
 **Universal Clipboard for Every Device** — A cross-platform clipboard sharing app that works like Apple's Universal Clipboard, but for all platforms.
 
+[![Alpha](https://img.shields.io/badge/Status-Alpha-orange.svg)](#project-status)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Built with Tauri](https://img.shields.io/badge/Built%20with-Tauri%20v2-24C8D8.svg)](https://tauri.app)
 [![libp2p](https://img.shields.io/badge/Powered%20by-libp2p-blue.svg)](https://libp2p.io)
+
+> 🚀 **Early Alpha** — Things may break and there could be security bugs. [Feedback welcome!](https://github.com/decentpaste/decentpaste/issues)
 
 <p align="center">
   <img src="website/assets/og-image.png" alt="DecentPaste Screenshot" width="600">
@@ -26,23 +29,7 @@ DecentPaste lets you seamlessly share your clipboard between all your devices ov
 
 ## How It Works
 
-```
-┌──────────────┐                              ┌──────────────┐
-│   Device A   │                              │   Device B   │
-│              │      Local Network (mDNS)    │              │
-│  1. Copy     │  ──────────────────────────► │              │
-│     text     │      Auto-discovery          │              │
-│              │                              │              │
-│  2. Encrypt  │      Encrypted via           │  3. Decrypt  │
-│     with     │  ──────────────────────────► │     with     │
-│     shared   │      gossipsub (P2P)         │     shared   │
-│     secret   │                              │     secret   │
-│              │                              │              │
-│              │                              │  4. Paste!   │
-└──────────────┘                              └──────────────┘
-```
-
-1. **Discovery**: Devices find each other using mDNS (like AirDrop/Chromecast)
+1. **Discovery**: Devices find each other using mDNS
 2. **Pairing**: One-time secure pairing with PIN verification establishes a shared secret
 3. **Sync**: Clipboard changes are encrypted and broadcast to paired devices
 4. **Receive**: Paired devices decrypt and update their clipboard automatically
@@ -53,14 +40,13 @@ DecentPaste lets you seamlessly share your clipboard between all your devices ov
 
 Download the latest release for your platform:
 
-| Platform | Download |
-|----------|----------|
-| Windows | [DecentPaste-x.x.x-windows.msi](https://github.com/decentpaste/decentpaste/releases) |
-| macOS | [DecentPaste-x.x.x-macos.dmg](https://github.com/decentpaste/decentpaste/releases) |
-| Linux (AppImage) | [DecentPaste-x.x.x-linux.AppImage](https://github.com/decentpaste/decentpaste/releases) |
-| Linux (deb) | [DecentPaste-x.x.x-linux.deb](https://github.com/decentpaste/decentpaste/releases) |
-| Android | [DecentPaste-x.x.x-android.apk](https://github.com/decentpaste/decentpaste/releases) |
-| iOS | Coming soon |
+| Platform | Download                                                                         |
+|----------|----------------------------------------------------------------------------------|
+| Windows  | [DecentPaste-x.x.x-windows](https://github.com/decentpaste/decentpaste/releases) |
+| macOS    | [DecentPaste-x.x.x-macos](https://github.com/decentpaste/decentpaste/releases)   |
+| Linux    | [DecentPaste-x.x.x-linux](https://github.com/decentpaste/decentpaste/releases)   |
+| Android  | [DecentPaste-x.x.x-android](https://github.com/decentpaste/decentpaste/releases) |
+| iOS      | Coming soon                                                                      |
 
 ### Build from Source
 
@@ -92,12 +78,12 @@ yarn tauri build
 1. **Install** DecentPaste on two or more devices
 2. **Ensure** devices are on the same local network (Wi-Fi/LAN)
 3. **Open** the app — devices will discover each other automatically
-4. **Pair** devices using the 6-digit PIN
+4. **Pair** devices using the 6-digit PIN (out-of-band MITM protection)
 5. **Copy** on one device, **paste** on another!
 
 ### Pairing Devices
 
-1. On Device A: Go to **Peers** → Click **Pair** next to the discovered device
+1. On Device A: Go to **Devices** → Click **Pair** next to the discovered device
 2. On Device B: Accept the pairing request
 3. Both devices display a **6-digit PIN** — verify they match
 4. Confirm on Device A
@@ -105,93 +91,92 @@ yarn tauri build
 
 ### Mobile Usage
 
-On Android and iOS:
-- **Clipboard sharing**: Automatic monitoring is disabled. Use the **"Share Clipboard"** button to manually send content.
-- **Pairing**: Keep the app open on both devices during pairing (background connections are not supported).
+On Android, clipboard access is restricted for privacy. Two ways to share:
+
+1. **Direct share** (easiest): Select text in any app → Share → Choose **DecentPaste**
+   Sent directly to paired devices — no clipboard involved.
+
+2. **Via clipboard**: Select text → Share → "Copy to clipboard" → Open DecentPaste → Tap **"Share Now"**
+
+**Note**: Keep the app open on both devices during pairing (background connections are not supported).
 
 ## Security
 
+> **📖 [Read the full Security Documentation →](SECURITY.md)**
+>
+> Includes architecture diagrams, threat model, and vulnerability reporting.
+
 DecentPaste is designed with security as a priority:
 
-| Layer | Technology | Purpose |
-|-------|------------|---------|
-| **Key Exchange** | X25519 ECDH | Secure key derivation without transmitting secrets |
-| **Encryption** | AES-256-GCM | Authenticated encryption for clipboard content |
-| **Hashing** | SHA-256 | Content deduplication and integrity verification |
-| **Transport** | libp2p Noise | Encrypted peer-to-peer connections |
+| Layer            | Technology                 | Purpose                                   |
+|------------------|----------------------------|-------------------------------------------|
+| **Key Exchange** | X25519 ECDH                | Shared secrets derived, never transmitted |
+| **Encryption**   | AES-256-GCM                | Authenticated encryption for clipboard    |
+| **Storage**      | IOTA Stronghold + Argon2id | PIN-protected encrypted vault             |
+| **Transport**    | libp2p Noise               | Encrypted P2P connections                 |
 
-### How Pairing Security Works
-
-1. Devices exchange **public keys** (X25519)
-2. Each device independently derives the **same shared secret** using ECDH
-3. The shared secret is **never transmitted** — only public keys are exchanged
-4. 6-digit PIN provides **visual verification** against MITM attacks
-5. Each device pair has a **unique encryption key**
-
-### Data Storage
-
-- **Shared secrets**: Stored locally in `~/.local/share/com.decentpaste.application/peers.json`
-- **Private key**: Stored in `~/.local/share/com.decentpaste.application/private_key.bin`
-- **No cloud**: All data stays on your devices
-
-> **Note**: Secrets are currently stored in plaintext. OS keychain integration is planned for future releases.
+**Key security properties:**
+- **Local-only**: Data never leaves your network (mDNS discovery)
+- **Zero-knowledge pairing**: 6-digit PIN + ECDH key exchange
+- **Per-peer encryption**: Each device pair has a unique key
+- **Auto-lock**: Vault locks after configurable inactivity
 
 ## Tech Stack
 
-| Component | Technology |
-|-----------|------------|
-| **App Framework** | [Tauri v2](https://tauri.app) |
-| **Backend** | Rust |
-| **Frontend** | TypeScript + [Tailwind CSS v4](https://tailwindcss.com) |
-| **Networking** | [libp2p](https://libp2p.io) (mDNS, gossipsub, request-response) |
-| **Encryption** | [aes-gcm](https://crates.io/crates/aes-gcm), [x25519-dalek](https://crates.io/crates/x25519-dalek) |
-
-## Project Structure
-
-```
-decentpaste/
-├── decentpaste-app/           # Main Tauri application
-│   ├── src/                   # Frontend (TypeScript)
-│   │   ├── app.ts             # Main UI
-│   │   ├── api/               # Tauri command wrappers
-│   │   └── state/             # Reactive state management
-│   └── src-tauri/             # Backend (Rust)
-│       ├── src/
-│       │   ├── network/       # libp2p networking
-│       │   ├── clipboard/     # Clipboard monitoring
-│       │   ├── security/      # Encryption & pairing
-│       │   └── storage/       # Settings & persistence
-│       └── Cargo.toml
-├── website/                   # Landing page
-├── LICENSE                    # Apache 2.0
-├── TRADEMARK.md               # Trademark policy
-└── NOTICE                     # Third-party attributions
-```
+| Component         | Technology                                                                                         |
+|-------------------|----------------------------------------------------------------------------------------------------|
+| **App Framework** | [Tauri v2](https://tauri.app)                                                                      |
+| **Backend**       | Rust                                                                                               |
+| **Frontend**      | TypeScript + [Tailwind CSS v4](https://tailwindcss.com)                                            |
+| **Networking**    | [libp2p](https://libp2p.io) (mDNS, gossipsub, request-response)                                    |
+| **Encryption**    | [aes-gcm](https://crates.io/crates/aes-gcm), [x25519-dalek](https://crates.io/crates/x25519-dalek) |
 
 ## Development
 
 ### Running Two Instances (Testing)
 
 ```bash
-# Terminal 1
+# Terminal 1 - desktop
 cd decentpaste-app
 yarn tauri dev
 
-# Terminal 2 (different port)
-TAURI_DEV_PORT=1421 yarn tauri dev
+# Terminal 2 - android
+yarn tauri android dev
+
+# Terminal 3 - iOS
+yarn tauri ios dev
 ```
 
 ### Architecture Documentation
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed technical documentation.
 
+## Project Status
+
+**DecentPaste is currently in Alpha.** Here's what that means:
+
+| Aspect                    | Status                                                    |
+|---------------------------|-----------------------------------------------------------|
+| **Core functionality**    | ✅ Works reliably for daily use                            |
+| **Security fundamentals** | ✅ Sound cryptography (X25519 ECDH, AES-256-GCM, Argon2id) |
+| **Local-only design**     | ✅ Data never leaves your network                          |
+| **Security hardening**    | 🔄 Ongoing (community review welcome)                     |
+| **Production readiness**  | ⚠️ Not yet recommended for highly sensitive data          |
+
+**What I'd recommend:**
+- ✅ Great for: URLs, code snippets, notes, general text
+- ⚠️ Caution with: Passwords, API keys, financial data (use a password manager instead)
+
+The local-only (mDNS) design significantly limits the attack surface compared to cloud-based alternatives. If you find security issues, please [open an issue](https://github.com/decentpaste/decentpaste/issues) — I take them seriously and respond promptly.
+
 ## Roadmap
 
 - [ ] Image and file clipboard support
-- [ ] Internet relay for cross-network sync
-- [ ] OS keychain integration for secret storage
+- [ ] Internet relay for cross-network sync (leverages libp2p Kademlia DHT)
+- [ ] Leverage platform-native secure authentication instead of PIN-based vault encryption (CTAP/FIDO2/TPM)
+- [ ] Zeroization: Key cleared from memory on lock
+- [x] Encrypted vault storage (IOTA Stronghold)
 - [x] Persistent clipboard history
-- [ ] Browser extension
 - [x] System tray improvements
 
 ## Contributing
@@ -200,7 +185,7 @@ Contributions are welcome! Please read our contributing guidelines before submit
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
+3. Commit your changes (`git commit -m 'use conventional commits'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
@@ -212,7 +197,7 @@ This project is licensed under the **Apache License 2.0** — see the [LICENSE](
 
 "DecentPaste" and the DecentPaste logo are trademarks. See [TRADEMARK.md](TRADEMARK.md) for usage guidelines.
 
-**Note**: The Apache 2.0 license grants rights to the code, but does not grant rights to use the DecentPaste trademarks or logos.
+**Note**: The Apache 2.0 license grants rights to the code but does not grant rights to use the DecentPaste trademarks or logos.
 
 ## Acknowledgments
 
