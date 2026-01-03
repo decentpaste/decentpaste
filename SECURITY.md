@@ -174,12 +174,6 @@ User PIN (4-8 digits)
 
 The PIN-based vault was the initial implementation to establish the storage mechanism and ensure future compatibility. Argon2id parameters (m=64MB, t=3, p=4) are tuned for usability on mobile devices, not maximum security.
 
-| PIN Length | Combinations | Est. Time (single GPU) |
-|------------|--------------|------------------------|
-| 4 digits   | 10,000       | ~2 hours               |
-| 6 digits   | 1,000,000    | ~8 days                |
-| 8 digits   | 100,000,000  | ~2 years               |
-
 **Important**: This only affects local storage security. Peer-to-peer encryption uses X25519 ECDH, which is not affected.
 
 ### Planned Improvement
