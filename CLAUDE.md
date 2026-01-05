@@ -45,18 +45,23 @@ yarn tauri ios dev
 yarn tauri ios build
 ```
 
-### Code Quality
+### Code Quality & Testing
 
 ```bash
 # Format TypeScript/CSS
-yarn format:fix
+cd decentpaste-app && yarn format:fix
 
-# Check Rust code
-cd src-tauri && cargo check
+# Check Rust code (compile check)
+cd decentpaste-app/src-tauri && cargo check
 
-# Clippy lints
-cd src-tauri && cargo clippy
+# Run Clippy lints
+cd decentpaste-app/src-tauri && cargo clippy
+
+# Run full build (includes TypeScript compilation)
+cd decentpaste-app && yarn build
 ```
+
+**Note**: This project does not currently have automated tests. Manual testing involves running multiple instances (see below).
 
 ### Testing Multiple Instances
 
@@ -201,9 +206,16 @@ Device names propagate through:
 2. **DeviceAnnounce** - Gossipsub message on name change in settings
 3. **On connection** - Automatic announce when peer connects (catches offline peers)
 
-## Platform-Specific Notes
+## Platform-Specific Development
 
-### Mobile
+### Desktop (Windows, macOS, Linux)
+
+- **Auto-updates**: Checks GitHub Releases every 60 seconds via Tauri updater plugin
+- **System tray**: Quick actions for common tasks
+- **Notifications**: Desktop notifications for clipboard events (configurable)
+- **Single instance**: Only one app instance runs at a time (enforced by plugin)
+
+### Mobile (Android & iOS)
 
 **Android:**
 - **Clipboard outgoing**: Auto-monitoring disabled due to privacy restrictions. Two options:
@@ -211,12 +223,13 @@ Device names propagate through:
   - Use in-app "Share Now" button (requires clipboard access permission)
 - **Clipboard incoming**: Only syncs when app is in foreground; connections drop when backgrounded
 - When app resumes: automatically reconnects to peers via `reconnect_peers`
+- **Plugin build**: Build plugin JS bindings before running: `cd tauri-plugin-decentshare && yarn install && yarn build`
 
 **iOS:**
 - Basic Tauri iOS support exists but share extension not yet implemented
 - Same foreground-only limitations as Android
 
-### Android Share Intent
+### Android Share Intent (Plugin Architecture)
 
 The `tauri-plugin-decentshare` enables sharing text directly from any Android app:
 
@@ -230,14 +243,12 @@ The `tauri-plugin-decentshare` enables sharing text directly from any Android ap
    - Returns honest status: "Sent to 2/3. 1 offline."
 
 Key files:
-- `tauri-plugin-decentshare/android/.../DecentsharePlugin.kt` - Kotlin intent handler
-- `src/main.ts` - `checkForPendingShare()` function
-- `src-tauri/src/commands.rs` - `handle_shared_content` command
+- `tauri-plugin-decentshare/android/src/main/java/DecentsharePlugin.kt` - Kotlin intent handler
+- `tauri-plugin-decentshare/android/src/main/AndroidManifest.xml` - Intent filter registration
+- `decentpaste-app/src/main.ts` - `checkForPendingShare()` polling logic
+- `decentpaste-app/src-tauri/src/commands.rs` - `handle_shared_content` command
 
-### Desktop
-
-- Auto-updates via GitHub Releases (checks every 60 seconds)
-- System tray icon with quick actions
+**Plugin Development**: When modifying the plugin, rebuild JS bindings with `cd tauri-plugin-decentshare && yarn build`.
 
 ## Current Limitations
 
@@ -251,3 +262,56 @@ Key files:
 - `ARCHITECTURE.md` - Detailed architecture documentation with data flow diagrams
 - `SECURITY.md` - Security model, cryptographic stack, and threat considerations
 - `README.md` - User-facing documentation
+
+## Critical Implementation Details
+
+### Per-Peer Encryption
+Clipboard content is encrypted **separately for each paired peer** using their specific shared secret. When broadcasting via gossipsub, the app sends one encrypted message per peer. Peer A cannot decrypt messages intended for Peer B.
+
+### Echo Prevention
+The `ClipboardMonitor` tracks `last_hash` (SHA-256) to prevent re-broadcasting received content. When a device receives clipboard from a peer, it updates its own `last_hash` to match, preventing an infinite broadcast loop.
+
+### Flush-on-Write Pattern
+**Always flush after mutating data**. The vault uses an immediate-persistence pattern:
+- `AppState::flush_paired_peers()` - After pairing/unpairing
+- `AppState::flush_device_identity()` - After device name change
+- `AppState::flush_clipboard_history()` - After clipboard entry added
+
+This prevents data loss on crashes/force-quit. Additionally, safety net flushes occur on:
+- App backgrounded (mobile): `Focused(false)` event
+- App exit (all platforms): `ExitRequested` event
+- Manual vault lock: Before clearing encryption key from memory
+
+### Consistent PeerId Across Restarts
+The libp2p Ed25519 keypair is stored in the encrypted vault and loaded on startup. This ensures the device's PeerId remains consistent across app restarts, which is critical for pairing persistence.
+
+### Event-Driven Reconnection (Mobile)
+When the app resumes from background, `reconnect_peers` uses event-driven reconnection:
+1. Identifies disconnected peers
+2. Marks them as "Connecting" in UI
+3. Dials peers and waits via `tokio::sync::Notify` (no polling)
+4. Returns honest status: "Connected to 2/3 peers. 1 offline."
+
+This is critical for mobile where network connections are killed when backgrounded.
+
+### Device Name Propagation
+Device names sync through three mechanisms to ensure peers always have the latest name:
+1. **libp2p identify** - Startup, name in `agent_version` field
+2. **DeviceAnnounce gossip** - On name change in settings
+3. **On connection** - Automatic announce when peer connects (catches offline peers)
+
+### Unpair → Rediscovery Flow
+When unpairing a device:
+1. Removes from `paired_peers` storage
+2. Sends `RefreshPeer` command to NetworkManager
+3. If peer still in `discovered_peers` cache, re-emits as discovered
+4. Frontend shows device in "Discovered" section, ready for re-pairing
+5. No app restart needed
+
+### Auto-Update Target Selection
+The updater dynamically selects the correct artifact based on:
+- Platform (`@tauri-apps/plugin-os` platform())
+- Architecture (`@tauri-apps/plugin-os` arch())
+- Bundle type (`@tauri-apps/api/app` getBundleType())
+
+For example, Linux can be `.deb`, `.rpm`, or `.appimage` - the updater matches the installation type.

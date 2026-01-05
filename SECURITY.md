@@ -223,7 +223,7 @@ This is a deliberate security choice — your clipboard data never traverses the
 
 | Date       | Change                                                                                                                |
 |------------|-----------------------------------------------------------------------------------------------------------------------|
-| 2025-01-03 | Fixed: Shared secret no longer transmitted during pairing ([#25](https://github.com/decentpaste/decentpaste/pull/25)) |
+| 2026-01-01 | Fixed: Shared secret no longer transmitted during pairing ([#25](https://github.com/decentpaste/decentpaste/pull/25)) |
 
 ---
 
