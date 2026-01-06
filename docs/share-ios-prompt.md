@@ -1,0 +1,171 @@
+# AI Agent Prompt: Implement iOS Share Extension for DecentPaste
+
+## Your Mission
+
+You are implementing iOS Share Extension support for DecentPaste, a cross-platform clipboard sharing app built with Tauri v2. Your task is to create the Swift source files and configuration needed for users to share text from any iOS app to DecentPaste.
+
+## Important Context
+
+- **Android share already works** - The `tauri-plugin-decentshare` plugin has a working Android implementation. Your iOS implementation must use the **same API** (`getPendingShare`, `clearPendingShare`) for frontend compatibility.
+
+- **Don't modify gen/apple directly** - The `src-tauri/gen/apple/` directory can be regenerated. All source files must go in `tauri-plugin-decentshare/ios/` which is version controlled.
+
+- **Documentation is key** - Users will need to manually configure Xcode after regeneration. The README must have complete step-by-step instructions.
+
+## Detailed Plan
+
+Read the complete implementation plan at: `docs/share-ios-plan.md`
+
+This document contains:
+- Architecture overview and data flow diagrams
+- Complete Swift code for `DecentsharePlugin.swift` and `ShareViewController.swift`
+- `Info.plist` configuration
+- Step-by-step Xcode setup guide
+- Configuration values and troubleshooting guide
+
+## Files to Create
+
+Create these files in the codebase:
+
+### 1. Tauri iOS Plugin
+**Path:** `decentpaste-app/tauri-plugin-decentshare/ios/Sources/DecentsharePlugin.swift`
+
+This is the main plugin that the frontend communicates with. It reads shared content from App Groups UserDefaults.
+
+Key requirements:
+- Extend Tauri's `Plugin` class
+- Implement `@objc func getPendingShare(_ invoke: Invoke)`
+- Implement `@objc func clearPendingShare(_ invoke: Invoke)`
+- Use App Group: `group.com.decentpaste.application`
+- Use UserDefaults key: `pendingShareContent`
+- Export via `@_cdecl("init_plugin_decentshare")` returning `Plugin`
+- **Important:** The init function must return the plugin instance (not call registerPlugin)
+
+### 2. Share Extension Controller
+**Path:** `decentpaste-app/tauri-plugin-decentshare/ios/ShareExtension/ShareViewController.swift`
+
+This is the extension that appears in the iOS share sheet.
+
+Key requirements:
+- Extend `UIViewController`
+- Extract text from `extensionContext?.inputItems`
+- Handle both `String` and `URL` item types
+- Save to App Groups UserDefaults
+- Show toast: "Saved! Opening DecentPaste..."
+- Attempt to open `decentpaste://share` URL
+- Call `extensionContext?.completeRequest()`
+
+### 3. Extension Info.plist
+**Path:** `decentpaste-app/tauri-plugin-decentshare/ios/ShareExtension/Info.plist`
+
+Key configurations:
+- `NSExtensionPointIdentifier`: `com.apple.share-services`
+- `NSExtensionPrincipalClass`: `$(PRODUCT_MODULE_NAME).ShareViewController`
+- `NSExtensionActivationSupportsText`: `true`
+
+### 4. Helper Script (Optional)
+**Path:** `decentpaste-app/tauri-plugin-decentshare/ios/scripts/copy-files.sh`
+
+Simple script to copy files to a convenient location for Xcode access.
+
+## Files to Modify
+
+### 5. Add Deep-Link Plugin
+
+**Files to modify:**
+- `decentpaste-app/src-tauri/Cargo.toml` - Add `tauri-plugin-deep-link = "2"`
+- `decentpaste-app/src-tauri/tauri.conf.json` - Add deep-link plugin config
+- `decentpaste-app/src-tauri/src/lib.rs` - Add `.plugin(tauri_plugin_deep_link::init())`
+
+**tauri.conf.json addition** (in plugins section):
+```json
+"deep-link": {
+  "mobile": [
+    { "scheme": ["decentpaste"], "appLink": false }
+  ]
+}
+```
+
+### 6. Update package.json
+**Path:** `decentpaste-app/package.json`
+
+Add script:
+```json
+"ios:copy-files": "cd tauri-plugin-decentshare/ios/scripts && chmod +x copy-files.sh && ./copy-files.sh"
+```
+
+### 7. Update Frontend (Optional)
+**Path:** `decentpaste-app/src/main.ts`
+
+Add `onOpenUrl` listener for faster deep link handling. The existing `checkForPendingShare()` polling will also work as fallback.
+
+### 8. Update Plugin README
+**Path:** `decentpaste-app/tauri-plugin-decentshare/README.md`
+
+Add comprehensive iOS section with:
+- Platform support table
+- Complete Xcode setup guide
+- Troubleshooting section
+
+## Verification Steps
+
+After implementation, verify:
+
+1. **Files exist:**
+   - `tauri-plugin-decentshare/ios/Sources/DecentsharePlugin.swift`
+   - `tauri-plugin-decentshare/ios/ShareExtension/ShareViewController.swift`
+   - `tauri-plugin-decentshare/ios/ShareExtension/Info.plist`
+
+2. **Deep-link plugin configured:**
+   - Cargo.toml has `tauri-plugin-deep-link` dependency
+   - tauri.conf.json has `deep-link` plugin section
+   - lib.rs initializes the plugin
+
+3. **API compatibility:**
+   - `getPendingShare()` returns `{ content: string | null, hasPending: boolean }`
+   - Same format as Android implementation
+
+4. **Documentation complete:**
+   - README.md has iOS section with full Xcode setup guide
+
+## Key Configuration Values
+
+| Setting | Value |
+|---------|-------|
+| App Group | `group.com.decentpaste.application` |
+| URL Scheme | `decentpaste` |
+| Extension Bundle ID | `com.decentpaste.application.ShareExtension` |
+| UserDefaults Key | `pendingShareContent` |
+
+## Reference Files
+
+Before implementing, read these existing files to understand patterns:
+
+1. **Android plugin** (reference for API):
+   `decentpaste-app/tauri-plugin-decentshare/android/src/main/java/DecentsharePlugin.kt`
+
+2. **Rust mobile bridge**:
+   `decentpaste-app/tauri-plugin-decentshare/src/mobile.rs`
+
+3. **Frontend share handling**:
+   `decentpaste-app/src/main.ts` (search for `checkForPendingShare`)
+
+4. **Current plugin README**:
+   `decentpaste-app/tauri-plugin-decentshare/README.md`
+
+## Success Criteria
+
+The implementation is complete when:
+
+1. All Swift source files are created in the correct locations
+2. Deep-link plugin is properly configured
+3. README.md contains complete iOS setup documentation
+4. The code compiles (user will verify in Xcode after manual setup)
+5. API matches Android implementation for frontend compatibility
+
+## Notes
+
+- The user will handle Xcode configuration manually (adding target, App Groups, signing)
+- Focus on creating correct, well-documented source files
+- Include comprehensive comments in Swift code
+- The detailed plan in `docs/share-ios-plan.md` has the complete Swift code - use it as reference

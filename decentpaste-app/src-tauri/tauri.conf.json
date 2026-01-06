@@ -39,6 +39,11 @@
       "windows": {
         "installMode": "passive"
       }
+    },
+    "deep-link": {
+      "mobile": [
+        { "scheme": ["decentpaste"], "appLink": false }
+      ]
     }
   }
 }

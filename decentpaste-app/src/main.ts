@@ -12,15 +12,17 @@ import { store } from './state/store';
 import { checkForUpdates } from './api/updater';
 import { isDesktop, isMobile } from './utils/platform';
 import { getPendingShare } from 'tauri-plugin-decentshare-api';
+import { onOpenUrl } from '@tauri-apps/plugin-deep-link';
 
 // Track if the app has fully initialized (Tauri IPC is ready)
 let appInitialized = false;
 
 /**
- * Handle shared content from Android share intent.
+ * Handle shared content from Android share intent or iOS share extension.
  *
  * This is called when:
  * 1. The app finds pending shared content on startup or visibility change
+ * 2. iOS: Deep link received from share extension (decentpaste://share)
  *
  * If vault is locked, the content is stored in pendingShare and processed after unlock.
  * If vault is unlocked, the content is shared immediately with all paired peers.
@@ -127,9 +129,26 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Mark app as initialized after initApp completes (Tauri IPC is now ready)
   appInitialized = true;
 
-  // Check for pending share content from Android share intent
+  // Check for pending share content from Android/iOS share intent
   // This is called after app init to handle content that arrived via share sheet
   await checkForPendingShare();
+
+  // Listen for deep links from iOS share extension
+  // When ShareExtension opens the app via decentpaste://share, this triggers
+  // an immediate check for pending shared content (faster than visibility change)
+  if (isMobile()) {
+    try {
+      await onOpenUrl((urls) => {
+        if (urls.some((u) => u.startsWith('decentpaste://'))) {
+          console.log('[Share] Deep link received from share extension');
+          checkForPendingShare();
+        }
+      });
+    } catch (e) {
+      // Deep link plugin may not be available on all platforms
+      console.debug('[Share] Deep link listener not available:', e);
+    }
+  }
 
   // Reset flag when page is unloading (prevents IPC errors during refresh)
   window.addEventListener('beforeunload', () => {
