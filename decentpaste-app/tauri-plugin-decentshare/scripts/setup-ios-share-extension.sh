@@ -8,7 +8,7 @@
 # Usage:
 #   cd decentpaste-app
 #   yarn tauri ios init
-#   ./scripts/setup-ios-share-extension.sh
+#   ./tauri-plugin-decentshare/scripts/setup-ios-share-extension.sh
 #   open src-tauri/gen/apple/decentpaste-app.xcodeproj
 #
 # Configuration (read from tauri.conf.json):
@@ -38,9 +38,10 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-APP_DIR="$(dirname "$SCRIPT_DIR")"
+PLUGIN_DIR="$(dirname "$SCRIPT_DIR")"
+APP_DIR="$(dirname "$PLUGIN_DIR")"
 GEN_APPLE="$APP_DIR/src-tauri/gen/apple"
-PLUGIN_IOS="$APP_DIR/tauri-plugin-decentshare/ios"
+PLUGIN_IOS="$PLUGIN_DIR/ios"
 SHARE_EXT_DIR="$GEN_APPLE/ShareExtension"
 
 # Extract configuration from tauri.conf.json

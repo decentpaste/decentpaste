@@ -91,7 +91,7 @@ Run these commands whenever you initialize or regenerate the iOS project:
 yarn tauri ios init
 
 # 2. Run the Share Extension setup script
-./scripts/setup-ios-share-extension.sh
+./tauri-plugin-decentshare/scripts/setup-ios-share-extension.sh
 
 # 3. Open Xcode
 open src-tauri/gen/apple/decentpaste-app.xcodeproj
@@ -182,7 +182,7 @@ These values are derived from `tauri.conf.json`:
 ### "does not define an NSExtension dictionary" error
 
 - The Info.plist was overwritten by xcodegen
-- **Solution:** Re-run `./scripts/setup-ios-share-extension.sh` (Step 7 restores the correct Info.plist)
+- **Solution:** Re-run `./tauri-plugin-decentshare/scripts/setup-ios-share-extension.sh` (Step 7 restores the correct Info.plist)
 
 ### Extension appears but crashes
 
@@ -199,7 +199,7 @@ These values are derived from `tauri.conf.json`:
 ### Build errors after regenerating gen/apple/
 
 - This is expected - `yarn tauri ios init` regenerates the project from scratch
-- **Solution:** Run `./scripts/setup-ios-share-extension.sh` after every regeneration
+- **Solution:** Run `./tauri-plugin-decentshare/scripts/setup-ios-share-extension.sh` after every regeneration
 - Source files are preserved in `tauri-plugin-decentshare/ios/`
 
 ---
@@ -219,9 +219,9 @@ yarn build
 
 ```
 decentpaste-app/
-├── scripts/
-│   └── setup-ios-share-extension.sh  # iOS setup automation script
 └── tauri-plugin-decentshare/
+    ├── scripts/
+    │   └── setup-ios-share-extension.sh  # iOS setup automation script
     ├── android/                          # Android implementation
     │   ├── src/main/java/DecentsharePlugin.kt
     │   └── src/main/AndroidManifest.xml

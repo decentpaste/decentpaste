@@ -228,7 +228,7 @@ Device names propagate through:
 **iOS:**
 - **Clipboard outgoing**: Use system share sheet from any app → DecentPaste (via Share Extension)
 - **Clipboard incoming**: Only syncs when app is in foreground; connections drop when backgrounded
-- **iOS Setup**: Requires running `./scripts/setup-ios-share-extension.sh` after `yarn tauri ios init`
+- **iOS Setup**: Requires running `./tauri-plugin-decentshare/scripts/setup-ios-share-extension.sh` after `yarn tauri ios init`
 - See `tauri-plugin-decentshare/README.md` for complete iOS setup guide
 
 ### Android Share Intent (Plugin Architecture)
