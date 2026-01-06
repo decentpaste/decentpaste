@@ -13,7 +13,7 @@
 		36AFE6424E6C64992AEB3A8C /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6A6D82A793FF30965713B72C /* UIKit.framework */; };
 		3CDFC767CCBF9319345F2112 /* SystemConfiguration.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E784ED49AC8A140CEFA8FC29 /* SystemConfiguration.framework */; };
 		5698EED4AD7102FD22C206C6 /* assets in Resources */ = {isa = PBXBuildFile; fileRef = BD4DBD6E2187BD008E17F330 /* assets */; };
-		75543A7C2F0D259100A2AF74 /* ShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 75543A722F0D259100A2AF74 /* ShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		7598CF5C2F0D2E20005E7245 /* ShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 7598CF522F0D2E20005E7245 /* ShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		9BB1CE860886F2D929E931BC /* main.mm in Sources */ = {isa = PBXBuildFile; fileRef = 55665F32F884ABEA9B4CF0FC /* main.mm */; };
 		B3E2D93231C6A7551F058C5A /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 4D878060A91951FF8E1174C6 /* LaunchScreen.storyboard */; };
 		CA4BB40C53F9CEB3EC8DBFA7 /* MetalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D916CD2DB439D6786FA8479A /* MetalKit.framework */; };
@@ -24,23 +24,23 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		75543A7A2F0D259100A2AF74 /* PBXContainerItemProxy */ = {
+		7598CF5A2F0D2E20005E7245 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 6B6D64C2C8270FAB7E2204E0 /* Project object */;
 			proxyType = 1;
-			remoteGlobalIDString = 75543A712F0D259100A2AF74;
+			remoteGlobalIDString = 7598CF512F0D2E20005E7245;
 			remoteInfo = ShareExtension;
 		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
-		75543A7D2F0D259100A2AF74 /* Embed Foundation Extensions */ = {
+		7598CF612F0D2E20005E7245 /* Embed Foundation Extensions */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
-				75543A7C2F0D259100A2AF74 /* ShareExtension.appex in Embed Foundation Extensions */,
+				7598CF5C2F0D2E20005E7245 /* ShareExtension.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -62,7 +62,7 @@
 		714279E881D82580BE05D43B /* lib.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = lib.rs; sourceTree = "<group>"; };
 		73443C0DDDC78735A29A6CE0 /* auth.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = auth.rs; sourceTree = "<group>"; };
 		7377F8416BA3F06410A8049E /* monitor.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = monitor.rs; sourceTree = "<group>"; };
-		75543A722F0D259100A2AF74 /* ShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		7598CF522F0D2E20005E7245 /* ShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		7CD9E165DE255C39A250C79D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		7E7643B347C8F9829B235994 /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
 		81A52622FD1DF6BB1411ABC0 /* swarm.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = swarm.rs; sourceTree = "<group>"; };
@@ -94,12 +94,22 @@
 		FE33FF136483D569D9AA3C4F /* events.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = events.rs; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		7598CF5D2F0D2E20005E7245 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 7598CF512F0D2E20005E7245 /* ShareExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		75543A732F0D259100A2AF74 /* ShareExtension */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = ShareExtension; sourceTree = "<group>"; };
+		7598CF532F0D2E20005E7245 /* ShareExtension */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (7598CF5D2F0D2E20005E7245 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = ShareExtension; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		75543A6F2F0D259100A2AF74 /* Frameworks */ = {
+		7598CF4F2F0D2E20005E7245 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -181,7 +191,7 @@
 			isa = PBXGroup;
 			children = (
 				2293A3279BDD6DE41EB6FF08 /* DecentPaste.app */,
-				75543A722F0D259100A2AF74 /* ShareExtension.appex */,
+				7598CF522F0D2E20005E7245 /* ShareExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -255,7 +265,7 @@
 				C0D6A231CE14E174E3D8C12E /* Externals */,
 				13D173115DDDEBE4F75CEAD2 /* Sources */,
 				A9E7C5BBE737DA67443CB8FE /* src */,
-				75543A732F0D259100A2AF74 /* ShareExtension */,
+				7598CF532F0D2E20005E7245 /* ShareExtension */,
 				64F6C4C1077E876F66060013 /* Frameworks */,
 				918C3F418CB18EF1556117C9 /* Products */,
 			);
@@ -284,26 +294,26 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		75543A712F0D259100A2AF74 /* ShareExtension */ = {
+		7598CF512F0D2E20005E7245 /* ShareExtension */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 75543A812F0D259100A2AF74 /* Build configuration list for PBXNativeTarget "ShareExtension" */;
+			buildConfigurationList = 7598CF5E2F0D2E20005E7245 /* Build configuration list for PBXNativeTarget "ShareExtension" */;
 			buildPhases = (
-				75543A6E2F0D259100A2AF74 /* Sources */,
-				75543A6F2F0D259100A2AF74 /* Frameworks */,
-				75543A702F0D259100A2AF74 /* Resources */,
+				7598CF4E2F0D2E20005E7245 /* Sources */,
+				7598CF4F2F0D2E20005E7245 /* Frameworks */,
+				7598CF502F0D2E20005E7245 /* Resources */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				75543A732F0D259100A2AF74 /* ShareExtension */,
+				7598CF532F0D2E20005E7245 /* ShareExtension */,
 			);
 			name = ShareExtension;
 			packageProductDependencies = (
 			);
 			productName = ShareExtension;
-			productReference = 75543A722F0D259100A2AF74 /* ShareExtension.appex */;
+			productReference = 7598CF522F0D2E20005E7245 /* ShareExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
 		D081D982FC0EFFAAF99B3F0F /* decentpaste-app_iOS */ = {
@@ -314,12 +324,12 @@
 				CF6691AC8CAA0C0F0F9BE8DF /* Sources */,
 				94A977E83A89F6F74EAB6A55 /* Resources */,
 				C19103974CBD7EE24459FD5E /* Frameworks */,
-				75543A7D2F0D259100A2AF74 /* Embed Foundation Extensions */,
+				7598CF612F0D2E20005E7245 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
-				75543A7B2F0D259100A2AF74 /* PBXTargetDependency */,
+				7598CF5B2F0D2E20005E7245 /* PBXTargetDependency */,
 			);
 			name = "decentpaste-app_iOS";
 			packageProductDependencies = (
@@ -338,7 +348,7 @@
 				LastSwiftUpdateCheck = 2620;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
-					75543A712F0D259100A2AF74 = {
+					7598CF512F0D2E20005E7245 = {
 						CreatedOnToolsVersion = 26.2;
 						LastSwiftMigration = 2620;
 					};
@@ -358,13 +368,13 @@
 			projectRoot = "";
 			targets = (
 				D081D982FC0EFFAAF99B3F0F /* decentpaste-app_iOS */,
-				75543A712F0D259100A2AF74 /* ShareExtension */,
+				7598CF512F0D2E20005E7245 /* ShareExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		75543A702F0D259100A2AF74 /* Resources */ = {
+		7598CF502F0D2E20005E7245 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -408,7 +418,7 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		75543A6E2F0D259100A2AF74 /* Sources */ = {
+		7598CF4E2F0D2E20005E7245 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -426,10 +436,10 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		75543A7B2F0D259100A2AF74 /* PBXTargetDependency */ = {
+		7598CF5B2F0D2E20005E7245 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 75543A712F0D259100A2AF74 /* ShareExtension */;
-			targetProxy = 75543A7A2F0D259100A2AF74 /* PBXContainerItemProxy */;
+			target = 7598CF512F0D2E20005E7245 /* ShareExtension */;
+			targetProxy = 7598CF5A2F0D2E20005E7245 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -475,7 +485,7 @@
 			};
 			name = debug;
 		};
-		75543A7E2F0D259100A2AF74 /* debug */ = {
+		7598CF5F2F0D2E20005E7245 /* debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -562,7 +572,7 @@
 			};
 			name = debug;
 		};
-		75543A7F2F0D259100A2AF74 /* release */ = {
+		7598CF602F0D2E20005E7245 /* release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -814,11 +824,11 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = debug;
 		};
-		75543A812F0D259100A2AF74 /* Build configuration list for PBXNativeTarget "ShareExtension" */ = {
+		7598CF5E2F0D2E20005E7245 /* Build configuration list for PBXNativeTarget "ShareExtension" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				75543A7E2F0D259100A2AF74 /* debug */,
-				75543A7F2F0D259100A2AF74 /* release */,
+				7598CF5F2F0D2E20005E7245 /* debug */,
+				7598CF602F0D2E20005E7245 /* release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = debug;

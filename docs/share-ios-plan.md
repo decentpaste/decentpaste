@@ -132,23 +132,18 @@ decentpaste-app/tauri-plugin-decentshare/ios/
 ├── Package.swift                      # Swift package definition (required by Tauri)
 ├── Sources/
 │   └── DecentsharePlugin.swift        # Tauri iOS plugin implementation
-├── ShareExtension/
-│   ├── ShareViewController.swift      # Extension entry point
-│   └── Info.plist                     # Extension configuration
-├── scripts/
-│   └── copy-files.sh                  # Optional helper script
-└── README.md                          # iOS setup documentation (update existing)
+└── ShareExtension/
+    ├── ShareViewController.swift      # Extension entry point
+    └── Info.plist                     # Extension configuration (reference only)
 ```
 
 ### Files to Modify (in main app)
 
 ```
-decentpaste-app/
-├── package.json                       # Add ios:copy-files script
-└── src-tauri/
-    ├── tauri.conf.json               # Add deep-link plugin config
-    ├── Cargo.toml                    # Add tauri-plugin-deep-link
-    └── src/lib.rs                    # Initialize deep-link plugin
+decentpaste-app/src-tauri/
+├── tauri.conf.json                    # Add deep-link plugin config
+├── Cargo.toml                         # Add tauri-plugin-deep-link
+└── src/lib.rs                         # Initialize deep-link plugin
 ```
 
 ### Generated Files (created via Xcode, NOT version controlled)
@@ -169,7 +164,12 @@ decentpaste-app/src-tauri/gen/apple/
 
 ### Step 1: Install Tauri Deep-Link Plugin
 
-This plugin handles URL scheme registration automatically via `tauri.conf.json`.
+This plugin handles URL scheme registration **automatically** via `tauri.conf.json`.
+
+**How it works:**
+- The plugin's `build.rs` injects `CFBundleURLTypes` into Info.plist during the **build** phase
+- You do NOT need to manually edit Info.plist for URL schemes
+- The URL scheme appears automatically when you run `yarn tauri ios build` or `yarn tauri ios dev`
 
 **1.1 Install JavaScript package:**
 
@@ -604,89 +604,7 @@ class ShareViewController: UIViewController {
 
 ---
 
-### Step 5: Create Helper Script
-
-**File:** `decentpaste-app/tauri-plugin-decentshare/ios/scripts/copy-files.sh`
-
-This script is optional - it just copies files to a convenient location.
-
-```bash
-#!/bin/bash
-#
-# Copy iOS Share Extension source files for easy access in Xcode.
-#
-# This script does NOT modify the Xcode project - you still need to
-# add the files manually in Xcode. See README.md for instructions.
-#
-# Usage: ./copy-files.sh
-#
-
-set -e
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PLUGIN_DIR="$(dirname "$SCRIPT_DIR")"
-PROJECT_ROOT="$(dirname "$(dirname "$(dirname "$PLUGIN_DIR")")")"
-DEST_DIR="$PROJECT_ROOT/src-tauri/gen/apple/ShareExtension-source"
-
-echo "=== DecentPaste iOS Share Extension File Copy ==="
-echo ""
-echo "Source: $PLUGIN_DIR"
-echo "Destination: $DEST_DIR"
-echo ""
-
-# Check if source files exist
-if [ ! -f "$PLUGIN_DIR/ShareExtension/ShareViewController.swift" ]; then
-    echo "ERROR: Source files not found. Make sure you're running from the correct directory."
-    exit 1
-fi
-
-# Create destination directory
-mkdir -p "$DEST_DIR"
-
-# Copy ShareExtension files
-echo "Copying ShareExtension files..."
-cp "$PLUGIN_DIR/ShareExtension/ShareViewController.swift" "$DEST_DIR/"
-cp "$PLUGIN_DIR/ShareExtension/Info.plist" "$DEST_DIR/"
-
-# Copy plugin files
-echo "Copying DecentsharePlugin files..."
-mkdir -p "$DEST_DIR/Plugin"
-cp "$PLUGIN_DIR/Sources/DecentsharePlugin/DecentsharePlugin.swift" "$DEST_DIR/Plugin/"
-
-echo ""
-echo "=== Files copied successfully ==="
-echo ""
-echo "Files are now at: $DEST_DIR"
-echo ""
-echo "NEXT STEPS:"
-echo "1. Open Xcode: open $PROJECT_ROOT/src-tauri/gen/apple/decentpaste-app.xcodeproj"
-echo "2. Follow the setup guide in README.md to add these files to the project"
-echo ""
-```
-
----
-
-### Step 6: Update package.json
-
-**File:** `decentpaste-app/package.json`
-
-Add to the `scripts` section:
-
-```json
-{
-  "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
-    "tauri": "tauri",
-    "format:fix": "prettier --write .",
-    "ios:copy-files": "cd tauri-plugin-decentshare/ios/scripts && chmod +x copy-files.sh && ./copy-files.sh"
-  }
-}
-```
-
----
-
-### Step 7: Update Frontend (Optional)
+### Step 5: Update Frontend (Optional)
 
 **File:** `decentpaste-app/src/main.ts`
 
@@ -717,7 +635,7 @@ try {
 
 ---
 
-### Step 8: Update Plugin README
+### Step 6: Update Plugin README
 
 **File:** `decentpaste-app/tauri-plugin-decentshare/README.md`
 
@@ -767,25 +685,26 @@ open src-tauri/gen/apple/decentpaste-app.xcodeproj
 4. Click Finish
 5. When prompted "Activate ShareExtension scheme?", click **Activate**
 
-### Step D: Replace Generated Files with Custom Implementation
+### Step D: Replace Generated Swift File
 
-Xcode creates template files. Replace them with our implementation:
+Xcode creates a template `ShareViewController.swift`. Replace it with our implementation:
 
 1. In Project Navigator, expand the `ShareExtension` group
 2. **Delete** the auto-generated files:
-   - Select `ShareViewController.swift` → Delete → Move to Trash
-   - Select `MainInterface.storyboard` (if present) → Delete → Move to Trash
+   - Select `ShareViewController.swift` → Delete → **Move to Trash**
+   - Select `MainInterface.storyboard` (if present) → Delete → **Move to Trash**
+   - ⚠️ **Do NOT delete `Info.plist`** - Xcode needs this for build settings
 3. Right-click the `ShareExtension` group → "Add Files to 'decentpaste-app'..."
-4. Navigate to `tauri-plugin-decentshare/ios/ShareExtension/`
-   - Or if you ran the copy script: `src-tauri/gen/apple/ShareExtension-source/`
-5. Select both files:
-   - `ShareViewController.swift`
-   - `Info.plist`
+4. Navigate to: `tauri-plugin-decentshare/ios/ShareExtension/`
+5. Select **ONLY** `ShareViewController.swift`
+   - ⚠️ **Do NOT add `Info.plist`** - Adding it causes "Multiple commands produce Info.plist" build error
 6. Configure:
    - ☑️ Copy items if needed
    - ☑️ Create groups
-   - Add to targets: ☑️ ShareExtension
+   - Add to targets: ☑️ **ShareExtension** only
 7. Click Add
+
+> **Important:** The `Info.plist` must only exist in Xcode's build settings (`INFOPLIST_FILE`), not in "Copy Bundle Resources". Adding it as a file causes duplicate output errors.
 
 ### Step E: Configure App Groups Capability
 

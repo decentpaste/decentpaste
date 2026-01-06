@@ -12,6 +12,10 @@ You are implementing iOS Share Extension support for DecentPaste, a cross-platfo
 
 - **Documentation is key** - Users will need to manually configure Xcode after regeneration. The README must have complete step-by-step instructions.
 
+- **URL scheme is automatic** - The `tauri-plugin-deep-link` automatically injects `CFBundleURLTypes` into Info.plist during the build phase. No manual URL scheme configuration needed.
+
+- **Info.plist gotcha** - When adding ShareExtension files in Xcode, do NOT add `Info.plist` to the project. Xcode generates its own and adding ours causes "Multiple commands produce Info.plist" build errors.
+
 ## Detailed Plan
 
 Read the complete implementation plan at: `docs/share-ios-plan.md`
@@ -63,14 +67,9 @@ Key configurations:
 - `NSExtensionPrincipalClass`: `$(PRODUCT_MODULE_NAME).ShareViewController`
 - `NSExtensionActivationSupportsText`: `true`
 
-### 4. Helper Script (Optional)
-**Path:** `decentpaste-app/tauri-plugin-decentshare/ios/scripts/copy-files.sh`
-
-Simple script to copy files to a convenient location for Xcode access.
-
 ## Files to Modify
 
-### 5. Add Deep-Link Plugin
+### 4. Add Deep-Link Plugin
 
 **Files to modify:**
 - `decentpaste-app/src-tauri/Cargo.toml` - Add `tauri-plugin-deep-link = "2"`
@@ -86,20 +85,12 @@ Simple script to copy files to a convenient location for Xcode access.
 }
 ```
 
-### 6. Update package.json
-**Path:** `decentpaste-app/package.json`
-
-Add script:
-```json
-"ios:copy-files": "cd tauri-plugin-decentshare/ios/scripts && chmod +x copy-files.sh && ./copy-files.sh"
-```
-
-### 7. Update Frontend (Optional)
+### 5. Update Frontend (Optional)
 **Path:** `decentpaste-app/src/main.ts`
 
 Add `onOpenUrl` listener for faster deep link handling. The existing `checkForPendingShare()` polling will also work as fallback.
 
-### 8. Update Plugin README
+### 6. Update Plugin README
 **Path:** `decentpaste-app/tauri-plugin-decentshare/README.md`
 
 Add comprehensive iOS section with:

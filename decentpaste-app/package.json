@@ -9,8 +9,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "format:fix": "prettier . --write",
-    "ios:copy-files": "cd tauri-plugin-decentshare/ios/scripts && ./copy-files.sh"
+    "format:fix": "prettier . --write"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

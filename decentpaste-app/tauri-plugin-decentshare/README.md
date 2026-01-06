@@ -65,6 +65,9 @@ iOS requires additional Xcode configuration because Share Extensions are separat
 1. **Apple Developer Account** with ability to create App Groups
 2. **Xcode** installed (14.0+)
 3. iOS project initialized: `yarn tauri ios init`
+4. **Tauri deep-link plugin** configured in `tauri.conf.json` (handles URL scheme automatically)
+
+> **Note:** The `tauri-plugin-deep-link` automatically injects `CFBundleURLTypes` into Info.plist during the build phase. You do NOT need to manually add URL schemes - the `decentpaste://` scheme is configured automatically based on your `tauri.conf.json`.
 
 ### Step 1: Create App Group in Apple Developer Portal
 
@@ -75,23 +78,13 @@ iOS requires additional Xcode configuration because Share Extensions are separat
 5. Enter identifier: `group.com.decentpaste.application`
 6. Click Continue → Register
 
-### Step 2: Copy Source Files (Optional Helper)
-
-Run the helper script to copy iOS files to a convenient location:
-
-```bash
-yarn ios:copy-files
-```
-
-This copies files to `src-tauri/gen/apple/ShareExtension-source/` for easy access in Xcode.
-
-### Step 3: Open Xcode Project
+### Step 2: Open Xcode Project
 
 ```bash
 open src-tauri/gen/apple/decentpaste-app.xcodeproj
 ```
 
-### Step 4: Add Share Extension Target
+### Step 3: Add Share Extension Target
 
 1. In Xcode menu: **File → New → Target...**
 2. Select iOS tab → **Share Extension** → Next
@@ -106,28 +99,28 @@ open src-tauri/gen/apple/decentpaste-app.xcodeproj
 4. Click **Finish**
 5. When prompted "Activate ShareExtension scheme?", click **Activate**
 
-### Step 5: Replace Generated Files
+### Step 4: Replace Generated Swift File
 
-Xcode creates template files. Replace them with our implementation:
+Xcode creates a template `ShareViewController.swift`. Replace it with our implementation:
 
 1. In Project Navigator, expand the `ShareExtension` group
 2. **Delete** the auto-generated files:
-   - Select `ShareViewController.swift` → Delete → Move to Trash
-   - Select `MainInterface.storyboard` (if present) → Delete → Move to Trash
+   - Select `ShareViewController.swift` → Delete → **Move to Trash**
+   - Select `MainInterface.storyboard` (if present) → Delete → **Move to Trash**
+   - ⚠️ **Do NOT delete `Info.plist`** - Xcode needs this for build settings
 3. Right-click the `ShareExtension` group → **Add Files to "decentpaste-app"...**
-4. Navigate to one of:
-   - `tauri-plugin-decentshare/ios/ShareExtension/` (source)
-   - `src-tauri/gen/apple/ShareExtension-source/` (if you ran `yarn ios:copy-files`)
-5. Select both files:
-   - `ShareViewController.swift`
-   - `Info.plist`
+4. Navigate to: `tauri-plugin-decentshare/ios/ShareExtension/`
+5. Select **ONLY** `ShareViewController.swift`
+   - ⚠️ **Do NOT add `Info.plist`** - Adding it causes "Multiple commands produce Info.plist" build error
 6. Configure:
    - ☑️ Copy items if needed
    - ☑️ Create groups
-   - Add to targets: ☑️ ShareExtension
+   - Add to targets: ☑️ **ShareExtension** only
 7. Click **Add**
 
-### Step 6: Configure App Groups (Both Targets)
+> **Important:** The `Info.plist` must only exist in Xcode's build settings (`INFOPLIST_FILE`), not in "Copy Bundle Resources". Adding it as a file causes duplicate output errors.
+
+### Step 5: Configure App Groups (Both Targets)
 
 **For main app target (decentpaste-app_iOS):**
 
@@ -147,7 +140,7 @@ Xcode creates template files. Replace them with our implementation:
 4. Select **App Groups**
 5. Click **+** and select the SAME group: `group.com.decentpaste.application`
 
-### Step 7: Configure Code Signing
+### Step 6: Configure Code Signing
 
 **For main app target:**
 
@@ -165,7 +158,7 @@ Xcode creates template files. Replace them with our implementation:
    - Team: (Select SAME team as main app)
 3. Verify no signing errors appear
 
-### Step 8: Verify Extension Embedding
+### Step 7: Verify Extension Embedding
 
 1. Select target: `decentpaste-app_iOS`
 2. Select **General** tab
@@ -173,7 +166,7 @@ Xcode creates template files. Replace them with our implementation:
 4. Verify `ShareExtension.appex` is listed with "Embed & Sign"
    - If missing: Click "+" → Under "Embed App Extensions" select ShareExtension
 
-### Step 9: Build and Test
+### Step 8: Build and Test
 
 1. Connect a physical iOS device (Share Extensions don't work reliably in Simulator)
 2. Select scheme: `decentpaste-app_iOS`
@@ -214,7 +207,7 @@ Xcode creates template files. Replace them with our implementation:
 
 ### Share Extension doesn't appear in share sheet
 
-- Verify extension is embedded in main app (Step 8)
+- Verify extension is embedded in main app (Step 7)
 - Verify `NSExtensionActivationRule` in Info.plist accepts text
 - Build and run the main app at least once
 - Check device Settings → (App Name) → Share Extension is enabled
@@ -237,6 +230,13 @@ Xcode creates template files. Replace them with our implementation:
 - Content is still saved to App Groups
 - User can manually switch to DecentPaste
 - App will pick up content on visibility change
+
+### "Multiple commands produce Info.plist" build error
+
+- This happens when `Info.plist` is added to "Copy Bundle Resources" build phase
+- **Solution:** In Xcode, select ShareExtension target → Build Phases → Copy Bundle Resources
+- Remove `Info.plist` from the list if present (click `-` button)
+- Info.plist should only be referenced in Build Settings (`INFOPLIST_FILE`), not copied as a resource
 
 ### Build errors after regenerating gen/apple/
 
@@ -268,11 +268,9 @@ tauri-plugin-decentshare/
 │   ├── Package.swift                # Swift package definition
 │   ├── Sources/
 │   │   └── DecentsharePlugin.swift  # Tauri plugin
-│   ├── ShareExtension/
-│   │   ├── ShareViewController.swift # Extension controller
-│   │   └── Info.plist               # Extension config
-│   └── scripts/
-│       └── copy-files.sh            # Helper script
+│   └── ShareExtension/
+│       ├── ShareViewController.swift # Extension controller
+│       └── Info.plist               # Extension config (reference only)
 ├── src/                              # Rust plugin code
 │   ├── lib.rs
 │   ├── mobile.rs
