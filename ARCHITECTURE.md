@@ -794,8 +794,7 @@ yarn build
 2. **Local network only**: Uses mDNS, so devices must be on same network. Internet relay could be added.
 3. **Mobile clipboard (outgoing)**: On Android/iOS, automatic clipboard monitoring is not supported. Users can either:
    - Use the in-app "Share Now" button to send current clipboard
-   - Use Android's share sheet to share directly from any app (via `tauri-plugin-decentshare`)
-   - iOS share extension is planned for future implementation
+   - Use system share sheet from any app to share directly (via `tauri-plugin-decentshare` - works on both Android and iOS)
 4. **Mobile clipboard (incoming)**: Clipboard only syncs when the app is in foreground. Network connections drop when
    the app is backgrounded (same behavior on both Android and iOS).
 5. **Device name in identify**: The identify protocol includes device name in `agent_version` field, which is

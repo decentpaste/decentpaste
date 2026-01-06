@@ -20,9 +20,10 @@ private let pendingShareKey = "pendingShareContent"
 /// ## Data Flow
 /// 1. User shares text via iOS share sheet → ShareExtension
 /// 2. ShareExtension saves text to App Groups UserDefaults
-/// 3. ShareExtension opens main app via URL scheme (decentpaste://share)
-/// 4. Frontend calls `getPendingShare()` to retrieve the content
-/// 5. Content is cleared after retrieval (atomic get-and-clear pattern)
+/// 3. ShareExtension shows confirmation, user taps "Done" to dismiss
+/// 4. User opens DecentPaste manually → visibility change triggers check
+/// 5. Frontend calls `getPendingShare()` to retrieve the content
+/// 6. Content is cleared after retrieval (atomic get-and-clear pattern)
 ///
 /// ## API Response Format (matches Android)
 /// ```json

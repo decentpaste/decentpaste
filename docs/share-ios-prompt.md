@@ -1,5 +1,7 @@
 # AI Agent Prompt: Implement iOS Share Extension for DecentPaste
 
+> **Status: IMPLEMENTED** - This prompt was used to guide the initial implementation. The iOS share extension is now fully working. See `tauri-plugin-decentshare/README.md` for the authoritative documentation.
+
 ## Your Mission
 
 You are implementing iOS Share Extension support for DecentPaste, a cross-platform clipboard sharing app built with Tauri v2. Your task is to create the Swift source files and configuration needed for users to share text from any iOS app to DecentPaste.
@@ -10,9 +12,9 @@ You are implementing iOS Share Extension support for DecentPaste, a cross-platfo
 
 - **Don't modify gen/apple directly** - The `src-tauri/gen/apple/` directory can be regenerated. All source files must go in `tauri-plugin-decentshare/ios/` which is version controlled.
 
-- **Documentation is key** - Users will need to manually configure Xcode after regeneration. The README must have complete step-by-step instructions.
+- **Documentation is key** - Users will need to run the setup script after regeneration. The README must have complete step-by-step instructions.
 
-- **URL scheme is automatic** - The `tauri-plugin-deep-link` automatically injects `CFBundleURLTypes` into Info.plist during the build phase. No manual URL scheme configuration needed.
+- **No URL scheme needed** - iOS share extensions cannot reliably open the containing app. The shared content is saved to App Groups and processed when the user manually opens the app.
 
 - **Info.plist gotcha** - When adding ShareExtension files in Xcode, do NOT add `Info.plist` to the project. Xcode generates its own and adding ours causes "Multiple commands produce Info.plist" build errors.
 
@@ -55,9 +57,9 @@ Key requirements:
 - Extract text from `extensionContext?.inputItems`
 - Handle both `String` and `URL` item types
 - Save to App Groups UserDefaults
-- Show toast: "Saved! Opening DecentPaste..."
-- Attempt to open `decentpaste://share` URL
-- Call `extensionContext?.completeRequest()`
+- Show confirmation card: "Content Saved!" with "Done" button
+- Wait for user to tap "Done" to dismiss (no auto-dismiss)
+- Call `extensionContext?.completeRequest()` on dismiss
 
 ### 3. Extension Info.plist
 **Path:** `decentpaste-app/tauri-plugin-decentshare/ios/ShareExtension/Info.plist`
@@ -69,28 +71,7 @@ Key configurations:
 
 ## Files to Modify
 
-### 4. Add Deep-Link Plugin
-
-**Files to modify:**
-- `decentpaste-app/src-tauri/Cargo.toml` - Add `tauri-plugin-deep-link = "2"`
-- `decentpaste-app/src-tauri/tauri.conf.json` - Add deep-link plugin config
-- `decentpaste-app/src-tauri/src/lib.rs` - Add `.plugin(tauri_plugin_deep_link::init())`
-
-**tauri.conf.json addition** (in plugins section):
-```json
-"deep-link": {
-  "mobile": [
-    { "scheme": ["decentpaste"], "appLink": false }
-  ]
-}
-```
-
-### 5. Update Frontend (Optional)
-**Path:** `decentpaste-app/src/main.ts`
-
-Add `onOpenUrl` listener for faster deep link handling. The existing `checkForPendingShare()` polling will also work as fallback.
-
-### 6. Update Plugin README
+### 4. Update Plugin README
 **Path:** `decentpaste-app/tauri-plugin-decentshare/README.md`
 
 Add comprehensive iOS section with:
@@ -107,24 +88,21 @@ After implementation, verify:
    - `tauri-plugin-decentshare/ios/ShareExtension/ShareViewController.swift`
    - `tauri-plugin-decentshare/ios/ShareExtension/Info.plist`
 
-2. **Deep-link plugin configured:**
-   - Cargo.toml has `tauri-plugin-deep-link` dependency
-   - tauri.conf.json has `deep-link` plugin section
-   - lib.rs initializes the plugin
+2. **Setup script exists:**
+   - `scripts/setup-ios-share-extension.sh`
 
 3. **API compatibility:**
    - `getPendingShare()` returns `{ content: string | null, hasPending: boolean }`
    - Same format as Android implementation
 
 4. **Documentation complete:**
-   - README.md has iOS section with full Xcode setup guide
+   - README.md has iOS section with full setup guide
 
 ## Key Configuration Values
 
 | Setting | Value |
 |---------|-------|
 | App Group | `group.com.decentpaste.application` |
-| URL Scheme | `decentpaste` |
 | Extension Bundle ID | `com.decentpaste.application.ShareExtension` |
 | UserDefaults Key | `pendingShareContent` |
 
@@ -149,9 +127,9 @@ Before implementing, read these existing files to understand patterns:
 The implementation is complete when:
 
 1. All Swift source files are created in the correct locations
-2. Deep-link plugin is properly configured
+2. Setup script automates Xcode project configuration
 3. README.md contains complete iOS setup documentation
-4. The code compiles (user will verify in Xcode after manual setup)
+4. The code compiles (user will verify in Xcode after running setup script)
 5. API matches Android implementation for frontend compatibility
 
 ## Notes

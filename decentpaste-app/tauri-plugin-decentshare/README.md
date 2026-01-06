@@ -46,8 +46,11 @@ iOS uses a Share Extension (separate target) + App Groups for data passing:
 
 1. User shares text → iOS share sheet shows DecentPaste
 2. ShareExtension saves to App Groups UserDefaults
-3. Extension opens main app via `decentpaste://share` URL scheme
-4. Main app's plugin reads from App Groups via `getPendingShare()`
+3. Extension shows confirmation card, user taps "Done" to dismiss
+4. User opens DecentPaste manually → app reads via `getPendingShare()`
+
+> **Note:** iOS share extensions cannot reliably open the containing app due to sandbox restrictions.
+> The shared content is saved to App Groups and will be processed when the user opens DecentPaste.
 
 Files:
 - `ios/Sources/DecentsharePlugin.swift` - Tauri plugin
@@ -65,7 +68,6 @@ iOS requires additional configuration because Share Extensions are separate app 
 1. **Apple Developer Account** with ability to create App Groups
 2. **Xcode 14.0+** installed
 3. **xcodegen** installed: `brew install xcodegen`
-4. **Tauri deep-link plugin** configured in `tauri.conf.json` (already done for DecentPaste)
 
 ### One-Time Setup: Create App Group
 
@@ -119,7 +121,9 @@ The setup script handles everything except code signing (which requires your App
 2. Navigate to any webpage
 3. Select some text → Tap **Share**
 4. Look for **DecentPaste** in the share sheet (scroll right or tap "More" if needed)
-5. Tap DecentPaste → Should show toast → App should open
+5. Tap DecentPaste → Should show confirmation card with "Content Saved!"
+6. Tap **Done** to dismiss the extension
+7. Open DecentPaste → shared content should sync to paired devices
 
 ### What the Setup Script Does
 
@@ -157,7 +161,6 @@ These values are derived from `tauri.conf.json`:
 | Setting             | Value                 | Location                           |
 |---------------------|-----------------------|------------------------------------|
 | UserDefaults Key    | `pendingShareContent` | `DecentsharePlugin.swift`, `ShareViewController.swift` |
-| URL Scheme          | `decentpaste`         | `tauri.conf.json` (deep-link plugin) |
 
 ---
 
@@ -192,13 +195,6 @@ These values are derived from `tauri.conf.json`:
 - Verify both targets have App Groups capability with `group.<your-identifier>`
 - Check Console.app logs for "DecentsharePlugin" messages
 - Verify frontend is calling `checkForPendingShare()`
-
-### URL scheme doesn't open app
-
-- This is expected on some iOS versions (security restriction)
-- Content is still saved to App Groups
-- User can manually switch to DecentPaste
-- App will pick up content on visibility change
 
 ### Build errors after regenerating gen/apple/
 

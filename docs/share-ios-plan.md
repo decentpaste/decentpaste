@@ -1,12 +1,12 @@
 # iOS Share Extension Implementation Plan
 
+> **Status: IMPLEMENTED** - This document was used as the implementation guide. The iOS share extension is now fully implemented and working. See `tauri-plugin-decentshare/README.md` for the authoritative documentation.
+
 ## Executive Summary
 
-This document provides a complete implementation plan for adding iOS Share Extension support to DecentPaste. The goal is to allow users to select text in any iOS app, tap "Share", and send that text to paired DecentPaste devices.
+This document provides the implementation plan that was used for adding iOS Share Extension support to DecentPaste. The goal was to allow users to select text in any iOS app, tap "Share", and send that text to paired DecentPaste devices.
 
-**Current State**: Android share intent already works via `tauri-plugin-decentshare`. iOS implementation is missing.
-
-**Target State**: iOS share extension that mirrors Android functionality with identical API.
+**Implementation Status**: Complete. Both Android and iOS share functionality work via `tauri-plugin-decentshare`.
 
 ---
 
@@ -39,7 +39,7 @@ iOS Share Extensions are fundamentally different from Android's share intents:
 |--------|---------|-----|
 | Process | Same process (MainActivity receives intent) | Separate process (extension runs independently) |
 | Data Passing | Intent extras | App Groups (shared UserDefaults) |
-| App Opening | Automatic (intent opens app) | URL scheme (must explicitly open) |
+| App Opening | Automatic (intent opens app) | Manual (user opens app after sharing) |
 | Memory Limit | App's normal limit | ~120MB for extension |
 
 ### Key Components
@@ -47,7 +47,8 @@ iOS Share Extensions are fundamentally different from Android's share intents:
 1. **Share Extension** (`ShareExtension/`) - Separate iOS target that appears in share sheet
 2. **Tauri Plugin** (`DecentsharePlugin.swift`) - Reads shared data from App Groups
 3. **App Groups** - Shared storage container between extension and main app
-4. **URL Scheme** (`decentpaste://`) - Opens main app from extension
+
+> **Note:** The original plan included a URL scheme (`decentpaste://`) to open the main app from the extension, but iOS share extensions cannot reliably open the containing app due to sandbox restrictions. The implementation shows a friendly confirmation card instead and the user opens the app manually.
 
 ---
 
@@ -78,26 +79,25 @@ iOS Share Extensions are fundamentally different from Android's share intents:
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│ 4. Show toast & attempt to open main app                        │
-│    - Display: "Saved! Opening DecentPaste..."                   │
-│    - Try: extensionContext?.open(URL("decentpaste://share"))    │
-│    - Call: extensionContext?.completeRequest()                  │
+│ 4. Show confirmation card                                       │
+│    - Display: "Content Saved!" with checkmark icon              │
+│    - Show instruction: "Open DecentPaste to sync..."            │
+│    - User taps "Done" to dismiss extension                      │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│ 5. Main app opens (or user switches manually)                   │
-│    - Tauri deep-link plugin handles URL scheme                  │
-│    - OR: User manually opens DecentPaste                        │
+│ 5. User manually opens DecentPaste                              │
+│    - App detects visibility change                              │
+│    - Calls checkForPendingShare()                               │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │ 6. Frontend polls for pending share                             │
 │    main.ts: checkForPendingShare() called on:                   │
-│    - App init (line ~132)                                       │
-│    - Visibility change (line ~163)                              │
-│    - Deep link received (if onOpenUrl listener added)           │
+│    - App init                                                   │
+│    - Visibility change (when app becomes visible)               │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
