@@ -226,8 +226,10 @@ Device names propagate through:
 - **Plugin build**: Build plugin JS bindings before running: `cd tauri-plugin-decentshare && yarn install && yarn build`
 
 **iOS:**
-- Basic Tauri iOS support exists but share extension not yet implemented
-- Same foreground-only limitations as Android
+- **Clipboard outgoing**: Use system share sheet from any app → DecentPaste (via Share Extension)
+- **Clipboard incoming**: Only syncs when app is in foreground; connections drop when backgrounded
+- **iOS Setup**: Requires running `./tauri-plugin-decentshare/scripts/setup-ios-share-extension.sh` after `yarn tauri ios init`
+- See `tauri-plugin-decentshare/README.md` for complete iOS setup guide
 
 ### Android Share Intent (Plugin Architecture)
 
@@ -255,7 +257,6 @@ Key files:
 - **Text only** - No image/file support yet
 - **Local network only** - mDNS doesn't work across networks
 - **Mobile background** - Network connections drop when app is backgrounded
-- **iOS share extension** - Not yet implemented (Android share intent works via `tauri-plugin-decentshare`)
 
 ## See Also
 

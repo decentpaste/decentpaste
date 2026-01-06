@@ -3,10 +3,11 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 63;
 	objects = {
 
 /* Begin PBXBuildFile section */
+		04E6FAFE0315BE1A37E0212F /* ShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F9ED0232C588805EF8D3847F /* ShareExtension.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		14453536448FC40F101D7224 /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 960B525822C7AB85E251A311 /* Security.framework */; };
 		2BADE2AD1F99EC016820D305 /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2EAF5943D5981F47FCCFB187 /* WebKit.framework */; };
 		2CDAC241348D2F34B6F4F2CC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 7CD9E165DE255C39A250C79D /* Assets.xcassets */; };
@@ -18,54 +19,82 @@
 		CA4BB40C53F9CEB3EC8DBFA7 /* MetalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D916CD2DB439D6786FA8479A /* MetalKit.framework */; };
 		D4A61194DC65DFD8027F2CD0 /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BB42AABAE0A9B744515D6127 /* QuartzCore.framework */; };
 		D8660BA71025DCBFB7ED392C /* libapp.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 23702B157D56416ABF3B0ED7 /* libapp.a */; };
+		E26312CAAA3ACAF2C4EABF70 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DDED7DF5EBA3F37E6D861F8 /* ShareViewController.swift */; };
 		F32607FE8093940D795E4FF1 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = ABD91CB410449590EA71F9E6 /* Metal.framework */; };
 		F6CDEB7AED08165F789DA2D8 /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7E7643B347C8F9829B235994 /* CoreGraphics.framework */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		D3B6C08425015E4D0A7B494C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 6B6D64C2C8270FAB7E2204E0 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F9081D07DAD233DE68440709;
+			remoteInfo = ShareExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		798D63863E275116B97415DB /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				04E6FAFE0315BE1A37E0212F /* ShareExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
-		07E2D11B4F24FF993859938C /* mod.rs */ = {isa = PBXFileReference; path = mod.rs; sourceTree = "<group>"; };
-		0CE6306108417F82FECEE330 /* salt.rs */ = {isa = PBXFileReference; path = salt.rs; sourceTree = "<group>"; };
-		11821692930D149FC3D8AE2E /* tray.rs */ = {isa = PBXFileReference; path = tray.rs; sourceTree = "<group>"; };
-		2293A3279BDD6DE41EB6FF08 /* decentpaste-app_iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "decentpaste-app_iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		07E2D11B4F24FF993859938C /* mod.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = mod.rs; sourceTree = "<group>"; };
+		0CE6306108417F82FECEE330 /* salt.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = salt.rs; sourceTree = "<group>"; };
+		11821692930D149FC3D8AE2E /* tray.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = tray.rs; sourceTree = "<group>"; };
+		2293A3279BDD6DE41EB6FF08 /* DecentPaste.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DecentPaste.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		23702B157D56416ABF3B0ED7 /* libapp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libapp.a; sourceTree = "<group>"; };
 		2EAF5943D5981F47FCCFB187 /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
-		32CCF202C1E2B3E716D7EAA5 /* mod.rs */ = {isa = PBXFileReference; path = mod.rs; sourceTree = "<group>"; };
-		46698915114DABAD96443544 /* main.rs */ = {isa = PBXFileReference; path = main.rs; sourceTree = "<group>"; };
+		32CCF202C1E2B3E716D7EAA5 /* mod.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = mod.rs; sourceTree = "<group>"; };
+		46698915114DABAD96443544 /* main.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = main.rs; sourceTree = "<group>"; };
 		4D878060A91951FF8E1174C6 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
+		53A0D469586049B8668976B6 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		55665F32F884ABEA9B4CF0FC /* main.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = main.mm; sourceTree = "<group>"; };
 		6A6D82A793FF30965713B72C /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
-		714279E881D82580BE05D43B /* lib.rs */ = {isa = PBXFileReference; path = lib.rs; sourceTree = "<group>"; };
-		73443C0DDDC78735A29A6CE0 /* auth.rs */ = {isa = PBXFileReference; path = auth.rs; sourceTree = "<group>"; };
-		7377F8416BA3F06410A8049E /* monitor.rs */ = {isa = PBXFileReference; path = monitor.rs; sourceTree = "<group>"; };
+		714279E881D82580BE05D43B /* lib.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = lib.rs; sourceTree = "<group>"; };
+		73443C0DDDC78735A29A6CE0 /* auth.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = auth.rs; sourceTree = "<group>"; };
+		7377F8416BA3F06410A8049E /* monitor.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = monitor.rs; sourceTree = "<group>"; };
 		7CD9E165DE255C39A250C79D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		7DDED7DF5EBA3F37E6D861F8 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		7E7643B347C8F9829B235994 /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
-		81A52622FD1DF6BB1411ABC0 /* swarm.rs */ = {isa = PBXFileReference; path = swarm.rs; sourceTree = "<group>"; };
-		8920123305D9EC56F3AB9A39 /* error.rs */ = {isa = PBXFileReference; path = error.rs; sourceTree = "<group>"; };
+		81A52622FD1DF6BB1411ABC0 /* swarm.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = swarm.rs; sourceTree = "<group>"; };
+		8920123305D9EC56F3AB9A39 /* error.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = error.rs; sourceTree = "<group>"; };
 		89371E42E7CC582800AED012 /* decentpaste-app_iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "decentpaste-app_iOS.entitlements"; sourceTree = "<group>"; };
-		90ABC81AD73D8B1FD6D674CA /* mod.rs */ = {isa = PBXFileReference; path = mod.rs; sourceTree = "<group>"; };
+		90ABC81AD73D8B1FD6D674CA /* mod.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = mod.rs; sourceTree = "<group>"; };
 		960B525822C7AB85E251A311 /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
-		9EED721967A44AE43D74D6EE /* identity.rs */ = {isa = PBXFileReference; path = identity.rs; sourceTree = "<group>"; };
-		A3AE42EAEEF6303A92973DF3 /* commands.rs */ = {isa = PBXFileReference; path = commands.rs; sourceTree = "<group>"; };
+		9EED721967A44AE43D74D6EE /* identity.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = identity.rs; sourceTree = "<group>"; };
+		A3AE42EAEEF6303A92973DF3 /* commands.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = commands.rs; sourceTree = "<group>"; };
 		ABD91CB410449590EA71F9E6 /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
-		ADB4866B3A84495D0B3C1205 /* crypto.rs */ = {isa = PBXFileReference; path = crypto.rs; sourceTree = "<group>"; };
+		ADB4866B3A84495D0B3C1205 /* crypto.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = crypto.rs; sourceTree = "<group>"; };
 		B4E69F5EEEC276C2E2D4F606 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
-		B8ABE2672D4562E179DBF7F1 /* peers.rs */ = {isa = PBXFileReference; path = peers.rs; sourceTree = "<group>"; };
-		BA931F18F191EF9006BC58B1 /* manager.rs */ = {isa = PBXFileReference; path = manager.rs; sourceTree = "<group>"; };
+		B8ABE2672D4562E179DBF7F1 /* peers.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = peers.rs; sourceTree = "<group>"; };
+		BA931F18F191EF9006BC58B1 /* manager.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = manager.rs; sourceTree = "<group>"; };
 		BB42AABAE0A9B744515D6127 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
 		BD4DBD6E2187BD008E17F330 /* assets */ = {isa = PBXFileReference; lastKnownFileType = folder; path = assets; sourceTree = SOURCE_ROOT; };
-		C14677DEC82F0B06B26D67C9 /* behaviour.rs */ = {isa = PBXFileReference; path = behaviour.rs; sourceTree = "<group>"; };
-		C3545C7688133A7AB857CD1A /* state.rs */ = {isa = PBXFileReference; path = state.rs; sourceTree = "<group>"; };
-		C61526BB312231B81A209B3B /* mod.rs */ = {isa = PBXFileReference; path = mod.rs; sourceTree = "<group>"; };
+		C14677DEC82F0B06B26D67C9 /* behaviour.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = behaviour.rs; sourceTree = "<group>"; };
+		C3545C7688133A7AB857CD1A /* state.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = state.rs; sourceTree = "<group>"; };
+		C61526BB312231B81A209B3B /* mod.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = mod.rs; sourceTree = "<group>"; };
 		CD932204C4681075EA22D555 /* bindings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bindings.h; sourceTree = "<group>"; };
-		D6B0DD59A7D62BDDCEDC48A4 /* error.rs */ = {isa = PBXFileReference; path = error.rs; sourceTree = "<group>"; };
+		D6B0DD59A7D62BDDCEDC48A4 /* error.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = error.rs; sourceTree = "<group>"; };
 		D916CD2DB439D6786FA8479A /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = System/Library/Frameworks/MetalKit.framework; sourceTree = SDKROOT; };
-		E26C9F8AE8A112E29D59090D /* mod.rs */ = {isa = PBXFileReference; path = mod.rs; sourceTree = "<group>"; };
-		E6B530546F46A31B29030125 /* config.rs */ = {isa = PBXFileReference; path = config.rs; sourceTree = "<group>"; };
+		E26C9F8AE8A112E29D59090D /* mod.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = mod.rs; sourceTree = "<group>"; };
+		E6B530546F46A31B29030125 /* config.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = config.rs; sourceTree = "<group>"; };
 		E784ED49AC8A140CEFA8FC29 /* SystemConfiguration.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SystemConfiguration.framework; path = System/Library/Frameworks/SystemConfiguration.framework; sourceTree = SDKROOT; };
-		EFA65BE6BA8EF7779D1801A1 /* protocol.rs */ = {isa = PBXFileReference; path = protocol.rs; sourceTree = "<group>"; };
-		F3E2C6DC9440D583C28C8CE6 /* sync.rs */ = {isa = PBXFileReference; path = sync.rs; sourceTree = "<group>"; };
-		FB34B32A265F89CA38D5814A /* pairing.rs */ = {isa = PBXFileReference; path = pairing.rs; sourceTree = "<group>"; };
-		FE33FF136483D569D9AA3C4F /* events.rs */ = {isa = PBXFileReference; path = events.rs; sourceTree = "<group>"; };
+		EFA65BE6BA8EF7779D1801A1 /* protocol.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = protocol.rs; sourceTree = "<group>"; };
+		F3E2C6DC9440D583C28C8CE6 /* sync.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = sync.rs; sourceTree = "<group>"; };
+		F9ED0232C588805EF8D3847F /* ShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		FB34B32A265F89CA38D5814A /* pairing.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = pairing.rs; sourceTree = "<group>"; };
+		FE33FF136483D569D9AA3C4F /* events.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = events.rs; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -143,9 +172,19 @@
 		918C3F418CB18EF1556117C9 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				2293A3279BDD6DE41EB6FF08 /* decentpaste-app_iOS.app */,
+				2293A3279BDD6DE41EB6FF08 /* DecentPaste.app */,
+				F9ED0232C588805EF8D3847F /* ShareExtension.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		938F5CE1923F991866F299F2 /* ShareExtension */ = {
+			isa = PBXGroup;
+			children = (
+				53A0D469586049B8668976B6 /* Info.plist */,
+				7DDED7DF5EBA3F37E6D861F8 /* ShareViewController.swift */,
+			);
+			path = ShareExtension;
 			sourceTree = "<group>";
 		};
 		969AF1F296E3B396F024D483 /* decentpaste-app */ = {
@@ -215,6 +254,7 @@
 				4D878060A91951FF8E1174C6 /* LaunchScreen.storyboard */,
 				2DF0244C45A8BC8F6BEB9A91 /* decentpaste-app_iOS */,
 				C0D6A231CE14E174E3D8C12E /* Externals */,
+				938F5CE1923F991866F299F2 /* ShareExtension */,
 				13D173115DDDEBE4F75CEAD2 /* Sources */,
 				A9E7C5BBE737DA67443CB8FE /* src */,
 				64F6C4C1077E876F66060013 /* Frameworks */,
@@ -253,17 +293,36 @@
 				CF6691AC8CAA0C0F0F9BE8DF /* Sources */,
 				94A977E83A89F6F74EAB6A55 /* Resources */,
 				C19103974CBD7EE24459FD5E /* Frameworks */,
+				798D63863E275116B97415DB /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				843C64C157D5E0F188B616F7 /* PBXTargetDependency */,
 			);
 			name = "decentpaste-app_iOS";
 			packageProductDependencies = (
 			);
 			productName = "decentpaste-app_iOS";
-			productReference = 2293A3279BDD6DE41EB6FF08 /* decentpaste-app_iOS.app */;
+			productReference = 2293A3279BDD6DE41EB6FF08 /* DecentPaste.app */;
 			productType = "com.apple.product-type.application";
+		};
+		F9081D07DAD233DE68440709 /* ShareExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1F36EFB1D6CB3B8A0955B9EC /* Build configuration list for PBXNativeTarget "ShareExtension" */;
+			buildPhases = (
+				85346668C2E5E36E1F84731F /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ShareExtension;
+			packageProductDependencies = (
+			);
+			productName = ShareExtension;
+			productReference = F9ED0232C588805EF8D3847F /* ShareExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -273,6 +332,11 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					F9081D07DAD233DE68440709 = {
+						ProvisioningStyle = Automatic;
+					};
+				};
 			};
 			buildConfigurationList = 274C0D26F54C021B20CFB2A1 /* Build configuration list for PBXProject "decentpaste-app" */;
 			compatibilityVersion = "Xcode 14.0";
@@ -284,10 +348,10 @@
 			);
 			mainGroup = CDEF2C28DF6697B0128C8BA6;
 			minimizedProjectReferenceProxies = 1;
-			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+				F9081D07DAD233DE68440709 /* ShareExtension */,
 				D081D982FC0EFFAAF99B3F0F /* decentpaste-app_iOS */,
 			);
 		};
@@ -331,6 +395,14 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		85346668C2E5E36E1F84731F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E26312CAAA3ACAF2C4EABF70 /* ShareViewController.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		CF6691AC8CAA0C0F0F9BE8DF /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -341,17 +413,48 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		843C64C157D5E0F188B616F7 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F9081D07DAD233DE68440709 /* ShareExtension */;
+			targetProxy = D3B6C08425015E4D0A7B494C /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		478B1C42573CEDFFBC9649AF /* release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 0.4.2;
+				DEVELOPMENT_TEAM = SNDGGHFSJ2;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ShareExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.4.2;
+				PRODUCT_BUNDLE_IDENTIFIER = com.decentpaste.application.ShareExtension;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = release;
+		};
 		6287CF5BFCDA993AC0D3F15B /* debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
-				ARCHS = (
-					arm64,
-				);
+				ARCHS = arm64;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = "decentpaste-app_iOS/decentpaste-app_iOS.entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = SNDGGHFSJ2;
 				ENABLE_BITCODE = NO;
 				"EXCLUDED_ARCHS[sdk=iphoneos*]" = x86_64;
 				FRAMEWORK_SEARCH_PATHS = (
@@ -363,13 +466,49 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				"LIBRARY_SEARCH_PATHS[arch=arm64]" = "$(inherited) $(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME) $(TOOLCHAIN_DIR)/usr/lib/swift-5.0/$(PLATFORM_NAME)";
-				"LIBRARY_SEARCH_PATHS[arch=x86_64]" = "$(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME) $(TOOLCHAIN_DIR)/usr/lib/swift-5.0/$(PLATFORM_NAME)";
+				"LIBRARY_SEARCH_PATHS[arch=arm64]" = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION)",
+					"$(SDKROOT)/usr/lib/swift",
+					"$(TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME)",
+					"$(TOOLCHAIN_DIR)/usr/lib/swift-5.0/$(PLATFORM_NAME)",
+				);
+				"LIBRARY_SEARCH_PATHS[arch=x86_64]" = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION)",
+					"$(SDKROOT)/usr/lib/swift",
+					"$(TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME)",
+					"$(TOOLCHAIN_DIR)/usr/lib/swift-5.0/$(PLATFORM_NAME)",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.decentpaste.application;
 				PRODUCT_NAME = DecentPaste;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VALID_ARCHS = arm64;
+			};
+			name = debug;
+		};
+		8534EA9A090115F58ED1D34F /* debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 0.4.2;
+				DEVELOPMENT_TEAM = SNDGGHFSJ2;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ShareExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.4.2;
+				PRODUCT_BUNDLE_IDENTIFIER = com.decentpaste.application.ShareExtension;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = debug;
 		};
@@ -496,12 +635,11 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
-				ARCHS = (
-					arm64,
-				);
+				ARCHS = arm64;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = "decentpaste-app_iOS/decentpaste-app_iOS.entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = SNDGGHFSJ2;
 				ENABLE_BITCODE = NO;
 				"EXCLUDED_ARCHS[sdk=iphoneos*]" = x86_64;
 				FRAMEWORK_SEARCH_PATHS = (
@@ -513,8 +651,20 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				"LIBRARY_SEARCH_PATHS[arch=arm64]" = "$(inherited) $(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME) $(TOOLCHAIN_DIR)/usr/lib/swift-5.0/$(PLATFORM_NAME)";
-				"LIBRARY_SEARCH_PATHS[arch=x86_64]" = "$(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME) $(TOOLCHAIN_DIR)/usr/lib/swift-5.0/$(PLATFORM_NAME)";
+				"LIBRARY_SEARCH_PATHS[arch=arm64]" = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION)",
+					"$(SDKROOT)/usr/lib/swift",
+					"$(TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME)",
+					"$(TOOLCHAIN_DIR)/usr/lib/swift-5.0/$(PLATFORM_NAME)",
+				);
+				"LIBRARY_SEARCH_PATHS[arch=x86_64]" = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION)",
+					"$(SDKROOT)/usr/lib/swift",
+					"$(TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME)",
+					"$(TOOLCHAIN_DIR)/usr/lib/swift-5.0/$(PLATFORM_NAME)",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.decentpaste.application;
 				PRODUCT_NAME = DecentPaste;
 				SDKROOT = iphoneos;
@@ -526,6 +676,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		1F36EFB1D6CB3B8A0955B9EC /* Build configuration list for PBXNativeTarget "ShareExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8534EA9A090115F58ED1D34F /* debug */,
+				478B1C42573CEDFFBC9649AF /* release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = debug;
+		};
 		274C0D26F54C021B20CFB2A1 /* Build configuration list for PBXProject "decentpaste-app" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

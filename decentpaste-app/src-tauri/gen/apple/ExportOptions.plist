@@ -2,7 +2,24 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <!-- Distribution method: app-store-connect for TestFlight/App Store, development for testing -->
     <key>method</key>
-    <string>debugging</string>
+    <string>app-store-connect</string>
+
+    <!-- Your Apple Developer Team ID (found in Xcode → Preferences → Accounts) -->
+    <key>teamID</key>
+    <string>YOUR_TEAM_ID</string>
+
+    <!-- Disable Bitcode (not required for iOS 14+) -->
+    <key>uploadBitcode</key>
+    <false/>
+
+    <!-- Upload crash symbols for debugging -->
+    <key>uploadSymbols</key>
+    <true/>
+
+    <!-- Don't compile Bitcode on Apple's servers -->
+    <key>compileBitcode</key>
+    <false/>
 </dict>
 </plist>

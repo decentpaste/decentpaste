@@ -17,10 +17,11 @@ import { getPendingShare } from 'tauri-plugin-decentshare-api';
 let appInitialized = false;
 
 /**
- * Handle shared content from Android share intent.
+ * Handle shared content from Android share intent or iOS share extension.
  *
  * This is called when:
  * 1. The app finds pending shared content on startup or visibility change
+ * 2. iOS/Android: User shared content via system share sheet, then opened the app
  *
  * If vault is locked, the content is stored in pendingShare and processed after unlock.
  * If vault is unlocked, the content is shared immediately with all paired peers.
@@ -127,7 +128,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Mark app as initialized after initApp completes (Tauri IPC is now ready)
   appInitialized = true;
 
-  // Check for pending share content from Android share intent
+  // Check for pending share content from Android/iOS share intent
   // This is called after app init to handle content that arrived via share sheet
   await checkForPendingShare();
 
