@@ -80,6 +80,9 @@ targets:
       - sdk: UIKit.framework
       - sdk: SystemConfiguration.framework
       - sdk: WebKit.framework
+      - target: ShareExtension
+        embed: true
+        codeSign: true
     preBuildScripts:
       - script: yarn tauri ios xcode-script -v --platform ${PLATFORM_DISPLAY_NAME:?} --sdk-root ${SDKROOT:?} --framework-search-paths "${FRAMEWORK_SEARCH_PATHS:?}" --header-search-paths "${HEADER_SEARCH_PATHS:?}" --gcc-preprocessor-definitions "${GCC_PREPROCESSOR_DEFINITIONS:-}" --configuration ${CONFIGURATION:?} ${FORCE_COLOR} ${ARCHS:?}
         name: Build Rust Code
@@ -87,3 +90,25 @@ targets:
         outputFiles:
           - $(SRCROOT)/Externals/x86_64/${CONFIGURATION}/libapp.a
           - $(SRCROOT)/Externals/arm64/${CONFIGURATION}/libapp.a
+  ShareExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: ShareExtension
+        excludes:
+          - "*.entitlements"
+    info:
+      path: ShareExtension/Info.plist
+    entitlements:
+      path: ShareExtension/ShareExtension.entitlements
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.decentpaste.application.ShareExtension
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_VERSION: "5.0"
+        MARKETING_VERSION: "0.4.2"
+        CURRENT_PROJECT_VERSION: "0.4.2"
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: NO
+        SKIP_INSTALL: YES
+        IPHONEOS_DEPLOYMENT_TARGET: "14.0"

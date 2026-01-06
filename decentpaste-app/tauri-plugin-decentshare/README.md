@@ -58,141 +58,106 @@ Files:
 
 ## iOS Setup Guide
 
-iOS requires additional Xcode configuration because Share Extensions are separate app targets. Follow this guide after `yarn tauri ios init` or whenever `gen/apple/` is regenerated.
+iOS requires additional configuration because Share Extensions are separate app targets. We provide an **automated setup script** that handles most of the work.
 
 ### Prerequisites
 
 1. **Apple Developer Account** with ability to create App Groups
-2. **Xcode** installed (14.0+)
-3. iOS project initialized: `yarn tauri ios init`
-4. **Tauri deep-link plugin** configured in `tauri.conf.json` (handles URL scheme automatically)
+2. **Xcode 14.0+** installed
+3. **xcodegen** installed: `brew install xcodegen`
+4. **Tauri deep-link plugin** configured in `tauri.conf.json` (already done for DecentPaste)
 
-> **Note:** The `tauri-plugin-deep-link` automatically injects `CFBundleURLTypes` into Info.plist during the build phase. You do NOT need to manually add URL schemes - the `decentpaste://` scheme is configured automatically based on your `tauri.conf.json`.
+### One-Time Setup: Create App Group
 
-### Step 1: Create App Group in Apple Developer Portal
+Before first build, create the App Group in Apple Developer Portal:
 
 1. Go to [Apple Developer Portal - Identifiers](https://developer.apple.com/account/resources/identifiers/list/applicationGroup)
-2. Click "+" to register a new identifier
-3. Select "App Groups" → Continue
-4. Enter description: "DecentPaste Shared Data"
-5. Enter identifier: `group.com.decentpaste.application`
-6. Click Continue → Register
+2. Click **+** to register a new identifier
+3. Select **App Groups** → Continue
+4. Enter description: `DecentPaste Shared Data`
+5. Enter identifier: `group.<your-app-identifier>` (e.g., `group.com.decentpaste.application`)
+6. Click **Continue** → **Register**
 
-### Step 2: Open Xcode Project
+> **Note:** The App Group identifier is derived from your `identifier` in `tauri.conf.json` with a `group.` prefix.
+
+### Setup After `yarn tauri ios init`
+
+Run these commands whenever you initialize or regenerate the iOS project:
 
 ```bash
+# 1. Initialize iOS project (if not already done)
+yarn tauri ios init
+
+# 2. Run the Share Extension setup script
+./scripts/setup-ios-share-extension.sh
+
+# 3. Open Xcode
 open src-tauri/gen/apple/decentpaste-app.xcodeproj
 ```
 
-### Step 3: Add Share Extension Target
+### Configure Code Signing in Xcode
 
-1. In Xcode menu: **File → New → Target...**
-2. Select iOS tab → **Share Extension** → Next
-3. Configure:
-   - **Product Name:** `ShareExtension`
-   - **Team:** (Your development team)
-   - **Organization Identifier:** `com.decentpaste.application`
-   - **Bundle Identifier:** `com.decentpaste.application.ShareExtension` (auto-filled)
-   - **Language:** Swift
-   - **Project:** decentpaste-app
-   - **Embed in Application:** decentpaste-app_iOS
-4. Click **Finish**
-5. When prompted "Activate ShareExtension scheme?", click **Activate**
+The setup script handles everything except code signing (which requires your Apple Developer account):
 
-### Step 4: Replace Generated Swift File
+1. In Xcode, select target **decentpaste-app_iOS**
+2. Go to **Signing & Capabilities** tab
+3. Set **Team** to your development team
+4. Select target **ShareExtension**
+5. Go to **Signing & Capabilities** tab
+6. Set **Team** to the **same** development team
 
-Xcode creates a template `ShareViewController.swift`. Replace it with our implementation:
+### Build and Test
 
-1. In Project Navigator, expand the `ShareExtension` group
-2. **Delete** the auto-generated files:
-   - Select `ShareViewController.swift` → Delete → **Move to Trash**
-   - Select `MainInterface.storyboard` (if present) → Delete → **Move to Trash**
-   - ⚠️ **Do NOT delete `Info.plist`** - Xcode needs this for build settings
-3. Right-click the `ShareExtension` group → **Add Files to "decentpaste-app"...**
-4. Navigate to: `tauri-plugin-decentshare/ios/ShareExtension/`
-5. Select **ONLY** `ShareViewController.swift`
-   - ⚠️ **Do NOT add `Info.plist`** - Adding it causes "Multiple commands produce Info.plist" build error
-6. Configure:
-   - ☑️ Copy items if needed
-   - ☑️ Create groups
-   - Add to targets: ☑️ **ShareExtension** only
-7. Click **Add**
-
-> **Important:** The `Info.plist` must only exist in Xcode's build settings (`INFOPLIST_FILE`), not in "Copy Bundle Resources". Adding it as a file causes duplicate output errors.
-
-### Step 5: Configure App Groups (Both Targets)
-
-**For main app target (decentpaste-app_iOS):**
-
-1. Select the project in Navigator (blue icon at top)
-2. Select target: `decentpaste-app_iOS`
-3. Select **Signing & Capabilities** tab
-4. Click **+ Capability** button
-5. Select **App Groups**
-6. Under App Groups section, click **+**
-7. Select or enter: `group.com.decentpaste.application`
-
-**For ShareExtension target:**
-
-1. Select target: `ShareExtension`
-2. Select **Signing & Capabilities** tab
-3. Click **+ Capability**
-4. Select **App Groups**
-5. Click **+** and select the SAME group: `group.com.decentpaste.application`
-
-### Step 6: Configure Code Signing
-
-**For main app target:**
-
-1. Select target: `decentpaste-app_iOS`
-2. In "Signing & Capabilities":
-   - ☑️ Automatically manage signing
-   - Team: (Select your team)
-3. Verify no signing errors appear
-
-**For ShareExtension target:**
-
-1. Select target: `ShareExtension`
-2. In "Signing & Capabilities":
-   - ☑️ Automatically manage signing
-   - Team: (Select SAME team as main app)
-3. Verify no signing errors appear
-
-### Step 7: Verify Extension Embedding
-
-1. Select target: `decentpaste-app_iOS`
-2. Select **General** tab
-3. Scroll to **Frameworks, Libraries, and Embedded Content**
-4. Verify `ShareExtension.appex` is listed with "Embed & Sign"
-   - If missing: Click "+" → Under "Embed App Extensions" select ShareExtension
-
-### Step 8: Build and Test
-
-1. Connect a physical iOS device (Share Extensions don't work reliably in Simulator)
-2. Select scheme: `decentpaste-app_iOS`
+1. Connect a **physical iOS device** (Share Extensions don't work reliably in Simulator)
+2. Select scheme: **decentpaste-app_iOS**
 3. Select your device as destination
-4. Build: **Product → Build** (Cmd+B)
-5. If build succeeds, run: **Product → Run** (Cmd+R)
+4. Build and run: **Cmd+R**
 
-**Testing:**
+**Testing the Share Extension:**
 
 1. Open Safari on the device
 2. Navigate to any webpage
-3. Select some text → Share button
-4. DecentPaste should appear in share sheet
+3. Select some text → Tap **Share**
+4. Look for **DecentPaste** in the share sheet (scroll right or tap "More" if needed)
 5. Tap DecentPaste → Should show toast → App should open
+
+### What the Setup Script Does
+
+The `setup-ios-share-extension.sh` script reads configuration from `tauri.conf.json` and automates:
+
+- ✅ Reads `version` and `identifier` from `tauri.conf.json`
+- ✅ Derives extension bundle ID (`<identifier>.ShareExtension`) and App Group (`group.<identifier>`)
+- ✅ Creates ShareExtension directory in `gen/apple/`
+- ✅ Copies `ShareViewController.swift` and `Info.plist` from plugin source
+- ✅ Creates entitlements files with App Groups for both targets
+- ✅ Adds ShareExtension target to `project.yml`
+- ✅ Embeds ShareExtension in main app
+- ✅ Runs `xcodegen` to regenerate the Xcode project
+- ✅ Restores correct files after xcodegen (Info.plist and entitlements)
+
+**You only need to manually:**
+- Configure code signing team (once per Xcode project open)
+- Build and run
 
 ---
 
 ## Configuration Values
 
-| Setting             | Value                                        |
-|---------------------|----------------------------------------------|
-| App Group           | `group.com.decentpaste.application`          |
-| URL Scheme          | `decentpaste`                                |
-| Extension Bundle ID | `com.decentpaste.application.ShareExtension` |
-| Main App Bundle ID  | `com.decentpaste.application`                |
-| UserDefaults Key    | `pendingShareContent`                        |
+These values are derived from `tauri.conf.json`:
+
+| Setting             | Derivation                          | Example (DecentPaste)                        |
+|---------------------|-------------------------------------|----------------------------------------------|
+| Main App Bundle ID  | `identifier` from tauri.conf.json   | `com.decentpaste.application`                |
+| Extension Bundle ID | `<identifier>.ShareExtension`       | `com.decentpaste.application.ShareExtension` |
+| App Group           | `group.<identifier>`                | `group.com.decentpaste.application`          |
+| App Version         | `version` from tauri.conf.json      | `0.4.2`                                      |
+
+**Hardcoded values** (in Swift source files):
+
+| Setting             | Value                 | Location                           |
+|---------------------|-----------------------|------------------------------------|
+| UserDefaults Key    | `pendingShareContent` | `DecentsharePlugin.swift`, `ShareViewController.swift` |
+| URL Scheme          | `decentpaste`         | `tauri.conf.json` (deep-link plugin) |
 
 ---
 
@@ -200,28 +165,32 @@ Xcode creates a template `ShareViewController.swift`. Replace it with our implem
 
 ### "App Group container could not be accessed"
 
-- Verify App Group is created in Apple Developer Portal
-- Verify SAME App Group ID is added to BOTH targets in Xcode
-- Check the identifier matches exactly: `group.com.decentpaste.application`
-- Try removing and re-adding the App Groups capability
+- Verify App Group `group.<your-identifier>` is created in Apple Developer Portal
+- Verify both targets have the same Team selected in Signing & Capabilities
+- Try refreshing provisioning profiles: Xcode → Preferences → Accounts → Download Manual Profiles
 
 ### Share Extension doesn't appear in share sheet
 
-- Verify extension is embedded in main app (Step 7)
-- Verify `NSExtensionActivationRule` in Info.plist accepts text
-- Build and run the main app at least once
-- Check device Settings → (App Name) → Share Extension is enabled
+- **Delete the app from device** and reinstall (iOS caches extension registration)
+- Verify you built with `decentpaste-app_iOS` scheme (not `ShareExtension`)
+- Check device Settings → DecentPaste → Share Extension is enabled
+- Try scrolling right in share sheet or tapping "More"
+
+### "does not define an NSExtension dictionary" error
+
+- The Info.plist was overwritten by xcodegen
+- **Solution:** Re-run `./scripts/setup-ios-share-extension.sh` (Step 7 restores the correct Info.plist)
 
 ### Extension appears but crashes
 
 - Check Console.app for crash logs (filter by "ShareExtension")
-- Verify Info.plist `NSExtensionPrincipalClass` matches class name
-- Ensure all Swift files are added to ShareExtension target (check Target Membership)
+- Verify both targets use the same code signing team
+- Clean build folder (Cmd+Option+Shift+K) and rebuild
 
 ### Main app doesn't receive shared content
 
-- Verify App Group IDs match in both Swift files
-- Check UserDefaults key matches: `pendingShareContent`
+- Verify both targets have App Groups capability with `group.<your-identifier>`
+- Check Console.app logs for "DecentsharePlugin" messages
 - Verify frontend is calling `checkForPendingShare()`
 
 ### URL scheme doesn't open app
@@ -231,17 +200,10 @@ Xcode creates a template `ShareViewController.swift`. Replace it with our implem
 - User can manually switch to DecentPaste
 - App will pick up content on visibility change
 
-### "Multiple commands produce Info.plist" build error
-
-- This happens when `Info.plist` is added to "Copy Bundle Resources" build phase
-- **Solution:** In Xcode, select ShareExtension target → Build Phases → Copy Bundle Resources
-- Remove `Info.plist` from the list if present (click `-` button)
-- Info.plist should only be referenced in Build Settings (`INFOPLIST_FILE`), not copied as a resource
-
 ### Build errors after regenerating gen/apple/
 
-- The Share Extension target is lost when regenerating
-- Follow this setup guide again from Step 3
+- This is expected - `yarn tauri ios init` regenerates the project from scratch
+- **Solution:** Run `./scripts/setup-ios-share-extension.sh` after every regeneration
 - Source files are preserved in `tauri-plugin-decentshare/ios/`
 
 ---
@@ -260,21 +222,24 @@ yarn build
 ### File Locations
 
 ```
-tauri-plugin-decentshare/
-├── android/                          # Android implementation
-│   ├── src/main/java/DecentsharePlugin.kt
-│   └── src/main/AndroidManifest.xml
-├── ios/                              # iOS implementation (source of truth)
-│   ├── Package.swift                # Swift package definition
-│   ├── Sources/
-│   │   └── DecentsharePlugin.swift  # Tauri plugin
-│   └── ShareExtension/
-│       ├── ShareViewController.swift # Extension controller
-│       └── Info.plist               # Extension config (reference only)
-├── src/                              # Rust plugin code
-│   ├── lib.rs
-│   ├── mobile.rs
-│   └── commands.rs
-└── guest-js/                         # TypeScript bindings
-    └── index.ts
+decentpaste-app/
+├── scripts/
+│   └── setup-ios-share-extension.sh  # iOS setup automation script
+└── tauri-plugin-decentshare/
+    ├── android/                          # Android implementation
+    │   ├── src/main/java/DecentsharePlugin.kt
+    │   └── src/main/AndroidManifest.xml
+    ├── ios/                              # iOS implementation (source of truth)
+    │   ├── Package.swift                # Swift package definition
+    │   ├── Sources/
+    │   │   └── DecentsharePlugin.swift  # Tauri plugin
+    │   └── ShareExtension/
+    │       ├── ShareViewController.swift # Extension controller
+    │       └── Info.plist               # Extension config
+    ├── src/                              # Rust plugin code
+    │   ├── lib.rs
+    │   ├── mobile.rs
+    │   └── commands.rs
+    └── guest-js/                         # TypeScript bindings
+        └── index.ts
 ```
