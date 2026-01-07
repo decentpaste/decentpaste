@@ -5,7 +5,7 @@ Cross-platform share intent plugin for DecentPaste. Enables receiving shared tex
 ## Platform Support
 
 | Platform | Status          | Implementation                                  |
-|----------|-----------------|-------------------------------------------------|
+| -------- | --------------- | ----------------------------------------------- |
 | Android  | Fully supported | Kotlin plugin with `ACTION_SEND` intent handler |
 | iOS      | Fully supported | Swift plugin with Share Extension               |
 | Desktop  | N/A             | Desktop platforms don't have share sheets       |
@@ -37,6 +37,7 @@ Android uses a Kotlin plugin that handles `ACTION_SEND` intents:
 4. Frontend polls via `getPendingShare()`
 
 Files:
+
 - `android/src/main/java/DecentsharePlugin.kt` - Intent handler
 - `android/src/main/AndroidManifest.xml` - Intent filter registration
 
@@ -53,6 +54,7 @@ iOS uses a Share Extension (separate target) + App Groups for data passing:
 > The shared content is saved to App Groups and will be processed when the user opens DecentPaste.
 
 Files:
+
 - `ios/Sources/DecentsharePlugin.swift` - Tauri plugin
 - `ios/ShareExtension/ShareViewController.swift` - Extension controller
 - `ios/ShareExtension/Info.plist` - Extension configuration
@@ -140,6 +142,7 @@ The `setup-ios-share-extension.sh` script reads configuration from `tauri.conf.j
 - ✅ Restores correct files after xcodegen (Info.plist and entitlements)
 
 **You only need to manually:**
+
 - Configure code signing team (once per Xcode project open)
 - Build and run
 
@@ -149,18 +152,18 @@ The `setup-ios-share-extension.sh` script reads configuration from `tauri.conf.j
 
 These values are derived from `tauri.conf.json`:
 
-| Setting             | Derivation                          | Example (DecentPaste)                        |
-|---------------------|-------------------------------------|----------------------------------------------|
-| Main App Bundle ID  | `identifier` from tauri.conf.json   | `com.decentpaste.application`                |
-| Extension Bundle ID | `<identifier>.ShareExtension`       | `com.decentpaste.application.ShareExtension` |
-| App Group           | `group.<identifier>`                | `group.com.decentpaste.application`          |
-| App Version         | `version` from tauri.conf.json      | `0.4.2`                                      |
+| Setting             | Derivation                        | Example (DecentPaste)                        |
+| ------------------- | --------------------------------- | -------------------------------------------- |
+| Main App Bundle ID  | `identifier` from tauri.conf.json | `com.decentpaste.application`                |
+| Extension Bundle ID | `<identifier>.ShareExtension`     | `com.decentpaste.application.ShareExtension` |
+| App Group           | `group.<identifier>`              | `group.com.decentpaste.application`          |
+| App Version         | `version` from tauri.conf.json    | `0.4.2`                                      |
 
 **Hardcoded values** (in Swift source files):
 
-| Setting             | Value                 | Location                           |
-|---------------------|-----------------------|------------------------------------|
-| UserDefaults Key    | `pendingShareContent` | `DecentsharePlugin.swift`, `ShareViewController.swift` |
+| Setting          | Value                 | Location                                               |
+| ---------------- | --------------------- | ------------------------------------------------------ |
+| UserDefaults Key | `pendingShareContent` | `DecentsharePlugin.swift`, `ShareViewController.swift` |
 
 ---
 
