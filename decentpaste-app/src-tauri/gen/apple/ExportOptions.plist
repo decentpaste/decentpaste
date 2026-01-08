@@ -8,7 +8,7 @@
 
     <!-- Your Apple Developer Team ID (found in Xcode → Preferences → Accounts) -->
     <key>teamID</key>
-    <string>YOUR_TEAM_ID</string>
+    <string>SNDGGHFSJ2</string>
 
     <!-- Disable Bitcode (not required for iOS 14+) -->
     <key>uploadBitcode</key>
