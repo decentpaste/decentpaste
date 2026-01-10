@@ -17,6 +17,7 @@ import app.tauri.annotation.TauriPlugin
 import app.tauri.plugin.Invoke
 import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
+import org.json.JSONArray
 import org.json.JSONObject
 import java.security.KeyStore
 import java.util.concurrent.ConcurrentHashMap
@@ -302,9 +303,11 @@ class DecentsecretPlugin(private val activity: Activity) : Plugin(activity) {
                             val decrypted = authenticatedCipher.doFinal(encryptedData)
 
                             val ret = JSObject()
-                            // Convert ByteArray to List<Int> for JSON serialization
-                            val secretList = decrypted.map { it.toInt() and 0xFF }
-                            ret.put("secret", secretList)
+                            // Convert ByteArray to JSONArray for proper JSON serialization
+                            // Using JSONArray ensures it serializes as [1,2,3] not "[1, 2, 3]"
+                            val secretArray = JSONArray()
+                            decrypted.forEach { secretArray.put(it.toInt() and 0xFF) }
+                            ret.put("secret", secretArray)
 
                             Log.i(TAG, "Secret retrieved successfully")
                             invoke.resolve(ret)

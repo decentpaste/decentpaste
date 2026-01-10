@@ -7,7 +7,17 @@
 | **Phase 0** | ✅ COMPLETE     | Removed Stronghold, added zeroize, created vault/storage.rs             |
 | **Phase 1** | ✅ COMPLETE     | Created tauri-plugin-decentsecret with full Android/iOS/Desktop support |
 | **Phase 2** | ✅ COMPLETE     | Wire plugin into VaultManager                                           |
-| **Phase 3** | 🔲 NOT STARTED | Frontend integration (onboarding UI)                                    |
+| **Phase 3** | ✅ COMPLETE     | Frontend integration (onboarding UI, lock screen, auto-unlock)          |
+
+### Testing Status
+
+| Platform | Status | Notes |
+|----------|--------|-------|
+| **Linux** | ✅ Tested | Keyring flow verified |
+| **Android** | ✅ Tested | Biometric flow verified (JSON serialization bug fixed) |
+| **Windows** | 🔲 Pending | Credential Manager flow not yet tested |
+| **macOS** | 🔲 Pending | Keychain flow not yet tested |
+| **iOS** | 🔲 Pending | Face ID / Touch ID flow not yet tested |
 
 ### What's Been Implemented
 
@@ -48,21 +58,42 @@
 - **Removed**: Old `setup_vault(device_name, pin, auth_method)` command
 - **Build verified**: `cargo check` passes
 
-### What's Next (Phase 3)
+**Phase 3 - Frontend Integration:**
+- **Types** (`src/api/types.ts`):
+  - Added `SecretStorageMethod` union type (platform-specific methods)
+  - Added `SecretStorageStatus` interface
+  - Expanded `AuthMethod` to include `'secure_storage'`
+- **Commands** (`src/api/commands.ts`):
+  - Added `checkSecretStorageAvailability()` wrapper
+  - Added `getVaultAuthMethod()` wrapper
+- **State** (`src/state/store.ts`):
+  - Added `secretStorageStatus` and `vaultAuthMethod` state fields
+  - Expanded `OnboardingStep` to include `'auth-choice'`
+- **Onboarding Flow** (`src/app.ts`):
+  - New 3-step flow: Device Name → Auth Choice → PIN Setup (if chosen)
+  - Auth choice shows platform-specific labels (Keychain, Biometric, etc.)
+  - Skips auth choice step if SecureStorage unavailable
+- **Lock Screen** (`src/app.ts`):
+  - Shows "Unlock with [Method]" button for SecureStorage auth
+  - Shows PIN input for PIN auth
+  - Desktop auto-unlock for keyring-based auth (session-based, no prompt)
 
-**Goal**: Update frontend to use new auth flow.
+### Bug Fixes
 
-**Tasks**:
-1. Update `src/api/commands.ts` - add TypeScript wrappers for new commands
-2. Update `src/api/types.ts` - add `AuthMethod` and `SecretStorageStatus` types
-3. Update onboarding flow in `src/app.ts`:
-   - Check `checkSecretStorageAvailability()` on startup
-   - If available → show "Setup with Biometric/Keyring" option
-   - If not → show PIN setup
-4. Update lock screen flow:
-   - Check `getVaultAuthMethod()` to determine which unlock UI to show
-   - SecureStorage: Show "Unlock" button (triggers biometric on mobile, auto-unlock on desktop)
-   - PIN: Show PIN input field
+**Android JSON Serialization (Phase 3):**
+- **Issue**: `retrieveSecret()` returned error: `invalid type: string "[156, 44, ...]", expected a sequence`
+- **Cause**: Kotlin `List<Int>` passed to `JSObject.put()` was serialized via `.toString()` as a string, not a JSON array
+- **Fix**: Changed to use `org.json.JSONArray` explicitly in `DecentsecretPlugin.kt`:
+  ```kotlin
+  // Before (broken):
+  val secretList = decrypted.map { it.toInt() and 0xFF }
+  ret.put("secret", secretList)  // Becomes string "[1, 2, 3]"
+
+  // After (fixed):
+  val secretArray = JSONArray()
+  decrypted.forEach { secretArray.put(it.toInt() and 0xFF) }
+  ret.put("secret", secretArray)  // Becomes JSON array [1, 2, 3]
+  ```
 
 **Key Architecture Decision**: The vault key is either:
 - **SecureStorage**: Random 256-bit key stored in hardware (biometric/keyring protected)
@@ -328,63 +359,44 @@ tauri-plugin-decentsecret/
     └── default.toml
 ```
 
-### Phase 2: VaultManager Integration 🔲 NOT STARTED
+### Phase 2: VaultManager Integration ✅ COMPLETE
 
 **Goal**: Wire plugin into vault system.
 
-**AuthMethod enum:**
-```rust
-pub enum AuthMethod {
-    SecureStorage,  // decentsecret plugin
-    Pin,            // Argon2id fallback
-}
-```
+**Completed:**
+- ✅ AuthMethod enum with `SecureStorage | Pin` variants
+- ✅ Auth persistence in `auth-method.json`
+- ✅ VaultManager async methods for secure storage
+- ✅ New Tauri commands for auth flow
+- ✅ Build verified
 
-**VaultManager methods:**
-```rust
-pub async fn create_with_secure_storage(app_handle: &AppHandle) -> Result<Self>;
-pub async fn open_with_secure_storage(app_handle: &AppHandle) -> Result<Self>;
-pub fn create_with_pin(pin: &str) -> Result<Self>;
-pub fn open_with_pin(pin: &str) -> Result<Self>;
-pub fn set_device_name(&mut self, name: &str) -> Result<()>;
-pub fn get_device_name(&self) -> Option<&str>;
-```
-
-**Note**: Device name is NOT part of vault setup. It's set separately after vault creation and can be changed anytime.
-
-**Files:**
-- `src-tauri/src/vault/auth.rs`
-- `src-tauri/src/vault/manager.rs`
-- `src-tauri/src/commands.rs`
-
-### Phase 3: Frontend Integration 🔲 NOT STARTED
+### Phase 3: Frontend Integration ✅ COMPLETE
 
 **Goal**: Update UI for new auth flow.
 
-**New TypeScript commands:**
-```typescript
-export async function checkSecretStorageAvailability(): Promise<SecretStorageStatus>;
-export async function getRecommendedAuthMethod(): Promise<AuthMethod>;
-export async function setupVaultWithSecureStorage(): Promise<void>;
-export async function setupVaultWithPin(pin: string): Promise<void>;
-export async function unlockVault(pin?: string): Promise<void>;
-export async function setDeviceName(name: string): Promise<void>;
-export async function getDeviceName(): Promise<string | null>;
-```
+**Completed:**
+- ✅ TypeScript types and command wrappers
+- ✅ State management updates
+- ✅ 3-step onboarding flow with auth choice
+- ✅ Lock screen with biometric/keyring support
+- ✅ Desktop auto-unlock
+- ✅ Android JSON serialization bug fix
 
 **Onboarding flow:**
 
 ```mermaid
 flowchart TD
-    Start[App Launch - No Vault] --> Check[checkSecretStorageAvailability]
+    Start[App Launch - No Vault] --> DeviceName[Step 1: Device Name]
+    DeviceName --> Check{SecureStorage Available?}
 
-    Check -->|available = true| SS1[Step 1: Secure Setup<br/>setupVaultWithSecureStorage]
-    Check -->|available = false| PIN1[Step 1: PIN Setup<br/>setupVaultWithPin]
+    Check -->|Yes| AuthChoice[Step 2: Auth Choice]
+    Check -->|No| PINSetup[Step 2: PIN Setup]
 
-    SS1 --> Name[Step 2: Device Name<br/>setDeviceName]
-    PIN1 --> Name
+    AuthChoice -->|Biometric/Keyring| SecureSetup[setupVaultWithSecureStorage]
+    AuthChoice -->|PIN| PINSetup
 
-    Name --> Done[Onboarding Complete]
+    SecureSetup --> Done[Onboarding Complete]
+    PINSetup --> Done
 ```
 
 **Lock screen flow:**
@@ -393,7 +405,7 @@ flowchart TD
 flowchart TD
     Locked[Vault Locked] --> CheckAuth{Auth Method?}
 
-    CheckAuth -->|SecureStorage + Mobile| Bio[Biometric prompt]
+    CheckAuth -->|SecureStorage + Mobile| Bio[Biometric prompt button]
     CheckAuth -->|SecureStorage + Desktop| Auto[Auto-unlock via keyring]
     CheckAuth -->|PIN| PINInput[PIN input field]
 
@@ -401,11 +413,6 @@ flowchart TD
     Auto --> Unlocked
     PINInput --> Unlocked
 ```
-
-**Files:**
-- `src/api/commands.ts`
-- `src/api/types.ts`
-- `src/app.ts`
 
 ---
 
@@ -445,12 +452,14 @@ flowchart TD
 | `src-tauri/src/commands.rs`                | New auth commands              | ✅      |
 | `src-tauri/src/lib.rs`                     | Register new commands          | ✅      |
 
-### Phase 3: Frontend 🔲
-| File                  | Action                          | Status |
-|-----------------------|---------------------------------|--------|
-| `src/api/types.ts`    | Add new types                   | 🔲     |
-| `src/api/commands.ts` | Add new commands                | 🔲     |
-| `src/app.ts`          | Update onboarding + lock screen | 🔲     |
+### Phase 3: Frontend ✅
+| File                  | Action                                    | Status |
+|-----------------------|-------------------------------------------|--------|
+| `src/api/types.ts`    | Add SecretStorageStatus, expand AuthMethod | ✅     |
+| `src/api/commands.ts` | Add availability + auth method commands    | ✅     |
+| `src/state/store.ts`  | Add new state fields, expand OnboardingStep | ✅    |
+| `src/app.ts`          | Auth choice step, lock screen variants     | ✅     |
+| `DecentsecretPlugin.kt` | Fix JSON array serialization            | ✅     |
 
 ---
 
