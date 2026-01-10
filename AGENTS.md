@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-Guidance for Claude Code when working with this repository.
+Guidance for AI coding agents working with this repository.
 
 ## What is DecentPaste?
 
@@ -147,25 +147,9 @@ npx @tauri-apps/cli plugin new --android --ios <plugin-name>
 - **Plugin name**: Prefix with `decent` (e.g., `decentshare`, `decentsecret`)
 - **Package name**: `com.decentpaste.plugins.<plugin-name>`
 
-## Claude Code Skills
-
-**Release workflow:**
-- `/bump-version` - Update version across all config files
-- `/android-release` - Build, sign, prepare Android APK/AAB
-- `/ios-release` - Build, archive, prepare iOS for TestFlight
-- `/github-release` - Create GitHub release with auto-generated notes
-
-**iOS fixes:**
-- `/ios-icon-fix` - Remove alpha channel from iOS icons (App Store requirement)
-- `/appstore-screenshots` - Resize screenshots to App Store dimensions
-
-**General:**
-- `/frontend-design` - Create distinctive, production-grade frontend interfaces
-- `/skill-creator` - Guide for creating new skills
-
 ## Documentation Guidelines
 
-**When to document**: Architecture changes → `ARCHITECTURE.md` | Security changes → `SECURITY.md` | New workflows → `CLAUDE.md`
+**When to document**: Architecture changes → `ARCHITECTURE.md` | Security changes → `SECURITY.md` | New workflows → this file
 
 **When NOT to**: Minor bug fixes, trivial details, self-documenting code.
 

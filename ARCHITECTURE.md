@@ -118,62 +118,42 @@ decentpaste/
 
 ### Data Flow
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                         FRONTEND (TypeScript)                        │
-├─────────────────────────────────────────────────────────────────────┤
-│  ┌──────────┐         ┌──────────┐         ┌──────────┐            │
-│  │Dashboard │         │ PeerList │         │ Settings │            │
-│  └────┬─────┘         └────┬─────┘         └────┬─────┘            │
-│       │                    │                    │                   │
-│       └────────────────────┴────────────────────┘                   │
-│                               │                                      │
-│                        ┌──────┴──────┐                              │
-│                        │    Store    │  (Reactive State)            │
-│                        └──────┬──────┘                              │
-│                               │                                      │
-│              ┌────────────────┼────────────────┐                    │
-│              │                │                │                    │
-│       ┌──────┴──────┐  ┌──────┴──────┐  ┌──────┴──────┐            │
-│       │  Commands   │  │   Events    │  │   Types     │            │
-│       │  (invoke)   │  │  (listen)   │  │             │            │
-│       └──────┬──────┘  └──────┬──────┘  └─────────────┘            │
-└──────────────┼────────────────┼─────────────────────────────────────┘
-               │   Tauri IPC    │
-┌──────────────┼────────────────┼─────────────────────────────────────┐
-│              │                │                                      │
-│       ┌──────┴──────┐  ┌──────┴──────┐      BACKEND (Rust)          │
-│       │  Commands   │  │   Events    │                              │
-│       │  Handler    │  │   Emitter   │                              │
-│       └──────┬──────┘  └──────┬──────┘                              │
-│              │                │                                      │
-│              └────────┬───────┘                                      │
-│                       │                                              │
-│                ┌──────┴──────┐                                       │
-│                │  AppState   │                                       │
-│                └──────┬──────┘                                       │
-│                       │                                              │
-│       ┌───────────────┼───────────────┬───────────────┐             │
-│       │               │               │               │             │
-│ ┌─────┴─────┐  ┌──────┴──────┐  ┌─────┴─────┐  ┌─────┴─────┐       │
-│ │  Network  │  │  Clipboard  │  │ Security  │  │  Storage  │       │
-│ │  Manager  │  │   Monitor   │  │           │  │           │       │
-│ └─────┬─────┘  └──────┬──────┘  └───────────┘  └───────────┘       │
-│       │               │                                              │
-│       │         ┌─────┴─────┐                                       │
-│       │         │  Tauri    │  (Clipboard Plugin)                   │
-│       │         └───────────┘                                       │
-│       │                                                              │
-│ ┌─────┴──────────────────────────────────────────────────────┐      │
-│ │                     libp2p Swarm                            │      │
-│ │  ┌─────────┐  ┌───────────┐  ┌─────────────────┐  ┌──────┐ │      │
-│ │  │  mDNS   │  │ Gossipsub │  │ Request-Response│  │ ID   │ │      │
-│ │  │Discovery│  │ (Broadcast)│  │    (Pairing)   │  │      │ │      │
-│ │  └─────────┘  └───────────┘  └─────────────────┘  └──────┘ │      │
-│ └────────────────────────────────────────────────────────────┘      │
-│                              │                                       │
-│                         Local Network                                │
-└─────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph Frontend["FRONTEND (TypeScript)"]
+        direction TB
+        Dashboard & PeerList & Settings --> Store["Store (Reactive State)"]
+        Store --> Commands["Commands (invoke)"]
+        Store --> Events["Events (listen)"]
+        Store --> Types
+    end
+
+    Commands <-->|"Tauri IPC"| CmdHandler
+    Events <-->|"Tauri IPC"| EventEmitter
+
+    subgraph Backend["BACKEND (Rust)"]
+        direction TB
+        CmdHandler["Commands Handler"] --> AppState
+        EventEmitter["Events Emitter"] --> AppState
+
+        AppState --> NetworkMgr["Network Manager"]
+        AppState --> ClipboardMon["Clipboard Monitor"]
+        AppState --> Security
+        AppState --> Storage
+
+        ClipboardMon --> TauriClip["Tauri Clipboard Plugin"]
+
+        subgraph Swarm["libp2p Swarm"]
+            mDNS["mDNS Discovery"]
+            Gossipsub["Gossipsub (Broadcast)"]
+            ReqRes["Request-Response (Pairing)"]
+            Identify["Identify"]
+        end
+
+        NetworkMgr --> Swarm
+    end
+
+    Swarm <-->|"Local Network"| OtherDevices["Other Devices"]
 ```
 
 ---
@@ -279,38 +259,30 @@ The vault module provides encrypted storage for all sensitive data using IOTA St
 
 #### Architecture Overview
 
-```
-User enters PIN (4-8 digits)
-        │
-        ▼
-┌─────────────────────────────────────┐
-│           Argon2id KDF              │
-│  ┌─────────────┬─────────────────┐  │
-│  │ Salt (16B)  │ PIN             │  │
-│  │ salt.bin    │                 │  │
-│  └─────────────┴─────────────────┘  │
-│         │                           │
-│         ▼                           │
-│  Memory: 64 MB, Time: 3, Lanes: 4   │
-│         │                           │
-│         ▼                           │
-│  256-bit Encryption Key             │
-└─────────────────────────────────────┘
-        │
-        ▼
-┌─────────────────────────────────────┐
-│        IOTA Stronghold              │
-│           vault.hold                │
-├─────────────────────────────────────┤
-│  ┌─────────────────────────────┐   │
-│  │     Encrypted Store          │   │
-│  ├─────────────────────────────┤   │
-│  │ • clipboard_history         │   │
-│  │ • paired_peers              │   │
-│  │ • device_identity           │   │
-│  │ • libp2p_keypair            │   │
-│  └─────────────────────────────┘   │
-└─────────────────────────────────────┘
+```mermaid
+flowchart TB
+    PIN["User enters PIN (4-8 digits)"]
+
+    subgraph KDF["Argon2id KDF"]
+        direction TB
+        Inputs["Salt (16B from salt.bin) + PIN"]
+        Params["Memory: 64 MB, Time: 3, Lanes: 4"]
+        Key["256-bit Encryption Key"]
+        Inputs --> Params --> Key
+    end
+
+    subgraph Stronghold["IOTA Stronghold (vault.hold)"]
+        direction TB
+        subgraph Store["Encrypted Store"]
+            clipboard_history
+            paired_peers
+            device_identity
+            libp2p_keypair
+        end
+    end
+
+    PIN --> KDF
+    KDF --> Stronghold
 ```
 
 #### `auth.rs` - Authentication Types
@@ -529,43 +501,35 @@ Single-file application with authentication and main views:
 
 ### Pairing Flow (with X25519 ECDH Key Exchange)
 
-```
-Device A (Initiator)              Device B (Responder)
-        │                                │
-        │  1. User clicks "Pair"         │
-        │────────────────────────────────>│
-        │     PairingRequest              │
-        │     {session_id, device_name,   │
-        │      public_key: A_pub}         │
-        │                                │
-        │                                │ 2. Show pairing request UI
-        │                                │    Store A_pub for ECDH
-        │                                │    User clicks "Accept"
-        │                                │    Generate PIN
-        │                                │
-        │  3. PairingChallenge           │
-        │<────────────────────────────────│
-        │     {session_id, pin,           │
-        │      device_name,               │
-        │      public_key: B_pub}         │
-        │                                │
-        │ 4. Store B_pub for ECDH        │
-        │    Display PIN: "123456"       │ 5. Display PIN: "123456"
-        │    User confirms PIN            │    (waiting for initiator)
-        │                                │
-        │ 6. Derive shared_secret =      │
-        │    ECDH(A_priv, B_pub)          │
-        │    PairingConfirm              │
-        │────────────────────────────────>│
-        │    {session_id, success}        │
-        │                                │
-        │                                │ 7. Derive shared_secret =
-        │                                │    ECDH(B_priv, A_pub)
-        │  8. PairingConfirm (ack)       │
-        │<────────────────────────────────│
-        │     {success}                   │
-        │                                │
-        │ 9. Store pairing               │ 10. Store pairing
+```mermaid
+sequenceDiagram
+    participant A as Device A (Initiator)
+    participant B as Device B (Responder)
+
+    Note over A: 1. User clicks "Pair"
+    A->>B: PairingRequest {session_id, device_name, public_key: A_pub}
+
+    Note over B: 2. Show pairing request UI
+    Note over B: Store A_pub for ECDH
+    Note over B: User clicks "Accept"
+    Note over B: Generate PIN
+
+    B->>A: 3. PairingChallenge {session_id, pin, device_name, public_key: B_pub}
+
+    Note over A: 4. Store B_pub for ECDH
+    Note over A,B: Display PIN: "123456" on both devices
+    Note over A: User confirms PIN match
+
+    Note over A: 6. Derive shared_secret = ECDH(A_priv, B_pub)
+    A->>B: PairingConfirm {session_id, success}
+
+    Note over B: 7. Derive shared_secret = ECDH(B_priv, A_pub)
+    B->>A: 8. PairingConfirm (ack) {success}
+
+    Note over A: 9. Store pairing
+    Note over B: 10. Store pairing
+
+    Note over A,B: Both have identical shared_secret (never transmitted)
 ```
 
 **Security**: Both devices derive the same shared secret **independently** using ECDH.
@@ -618,40 +582,36 @@ DecentPaste registers as a share target in Android's share sheet, allowing users
 
 **How It Works:**
 
-```
-┌─────────────────┐
-│ User selects    │  Any Android app with text
-│ text & shares   │
-└────────┬────────┘
-         │ Intent.ACTION_SEND (text/plain)
-         ▼
-┌─────────────────────────────────┐
-│ DecentsharePlugin (Kotlin)      │  Plugin intercepts intent
-│ onNewIntent() → store content   │
-└────────┬────────────────────────┘
-         │ getPendingShare() command
-         ▼
-┌─────────────────────────────────┐
-│ Frontend (main.ts)              │  Checks on init & visibility
-├─────────────────────────────────┤
-│ If Locked → Store in state      │
-│           → Show PIN screen     │
-│ If Unlocked → handleSharedContent│
-└────────┬────────────────────────┘
-         │ Rust command
-         ▼
-┌─────────────────────────────────┐
-│ handle_shared_content (Rust)    │
-│ 1. Verify vault unlocked        │
-│ 2. ensure_connected() (≤3s)     │
-│ 3. share_clipboard_content()    │
-└────────┬────────────────────────┘
-         │
-         ▼
-┌─────────────────────────────────┐
-│ Content sent to all paired peers│
-│ + Added to clipboard history    │
-└─────────────────────────────────┘
+```mermaid
+flowchart TB
+    User["User selects text & shares<br/>(Any Android app)"]
+
+    User -->|"Intent.ACTION_SEND (text/plain)"| Plugin
+
+    subgraph Plugin["DecentsharePlugin (Kotlin)"]
+        OnIntent["onNewIntent() → store content"]
+    end
+
+    Plugin -->|"getPendingShare() command"| Frontend
+
+    subgraph Frontend["Frontend (main.ts)"]
+        Check{"Vault Status?"}
+        Locked["Store in state → Show PIN screen"]
+        Unlocked["handleSharedContent()"]
+        Check -->|Locked| Locked
+        Check -->|Unlocked| Unlocked
+    end
+
+    Unlocked -->|"Rust command"| Handler
+
+    subgraph Handler["handle_shared_content (Rust)"]
+        H1["1. Verify vault unlocked"]
+        H2["2. ensure_connected() (≤3s)"]
+        H3["3. share_clipboard_content()"]
+        H1 --> H2 --> H3
+    end
+
+    Handler --> Result["Content sent to all paired peers<br/>+ Added to clipboard history"]
 ```
 
 **Plugin Architecture:**
