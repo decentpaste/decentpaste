@@ -1,200 +1,167 @@
 # AGENTS.md
 
-This file provides coding guidelines and commands for agentic AI assistants working on DecentPaste.
+Guidance for AI coding agents working with this repository.
 
----
+## What is DecentPaste?
 
-## Build, Lint, and Typecheck Commands
+Cross-platform clipboard sharing app (like Apple's Universal Clipboard) for all platforms:
+
+- **Tauri v2** - Desktop/mobile app framework
+- **libp2p** - Decentralized P2P networking
+- **mDNS** - Local network device discovery
+- **X25519 ECDH** - Secure key exchange during pairing
+- **AES-256-GCM** - End-to-end encryption
+- **IOTA Stronghold** - Encrypted local storage (PIN-protected vault)
+
+## Development Commands
 
 ```bash
-# Development
-cd decentpaste-app && yarn tauri dev
+# Quick start
+cd decentpaste-app && yarn install && yarn tauri dev
 
-# Production build
-cd decentpaste-app && yarn tauri build
+# Desktop
+yarn tauri dev              # Development
+yarn tauri build            # Production
 
-# Rust compile check
-cd decentpaste-app/src-tauri && cargo check
+# Mobile (requires Android SDK / Xcode)
+yarn tauri android dev      # Android dev
+yarn tauri android build    # Android production
+yarn tauri ios dev          # iOS dev (macOS only)
+yarn tauri ios build        # iOS production
 
-# Rust linting (Clippy)
-cd decentpaste-app/src-tauri && cargo clippy
-
-# Full TypeScript compilation
-cd decentpaste-app && yarn build  # includes `tsc`
-
-# Format TypeScript/CSS
-cd decentpaste-app && yarn format:fix
+# Code quality
+cd decentpaste-app && yarn format:fix                    # Format TS/CSS
+cd decentpaste-app/src-tauri && cargo check              # Rust compile check
+cd decentpaste-app/src-tauri && cargo clippy             # Rust lints
+cd decentpaste-app && yarn build                         # Full TS build
 ```
 
-**Note:** This project does not have automated tests. Manual testing involves running desktop and mobile instances together (same app supports single-instance per platform):
-```bash
-# Terminal 1: Desktop
-yarn tauri dev
+**Testing**: No automated tests. Manual testing = run desktop + mobile instances together for pairing tests.
 
-# Terminal 2: Mobile (requires Android/iOS setup)
-yarn tauri android dev  # or: yarn tauri ios dev
-```
+## Git Commits
 
----
+Use **Conventional Commits**: `<type>(<scope>): <description>`
 
-## TypeScript Code Style
+**Types:** `feat` | `fix` | `refactor` | `docs` | `chore` | `style`
 
-### Formatting
-- Single quotes (`'`)
-- 120 character line width
-- Trailing commas in objects/arrays
-- Prettier auto-formats via `yarn format:fix`
+Examples: `feat(vault): add biometric auth` | `fix(clipboard): prevent echo loop` | `refactor(network): simplify reconnection`
 
-### Imports
-- Named imports preferred: `import { invoke } from '@tauri-apps/api/core'`
-- External Tauri APIs: use `@tauri-apps/api` and `@tauri-apps/plugin-*`
-- Local imports: relative paths, organized by module
-- Order: external packages, local imports, then type imports
+## Code Style
 
-### Types
-- All data structures use `interface` for objects, `type` for unions/primitives
-- Match Rust types in `api/types.ts` with backend `storage/peers.rs`, `network/protocol.rs`
-- Strict TypeScript enabled (`strict: true` in tsconfig.json)
+### TypeScript
 
-### Naming Conventions
-- Variables/functions: `camelCase`
-- Classes: `PascalCase`
-- Constants: `UPPER_SNAKE_CASE`
-- Files: `kebab-case.ts` for modules
-
-### Error Handling
-- Wrap Tauri commands in try/catch
-- Use `getErrorMessage()` helper for user-facing error messages
-- Log errors to console for debugging
-
-### State Management
-- Use `store.set(key, value)` and `store.get(key)`
-- Subscribe to changes via `store.subscribe(key, listener)`
-- Mutate arrays immutably: `update('key', (arr) => [...arr, newItem])`
-
-### UI/Components
-- DOM manipulation via helper functions in `utils/dom.ts` (`$`, `escapeHtml`)
-- Inline SVG icons from `components/icons.ts` (Lucide)
-- Delegated event listeners on root element for performance
-
-### Tauri Commands
+- Single quotes, 120 char width, trailing commas
+- Named imports: `import { invoke } from '@tauri-apps/api/core'`
+- `interface` for objects, `type` for unions/primitives
+- Variables/functions: `camelCase` | Classes: `PascalCase` | Constants: `UPPER_SNAKE_CASE`
+- Wrap Tauri commands in try/catch, use `getErrorMessage()` for user-facing errors
+- State: `store.set(key, value)`, `store.subscribe(key, listener)`
 - Command wrappers in `api/commands.ts` mirror Rust `commands.rs`
-- Use snake_case command names: `get_network_status` → `invoke('get_network_status')`
-- Event listeners in `api/events.ts` with typed handlers
 
----
+### Rust
 
-## Rust Code Style
+- 4-space indent, trailing commas in multi-line definitions
+- Imports: std lib → external crates → local modules
+- All structs derive `Debug`; serializable types: `#[derive(Debug, Clone, Serialize, Deserialize)]`
+- Variables/functions: `snake_case` | Types: `PascalCase` | Constants: `SCREAMING_SNAKE_CASE`
+- Use `DecentPasteError` enum with `thiserror`, propagate with `?`
+- Async with `tokio`, channels for inter-task communication
+- Logging: `tracing` crate (`debug!`, `info!`, `warn!`, `error!`)
+- Commands: `#[tauri::command]`, accept `State<'_, AppState>`, return `Result<T>`
+- Minimal comments - only for non-obvious behavior or security-critical code
 
-### Formatting
-- 4-space indentation (standard rustfmt)
-- Trailing commas in multi-line struct/enum definitions
+## Project Structure
 
-### Imports
-- Standard library first, then external crates, then local modules
-- Group related imports together
-- Use `use crate::module::Type` for internal imports
+```
+decentpaste-app/
+├── src/                          # Frontend (TypeScript + Tailwind v4)
+│   ├── main.ts                   # Entry point + share intent handling
+│   ├── app.ts                    # All UI views
+│   ├── api/commands.ts           # Tauri command wrappers
+│   ├── api/events.ts             # Event listeners
+│   └── state/store.ts            # Reactive state
+├── src-tauri/src/                # Backend (Rust)
+│   ├── lib.rs                    # App init, spawns network & clipboard tasks
+│   ├── commands.rs               # All Tauri command handlers
+│   ├── state.rs                  # AppState + flush helpers
+│   ├── network/                  # libp2p (mDNS, gossipsub, request-response)
+│   ├── clipboard/                # Polling monitor + echo prevention
+│   ├── security/                 # AES-GCM, X25519, PIN pairing
+│   ├── vault/                    # Stronghold encrypted storage
+│   └── storage/                  # Settings & peer types
+└── tauri-plugin-decentshare/     # Android/iOS share plugin
+```
 
-### Types
-- All structs/enums derive `Debug`
-- Serializable types: `#[derive(Debug, Clone, Serialize, Deserialize)]`
-- Use `serde` for JSON serialization
-- Public types exported at `storage/peers.rs`, `network/protocol.rs`
+## Adding a New Tauri Command
 
-### Naming Conventions
-- Variables/functions: `snake_case`
-- Types/structs/enums: `PascalCase`
-- Constants: `SCREAMING_SNAKE_CASE`
-- Modules: `snake_case` (files and directories)
+1. **Rust** (`src-tauri/src/commands.rs`):
+```rust
+#[tauri::command]
+pub async fn my_command(state: State<'_, AppState>, arg: String) -> Result<String> {
+    // implementation
+}
+```
 
-### Error Handling
-- Use custom `DecentPasteError` enum from `error.rs` with `thiserror`
-- Type alias: `pub type Result<T> = std::result::Result<T, DecentPasteError>`
-- Convert third-party errors with `#[from]` attribute where appropriate
-- Use `?` operator for error propagation
+2. **Register** (`src-tauri/src/lib.rs`):
+```rust
+.invoke_handler(tauri::generate_handler![commands::my_command])
+```
 
-### Async/Await
-- All async functions use `tokio` runtime
-- Spawn tasks with `tokio::spawn()` for concurrent operations
-- Use channels (`mpsc`, `broadcast`) for inter-task communication
+3. **TypeScript** (`src/api/commands.ts`):
+```typescript
+export async function myCommand(arg: string): Promise<string> {
+    return invoke('my_command', { arg });
+}
+```
 
-### Logging
-- Use `tracing` crate: `debug!()`, `info!()`, `warn!()`, `error!()`
-- Log levels: `decentpaste_app=debug,libp2p=info` (default env filter)
+## Adding a New Event
 
-### Tauri Commands
-- Commands in `commands.rs` with `#[tauri::command]` attribute
-- Accept `State<'_, AppState>` for shared state
-- Return `Result<T>` where `T` is `Serialize`
-- Emit events via `app_handle.emit("event-name", payload)?`
+1. **Emit from Rust**: `app_handle.emit("my-event", payload)?;`
+2. **Listen in TS** (`src/api/events.ts`): `listen<MyPayload>('my-event', (e) => { ... });`
 
-### State Management
-- `AppState` holds all shared application state
-- Use `Arc<RwLock<T>>` for thread-safe shared state
-- Flush vault data immediately after mutations (`flush_*()` methods)
+## Key Patterns
 
-### Module Documentation
-- Add module-level doc comments: `//! Module description`
-- Include important patterns and security notes in docs
+| Pattern | Description |
+|---------|-------------|
+| **Flush-on-Write** | Always call `flush_*()` immediately after mutating vault data |
+| **Per-Peer Encryption** | Clipboard encrypted separately for each peer using their unique shared secret |
+| **Echo Prevention** | `ClipboardMonitor` tracks `last_hash` to prevent re-broadcasting received content |
+| **Event-Driven** | Rust emits → Frontend listens. Use `tokio::sync::Notify` (no polling) |
+| **Platform Conditionals** | `#[cfg(desktop)]` / `#[cfg(mobile)]` for platform-specific code |
 
-### Comments
-- Minimal comments (code should be self-documenting)
-- Only comment non-obvious behavior, security-critical operations, or complex logic
+## Platform Notes
 
----
+**Desktop**: Auto-updates (GitHub Releases), system tray, notifications, single instance.
+
+**Mobile (Android/iOS)**:
+- Clipboard outgoing: Use system share sheet → DecentPaste (auto-monitoring disabled)
+- Clipboard incoming: Only syncs in foreground; connections drop when backgrounded
+- On resume: `reconnect_peers` automatically redials disconnected peers
+
+## Creating Tauri Plugins
+
+```bash
+npx @tauri-apps/cli plugin new --android --ios <plugin-name>
+```
+
+- **Plugin name**: Prefix with `decent` (e.g., `decentshare`, `decentsecret`)
+- **Package name**: `com.decentpaste.plugins.<plugin-name>`
 
 ## Documentation Guidelines
 
-### Diagrams
-- Use **Mermaid diagrams** instead of ASCII art or text descriptions for:
-  - Data flows
-  - Architecture diagrams
-  - Sequence diagrams
-  - State transitions
-- Mermaid renders properly in GitHub and Markdown viewers
-- Example: See ARCHITECTURE.md and SECURITY.md for Mermaid diagram usage
+**When to document**: Architecture changes → `ARCHITECTURE.md` | Security changes → `SECURITY.md` | New workflows → this file
 
----
+**When NOT to**: Minor bug fixes, trivial details, self-documenting code.
 
-## Tauri Plugins
+**Diagrams**: Use Mermaid (not ASCII art).
 
-### Creating New Plugins
-Create cross-platform plugins for DecentPaste with:
-```bash
-npx @tauri-apps/cli plugin new --android --ios <plugin name>
-```
+## Current Limitations
 
-**Note:** Run this command in a separate terminal tab to avoid conflicts with any running development server.
+- **Text only** - No image/file support
+- **Local network only** - mDNS doesn't work across networks
+- **Mobile background** - Network drops when backgrounded
 
-### Plugin Naming Convention
-- **Plugin name**: Prefix with `decent` followed by nature of plugin (e.g., `decentshare`, `decentsecret`)
-- **Package name**: Use format `com.decentpaste.plugins.<plugin name>` (e.g., `com.decentpaste.plugins.decentshare`)
+## See Also
 
----
-
-## Project-Specific Patterns
-
-### Flush-on-Write Pattern
-ALWAYS call flush methods immediately after mutating sensitive data:
-- `AppState::flush_paired_peers()` - after pairing/unpairing
-- `AppState::flush_device_identity()` - after device name change
-- `AppState::flush_clipboard_history()` - after clipboard entry added
-
-### Per-Peer Encryption
-Clipboard content is encrypted **separately for each paired peer** using their specific shared secret. Messages for Peer A cannot be decrypted by Peer B.
-
-### Event-Driven Architecture
-- Rust emits events → Frontend listens via `api/events.ts`
-- Use `tokio::sync::Notify` for async coordination (no polling)
-- Channel send/receive for inter-module communication
-
-### Platform Conditionals
-- `#[cfg(desktop)]` / `#[cfg(mobile)]` for platform-specific code
-- Desktop plugins: `notification`, `single-instance`, `autostart`
-- Mobile-only: Share intent via `tauri-plugin-decentshare`
-
-### Security
-- Never log sensitive data (PINs, keys, shared secrets)
-- PIN never stored; only Argon2id-derived encryption key in memory
-- Vault cleared from memory on lock
-- X25519 ECDH for key exchange (shared secret never transmitted)
+- `ARCHITECTURE.md` - Detailed architecture, data flows, component docs
+- `SECURITY.md` - Cryptographic stack, threat model, pairing protocol

@@ -140,17 +140,21 @@ Content is encrypted **separately for each paired peer** using their specific sh
 
 All sensitive data is stored in an encrypted IOTA Stronghold vault:
 
-```
-User PIN (4-8 digits)
-       │
-       ▼
-┌─────────────────────────┐
-│      Argon2id KDF       │ ← salt.bin (unique per device)
-│  m=64MB, t=3, p=4       │
-└─────────────────────────┘
-       │
-       ▼
-   256-bit Key → vault.hold (encrypted)
+```mermaid
+flowchart TB
+    PIN["User PIN (4-8 digits)"]
+
+    subgraph KDF["Argon2id KDF"]
+        Salt["salt.bin (unique per device)"]
+        Params["m=64MB, t=3, p=4"]
+    end
+
+    Key["256-bit Encryption Key"]
+    Vault["vault.hold (encrypted)"]
+
+    PIN --> KDF
+    KDF --> Key
+    Key --> Vault
 ```
 
 ### What's Protected
