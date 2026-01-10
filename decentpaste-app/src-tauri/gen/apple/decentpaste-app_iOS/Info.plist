@@ -42,5 +42,7 @@
 	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>NSFaceIDUsageDescription</key>
+	<string>DecentPaste uses Face ID to securely unlock your encrypted vault and protect your clipboard data.</string>
 </dict>
 </plist>
