@@ -8,6 +8,7 @@ import type {
   NetworkStatus,
   PairedPeer,
   PairingSession,
+  SecretStorageStatus,
   VaultStatus,
 } from './types';
 
@@ -147,6 +148,22 @@ export async function getDeviceInfo(): Promise<DeviceInfo> {
  */
 export async function getVaultStatus(): Promise<VaultStatus> {
   return invoke('get_vault_status');
+}
+
+/**
+ * Check if secure storage (biometric/keyring) is available on this device.
+ * Returns availability status and the specific method available.
+ */
+export async function checkSecretStorageAvailability(): Promise<SecretStorageStatus> {
+  return invoke('check_secret_storage_availability');
+}
+
+/**
+ * Get the authentication method used for the current vault.
+ * Returns null if no vault is set up yet.
+ */
+export async function getVaultAuthMethod(): Promise<AuthMethod | null> {
+  return invoke('get_vault_auth_method');
 }
 
 /**

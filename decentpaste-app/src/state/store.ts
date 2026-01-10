@@ -1,11 +1,13 @@
 import type {
   AppSettings,
+  AuthMethod,
   ClipboardEntry,
   DeviceInfo,
   DiscoveredPeer,
   NetworkStatus,
   PairedPeer,
   PairingSession,
+  SecretStorageStatus,
   UpdateInfo,
   UpdateProgress,
   UpdateStatus,
@@ -13,7 +15,7 @@ import type {
 } from '../api/types';
 
 export type View = 'dashboard' | 'peers' | 'settings';
-export type OnboardingStep = 'device-name' | 'pin-setup' | null;
+export type OnboardingStep = 'device-name' | 'auth-choice' | 'pin-setup' | null;
 
 export interface Toast {
   id: string;
@@ -61,6 +63,8 @@ export interface AppState {
 
   // Vault state
   vaultStatus: VaultStatus;
+  secretStorageStatus: SecretStorageStatus | null;
+  vaultAuthMethod: AuthMethod | null;
 
   // Onboarding state
   onboardingStep: OnboardingStep;
@@ -123,6 +127,8 @@ class Store {
       updateError: null,
       // Vault state
       vaultStatus: 'NotSetup',
+      secretStorageStatus: null,
+      vaultAuthMethod: null,
       // Onboarding state
       onboardingStep: null,
       onboardingDeviceName: '',

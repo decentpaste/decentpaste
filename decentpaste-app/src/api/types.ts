@@ -53,7 +53,21 @@ export interface PairingSession {
 
 // Vault types
 export type VaultStatus = 'NotSetup' | 'Locked' | 'Unlocked';
-export type AuthMethod = 'pin';
+export type AuthMethod = 'pin' | 'secure_storage';
+
+// Secure storage types (from tauri-plugin-decentsecret)
+export type SecretStorageMethod =
+  | 'androidBiometric'
+  | 'iOSBiometric'
+  | 'macOSKeychain'
+  | 'windowsCredentialManager'
+  | 'linuxSecretService';
+
+export interface SecretStorageStatus {
+  available: boolean;
+  method: SecretStorageMethod | null;
+  unavailableReason: string | null;
+}
 
 // Settings types
 export interface AppSettings {
@@ -64,7 +78,7 @@ export interface AppSettings {
   keep_history: boolean;
   show_notifications: boolean;
   clipboard_poll_interval_ms: number;
-  /** Preferred authentication method for vault access (currently only 'pin') */
+  /** Authentication method for vault access ('pin' or 'secure_storage') */
   auth_method: AuthMethod | null;
   /** Whether to hide clipboard content in the UI (privacy mode) */
   hide_clipboard_content: boolean;

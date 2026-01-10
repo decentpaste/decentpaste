@@ -9,7 +9,7 @@ import { getErrorMessage } from './utils/error';
 import { notifyClipboardReceived, notifyMinimizedToTray } from './utils/notifications';
 import { isDesktop } from './utils/platform';
 import { checkForUpdates, downloadAndInstallUpdate, formatBytes, getDownloadPercentage } from './api/updater';
-import type { ClipboardEntry, DiscoveredPeer, PairedPeer } from './api/types';
+import type { ClipboardEntry, DiscoveredPeer, PairedPeer, SecretStorageMethod } from './api/types';
 // ?url suffix prevents race condition where Tauri webview loads before Vite is ready,
 // causing "image/svg+xml is not a valid JavaScript MIME type" error on first load
 import logoDark from './assets/logo_dark.svg?url';
@@ -19,9 +19,73 @@ class App {
   private pairingInProgress: boolean = false; // Guard against duplicate pairing operations
   private modalRenderPending: boolean = false; // Debounce modal renders
   private autoLockTimer: ReturnType<typeof setTimeout> | null = null; // Auto-lock timer
+  private desktopAutoUnlockAttempted: boolean = false; // Prevent duplicate auto-unlock attempts
 
   constructor(rootElement: HTMLElement) {
     this.root = rootElement;
+  }
+
+  /**
+   * Get user-friendly label for secure storage method.
+   */
+  private getSecureStorageLabel(method: SecretStorageMethod | null): string {
+    switch (method) {
+      case 'androidBiometric':
+        return 'Biometric';
+      case 'iOSBiometric':
+        return 'Face ID / Touch ID';
+      case 'macOSKeychain':
+        return 'Keychain';
+      case 'windowsCredentialManager':
+        return 'Windows Hello';
+      case 'linuxSecretService':
+        return 'System Keyring';
+      default:
+        return 'Secure Storage';
+    }
+  }
+
+  /**
+   * Attempt to auto-unlock on desktop with secure storage.
+   * Called after lock screen renders. Desktop keyrings are session-based,
+   * so we can unlock without user interaction.
+   */
+  private async attemptDesktopAutoUnlock(): Promise<void> {
+    // Guard against duplicate attempts
+    if (this.desktopAutoUnlockAttempted) return;
+    this.desktopAutoUnlockAttempted = true;
+
+    const btn = document.getElementById('btn-unlock-secure') as HTMLButtonElement | null;
+    const errorEl = document.getElementById('lock-error');
+
+    if (!btn) return;
+
+    const secretStorageStatus = store.get('secretStorageStatus');
+    const methodLabel = this.getSecureStorageLabel(secretStorageStatus?.method ?? null);
+
+    try {
+      btn.disabled = true;
+      btn.innerHTML = `${icon('loader', 18, 'animate-spin')}<span>Unlocking...</span>`;
+
+      await commands.unlockVault();
+      // Success - vault status event will trigger re-render
+      // Reset the flag on success so we can auto-unlock again after lock
+      this.desktopAutoUnlockAttempted = false;
+    } catch (error) {
+      // On failure, re-enable button for manual retry
+      const errorMessage = getErrorMessage(error);
+      let displayMessage = errorMessage;
+      if (errorMessage.toLowerCase().includes('not found')) {
+        displayMessage = 'Security key not found. You may need to reset your vault.';
+      }
+
+      if (errorEl) {
+        errorEl.textContent = displayMessage;
+        errorEl.classList.remove('hidden');
+      }
+      btn.disabled = false;
+      btn.innerHTML = `${icon('shield', 18)}<span>Unlock with ${escapeHtml(methodLabel)}</span>`;
+    }
   }
 
   async init(): Promise<void> {
@@ -56,7 +120,27 @@ class App {
       if (vaultStatus === 'Unlocked') {
         await this.loadInitialData();
       } else {
-        // For NotSetup/Locked states, just mark loading as complete
+        // For NotSetup/Locked states, check secure storage availability
+        // This determines what auth options to show
+        try {
+          const secretStorageStatus = await commands.checkSecretStorageAvailability();
+          store.set('secretStorageStatus', secretStorageStatus);
+        } catch (ssError) {
+          console.error('Failed to check secure storage:', ssError);
+          // Continue with PIN-only fallback
+          store.set('secretStorageStatus', { available: false, method: null, unavailableReason: 'Check failed' });
+        }
+
+        // For locked vault, also get the stored auth method for unlock UI
+        if (vaultStatus === 'Locked') {
+          try {
+            const authMethod = await commands.getVaultAuthMethod();
+            store.set('vaultAuthMethod', authMethod);
+          } catch (authError) {
+            console.error('Failed to get vault auth method:', authError);
+          }
+        }
+
         // Data will be loaded after unlock/setup via loadDataAfterUnlock()
         store.set('isLoading', false);
       }
@@ -412,6 +496,41 @@ class App {
         return;
       }
 
+      // Lock screen: Unlock with Secure Storage button
+      const unlockSecureBtn = target.closest('#btn-unlock-secure') as HTMLButtonElement | null;
+      if (unlockSecureBtn) {
+        const errorEl = document.getElementById('lock-error');
+        const secretStorageStatus = store.get('secretStorageStatus');
+        const methodLabel = this.getSecureStorageLabel(secretStorageStatus?.method ?? null);
+
+        unlockSecureBtn.disabled = true;
+        unlockSecureBtn.innerHTML = `${icon('loader', 18, 'animate-spin')}<span>Unlocking...</span>`;
+
+        try {
+          // unlockVault() auto-detects auth method - no PIN needed for secure storage
+          await commands.unlockVault();
+          // Vault status will be updated via event, triggering re-render to main app
+        } catch (error) {
+          const errorMessage = getErrorMessage(error);
+
+          // Map backend errors to user-friendly messages
+          let displayMessage = errorMessage;
+          if (errorMessage.toLowerCase().includes('cancel')) {
+            displayMessage = 'Authentication cancelled. Tap to try again.';
+          } else if (errorMessage.toLowerCase().includes('not found')) {
+            displayMessage = 'Security key not found. You may need to reset your vault.';
+          }
+
+          if (errorEl) {
+            errorEl.textContent = displayMessage;
+            errorEl.classList.remove('hidden');
+          }
+          unlockSecureBtn.disabled = false;
+          unlockSecureBtn.innerHTML = `${icon('shield', 18)}<span>Unlock with ${escapeHtml(methodLabel)}</span>`;
+        }
+        return;
+      }
+
       // Lock screen: Forgot PIN button - show reset confirmation
       if (target.closest('#btn-forgot-pin')) {
         store.set('showResetConfirmation', true);
@@ -476,14 +595,70 @@ class App {
         }
 
         store.set('onboardingDeviceName', deviceName);
+
+        // Check if secure storage is available - if so, show auth choice
+        const secretStorageStatus = store.get('secretStorageStatus');
+        if (secretStorageStatus?.available) {
+          store.set('onboardingStep', 'auth-choice');
+        } else {
+          // Skip to PIN setup if secure storage not available
+          store.set('onboardingStep', 'pin-setup');
+        }
+        this.render();
+        return;
+      }
+
+      // Onboarding: Auth Choice - Secure Storage selected
+      const authSecureBtn = target.closest('#btn-auth-secure-storage') as HTMLButtonElement | null;
+      if (authSecureBtn) {
+        const deviceName = store.get('onboardingDeviceName');
+        const errorEl = document.getElementById('onboarding-auth-error');
+
+        // Disable button and show loading
+        authSecureBtn.disabled = true;
+        authSecureBtn.style.opacity = '0.5';
+
+        try {
+          await commands.setupVaultWithSecureStorage(deviceName);
+
+          // Reset onboarding state
+          store.set('onboardingStep', null);
+          store.set('onboardingDeviceName', '');
+          store.addToast('Vault created successfully!', 'success');
+          // Vault status will be updated via event
+        } catch (error) {
+          if (errorEl) {
+            errorEl.textContent = getErrorMessage(error);
+            errorEl.classList.remove('hidden');
+          }
+          authSecureBtn.disabled = false;
+          authSecureBtn.style.opacity = '1';
+        }
+        return;
+      }
+
+      // Onboarding: Auth Choice - PIN selected
+      if (target.closest('#btn-auth-pin')) {
         store.set('onboardingStep', 'pin-setup');
         this.render();
         return;
       }
 
-      // Onboarding: Step 2 - Back button
-      if (target.closest('#btn-onboarding-step2-back')) {
+      // Onboarding: Auth Choice - Back button
+      if (target.closest('#btn-onboarding-auth-back')) {
         store.set('onboardingStep', 'device-name');
+        this.render();
+        return;
+      }
+
+      // Onboarding: PIN Setup - Back button
+      if (target.closest('#btn-onboarding-step2-back')) {
+        const secretStorageStatus = store.get('secretStorageStatus');
+        if (secretStorageStatus?.available) {
+          store.set('onboardingStep', 'auth-choice');
+        } else {
+          store.set('onboardingStep', 'device-name');
+        }
         this.render();
         return;
       }
@@ -892,7 +1067,14 @@ class App {
     store.subscribe('activePairingSession', () => this.renderPairingModal());
     store.subscribe('showClearHistoryConfirm', () => this.updateClearHistoryModal());
     store.subscribe('isLoading', () => this.render());
-    store.subscribe('vaultStatus', () => this.render());
+    store.subscribe('vaultStatus', (status) => {
+      // Reset auto-unlock flag when vault becomes unlocked (via any method)
+      // This allows auto-unlock to trigger again after next lock
+      if (status === 'Unlocked') {
+        this.desktopAutoUnlockAttempted = false;
+      }
+      this.render();
+    });
     store.subscribe('onboardingStep', () => this.render());
     store.subscribe('showResetConfirmation', () => this.render());
     store.subscribe('updateStatus', () => {
@@ -1025,6 +1207,13 @@ class App {
     // Show lock screen if vault is locked
     if (state.vaultStatus === 'Locked') {
       this.root.innerHTML = this.renderLockScreen();
+
+      // Desktop auto-unlock with secure storage (keyring is session-based)
+      const authMethod = store.get('vaultAuthMethod');
+      if (authMethod === 'secure_storage' && isDesktop()) {
+        // Use setTimeout to avoid blocking render
+        setTimeout(() => this.attemptDesktopAutoUnlock(), 100);
+      }
       return;
     }
 
@@ -1417,30 +1606,35 @@ class App {
 
   /**
    * Renders the lock screen for returning users.
-   * Shows PIN input with masked digits.
+   * Shows PIN input or secure storage unlock button based on auth method.
    */
   private renderLockScreen(): string {
     const settings = store.get('settings');
     const showResetConfirmation = store.get('showResetConfirmation');
     const deviceName = settings.device_name || 'Your Device';
+    const authMethod = store.get('vaultAuthMethod');
+    const secretStorageStatus = store.get('secretStorageStatus');
 
-    return `
-      <div class="flex flex-col h-screen relative" style="background: #0a0a0b;">
-        <!-- Ambient background orbs -->
-        <div class="orb orb-teal animate-float" style="width: 400px; height: 400px; top: -15%; left: -10%;"></div>
-        <div class="orb orb-orange animate-float-delayed" style="width: 300px; height: 300px; bottom: 10%; right: -15%;"></div>
+    // Determine if we should use secure storage unlock
+    const useSecureStorage = authMethod === 'secure_storage';
+    const methodLabel = this.getSecureStorageLabel(secretStorageStatus?.method ?? null);
 
-        <!-- Lock Screen Content -->
-        <div class="flex-1 flex flex-col items-center justify-center relative z-10 p-6 pt-safe-top pb-safe-bottom">
-          <!-- Logo and Device Name -->
-          <div class="text-center mb-8">
-            <div class="w-20 h-20 rounded-2xl mx-auto mb-4 flex items-center justify-center glow-teal" style="background: linear-gradient(135deg, rgba(20, 184, 166, 0.2) 0%, rgba(13, 148, 136, 0.1) 100%); border: 1px solid rgba(20, 184, 166, 0.3);">
-              ${icon('lock', 36, 'text-teal-400')}
-            </div>
-            <h1 class="text-xl font-semibold text-white mb-1 font-display">Welcome back</h1>
-            <p class="text-white/50 text-sm">${escapeHtml(deviceName)}</p>
+    // Render the appropriate unlock content based on auth method
+    const unlockContent = useSecureStorage
+      ? `
+          <!-- Secure Storage Unlock -->
+          <div class="w-full max-w-xs mb-6 text-center">
+            <p class="text-sm text-white/60 mb-4">Tap to unlock with ${escapeHtml(methodLabel)}</p>
+            <p id="lock-error" class="text-red-400 text-xs text-center hidden"></p>
           </div>
 
+          <!-- Unlock Button -->
+          <button id="btn-unlock-secure" class="btn-primary w-full max-w-xs mb-4">
+            ${icon('shield', 18)}
+            <span>Unlock with ${escapeHtml(methodLabel)}</span>
+          </button>
+        `
+      : `
           <!-- PIN Input -->
           <div class="w-full max-w-xs mb-6">
             <label class="block text-sm text-white/60 mb-2 text-center">Enter your PIN to unlock</label>
@@ -1465,10 +1659,30 @@ class App {
             ${icon('unlock', 18)}
             <span>Unlock</span>
           </button>
+        `;
 
-          <!-- Forgot PIN Link -->
+    return `
+      <div class="flex flex-col h-screen relative" style="background: #0a0a0b;">
+        <!-- Ambient background orbs -->
+        <div class="orb orb-teal animate-float" style="width: 400px; height: 400px; top: -15%; left: -10%;"></div>
+        <div class="orb orb-orange animate-float-delayed" style="width: 300px; height: 300px; bottom: 10%; right: -15%;"></div>
+
+        <!-- Lock Screen Content -->
+        <div class="flex-1 flex flex-col items-center justify-center relative z-10 p-6 pt-safe-top pb-safe-bottom">
+          <!-- Logo and Device Name -->
+          <div class="text-center mb-8">
+            <div class="w-20 h-20 rounded-2xl mx-auto mb-4 flex items-center justify-center glow-teal" style="background: linear-gradient(135deg, rgba(20, 184, 166, 0.2) 0%, rgba(13, 148, 136, 0.1) 100%); border: 1px solid rgba(20, 184, 166, 0.3);">
+              ${icon('lock', 36, 'text-teal-400')}
+            </div>
+            <h1 class="text-xl font-semibold text-white mb-1 font-display">Welcome back</h1>
+            <p class="text-white/50 text-sm">${escapeHtml(deviceName)}</p>
+          </div>
+
+          ${unlockContent}
+
+          <!-- Forgot PIN / Can't Unlock Link -->
           <button id="btn-forgot-pin" class="text-white/40 hover:text-white/60 text-sm transition-colors">
-            Forgot PIN?
+            ${useSecureStorage ? "Can't unlock?" : 'Forgot PIN?'}
           </button>
         </div>
 
@@ -1485,17 +1699,26 @@ class App {
 
   /**
    * Renders the onboarding wizard for first-time setup.
-   * 2-step flow: Device Name → PIN Setup
+   * Flow: Device Name → Auth Choice (if available) → PIN Setup (if chosen)
    */
   private renderOnboarding(): string {
     const step = store.get('onboardingStep') || 'device-name';
+    const secretStorageStatus = store.get('secretStorageStatus');
 
-    // Progress indicator
-    const stepNumber = step === 'device-name' ? 1 : 2;
+    // Determine number of steps based on secure storage availability
+    const hasSecureStorage = secretStorageStatus?.available ?? false;
+    const totalSteps = hasSecureStorage ? 3 : 2;
+
+    // Step number mapping
+    let stepNumber: number;
+    if (step === 'device-name') stepNumber = 1;
+    else if (step === 'auth-choice') stepNumber = 2;
+    else stepNumber = hasSecureStorage ? 3 : 2; // pin-setup
+
     const progressIndicator = `
       <div class="flex items-center justify-center gap-2 mb-8">
         <div class="flex items-center gap-1">
-          ${[1, 2]
+          ${Array.from({ length: totalSteps }, (_, i) => i + 1)
             .map(
               (n) => `
             <div class="w-2 h-2 rounded-full transition-all ${n === stepNumber ? 'bg-teal-400 w-6' : n < stepNumber ? 'bg-teal-400/50' : 'bg-white/20'}"></div>
@@ -1503,7 +1726,7 @@ class App {
             )
             .join('')}
         </div>
-        <span class="text-xs text-white/40 ml-2">Step ${stepNumber} of 2</span>
+        <span class="text-xs text-white/40 ml-2">Step ${stepNumber} of ${totalSteps}</span>
       </div>
     `;
 
@@ -1537,6 +1760,55 @@ class App {
         <button id="btn-onboarding-step1-continue" class="btn-primary w-full">
           ${icon('arrowRight', 18)}
           <span>Continue</span>
+        </button>
+      `;
+    } else if (step === 'auth-choice') {
+      const methodLabel = this.getSecureStorageLabel(secretStorageStatus?.method ?? null);
+      stepContent = `
+        <div class="text-center mb-6">
+          <div class="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center glow-teal" style="background: linear-gradient(135deg, rgba(20, 184, 166, 0.2) 0%, rgba(13, 148, 136, 0.1) 100%); border: 1px solid rgba(20, 184, 166, 0.3);">
+            ${icon('shield', 28, 'text-teal-400')}
+          </div>
+          <h2 class="text-xl font-semibold text-white mb-2 font-display">Choose Security Method</h2>
+          <p class="text-white/50 text-sm">How would you like to protect your vault?</p>
+        </div>
+
+        <div class="space-y-3 mb-6">
+          <!-- Recommended: Secure Storage -->
+          <button id="btn-auth-secure-storage" class="w-full p-4 rounded-xl text-left transition-all hover:scale-[1.02]" style="background: rgba(20, 184, 166, 0.1); border: 1px solid rgba(20, 184, 166, 0.3);">
+            <div class="flex items-start gap-3">
+              <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(20, 184, 166, 0.2);">
+                ${icon('shield', 20, 'text-teal-400')}
+              </div>
+              <div class="flex-1">
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="font-medium text-white">${escapeHtml(methodLabel)}</span>
+                  <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-teal-400/20 text-teal-400">Recommended</span>
+                </div>
+                <p class="text-white/50 text-xs">Uses your device's built-in security. No PIN to remember.</p>
+              </div>
+            </div>
+          </button>
+
+          <!-- Alternative: PIN -->
+          <button id="btn-auth-pin" class="w-full p-4 rounded-xl text-left transition-all hover:scale-[1.02]" style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1);">
+            <div class="flex items-start gap-3">
+              <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(255, 255, 255, 0.1);">
+                ${icon('key', 20, 'text-white/60')}
+              </div>
+              <div class="flex-1">
+                <span class="font-medium text-white block mb-1">PIN Code</span>
+                <p class="text-white/50 text-xs">Create a 4-8 digit PIN to unlock your vault.</p>
+              </div>
+            </div>
+          </button>
+        </div>
+
+        <p id="onboarding-auth-error" class="text-red-400 text-xs text-center mb-4 hidden"></p>
+
+        <button id="btn-onboarding-auth-back" class="btn-secondary w-full">
+          ${icon('arrowLeft', 18)}
+          <span>Back</span>
         </button>
       `;
     } else if (step === 'pin-setup') {
