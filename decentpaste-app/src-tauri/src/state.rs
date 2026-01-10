@@ -170,8 +170,8 @@ impl AppState {
     /// - After unpairing
     /// - After peer name updates
     pub async fn flush_paired_peers(&self) -> Result<()> {
-        let vault_manager = self.vault_manager.read().await;
-        if let Some(ref manager) = *vault_manager {
+        let mut vault_manager = self.vault_manager.write().await;
+        if let Some(ref mut manager) = *vault_manager {
             let peers = self.paired_peers.read().await;
             manager.set_paired_peers(&peers)?;
             manager.flush()?;
@@ -196,8 +196,8 @@ impl AppState {
             return Ok(()); // History persistence disabled
         }
 
-        let vault_manager = self.vault_manager.read().await;
-        if let Some(ref manager) = *vault_manager {
+        let mut vault_manager = self.vault_manager.write().await;
+        if let Some(ref mut manager) = *vault_manager {
             let history = self.clipboard_history.read().await;
             manager.set_clipboard_history(&history)?;
             manager.flush()?;
@@ -214,8 +214,8 @@ impl AppState {
     /// This should be called after device identity changes:
     /// - After device name update in settings
     pub async fn flush_device_identity(&self) -> Result<()> {
-        let vault_manager = self.vault_manager.read().await;
-        if let Some(ref manager) = *vault_manager {
+        let mut vault_manager = self.vault_manager.write().await;
+        if let Some(ref mut manager) = *vault_manager {
             let identity = self.device_identity.read().await;
             if let Some(ref id) = *identity {
                 manager.set_device_identity(id)?;
@@ -234,8 +234,8 @@ impl AppState {
     /// This is a convenience method that flushes all data types.
     /// Used primarily as a safety net in lifecycle handlers.
     pub async fn flush_all_to_vault(&self) -> Result<()> {
-        let vault_manager = self.vault_manager.read().await;
-        if let Some(ref manager) = *vault_manager {
+        let mut vault_manager = self.vault_manager.write().await;
+        if let Some(ref mut manager) = *vault_manager {
             let keep_history = self.settings.read().await.keep_history;
 
             // Flush clipboard history if enabled

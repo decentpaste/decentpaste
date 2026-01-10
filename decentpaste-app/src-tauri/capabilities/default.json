@@ -19,7 +19,6 @@
     "clipboard-manager:allow-clear",
     "updater:default",
     "process:allow-restart",
-    "stronghold:default",
     "os:default",
     "decentshare:default"
   ]

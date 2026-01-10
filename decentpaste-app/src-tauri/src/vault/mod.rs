@@ -1,4 +1,4 @@
-//! Secure vault storage module using IOTA Stronghold.
+//! Secure vault storage module using AES-256-GCM encryption.
 //!
 //! This module provides encrypted storage for sensitive data including:
 //! - Paired peer shared secrets
@@ -12,8 +12,10 @@ pub mod auth;
 pub mod error;
 pub mod manager;
 pub mod salt;
+pub mod storage;
 
 pub use auth::{AuthMethod, VaultStatus};
 pub use error::{VaultError, VaultResult};
 pub use manager::VaultManager;
 pub use salt::{delete_salt, get_or_create_salt};
+pub use storage::{VaultData, VaultKey};
