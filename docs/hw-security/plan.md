@@ -1,320 +1,161 @@
-# Biometric Authentication Implementation Plan
+# Hardware Security Implementation Plan
 
-**Status**: Revised after security review
-**Priority**: High
-**Target**: Mobile (Android/iOS) with hardware biometrics, Desktop with OS keyring
+## User Decisions (Confirmed)
 
----
-
-## Security Review Summary
-
-> **Review Date**: 2025-01-10
-> **Reviewer**: Claude Code Security Analysis
-> **Verdict**: Original plan had critical flaws; revised plan addresses all issues
-
-### Critical Issues Identified & Resolved
-
-| Issue | Original Plan | Resolution |
-|-------|--------------|------------|
-| Wrapped key inside vault | Stored inside Stronghold (impossible) | Store in platform secure storage |
-| Memory zeroing | Used `drop()` (doesn't zero) | Use `zeroize` crate |
-| Android thread safety | Single `pendingInvoke` variable | Use `ConcurrentHashMap` |
-| Stronghold complexity | 20+ deps, no security benefit | **Remove entirely** |
-| PIN fallback | Created dual-key weakness | PIN/biometric mutually exclusive |
-| iOS key invalidation | Used `.userPresence` | Use `.biometryCurrentSet` |
-| iOS encryption | Unclear approach | Use Secure Enclave + ECIES |
-
-### User Decisions (Confirmed)
-
-1. **Wrapped Key Storage**: Platform secure storage (AndroidKeyStore / iOS Keychain), NOT inside vault
-2. **Key Invalidation**: Invalidate on biometric enrollment change (more secure)
-3. **PIN/Biometric Relationship**: Mutually exclusive - device capability determines which, not fallback
-4. **iOS Algorithm**: ECIES with Secure Enclave for maximum hardware security
-5. **Stronghold**: Remove entirely - no security benefit over existing AES-256-GCM + Argon2id
-6. **Desktop**: Use `keyring` crate for session-based OS keychain security
+| Decision      | Choice                                   | Implication                                       |
+|---------------|------------------------------------------|---------------------------------------------------|
+| Migration     | Force re-setup                           | No migration code; users factory reset on upgrade |
+| Mobile auth   | Biometric-only where available           | No PIN recovery; biometric change = vault lost    |
+| Desktop auth  | Keyring-only where available             | PIN only if keyring unavailable                   |
+| Plugin design | Unified `decentsecret` for ALL platforms | Single API, open-source friendly                  |
 
 ---
 
-## Overview
+## Architecture Overview
 
-This plan describes the implementation of hardware-backed authentication for DecentPaste's vault system.
+### Unified Security Model
 
-### Problem Statement
+```mermaid
+flowchart TD
+    VK[VAULT KEY - 256-bit random<br/>Encrypts vault.enc via AES-256-GCM]
 
-The current PIN-based vault authentication has security limitations:
-- PIN is brute-forceable (though Argon2id slows it significantly)
-- PIN must be derived each time (memory-intensive)
-- No hardware protection (relies on KDF strength)
-- Stronghold adds complexity without additional security benefit
+    VK --> DS[decentsecret plugin]
+    VK --> PIN[PIN Fallback - Argon2id]
 
-### Solution
+    DS --> Android[Android TEE]
+    DS --> iOS[iOS Secure Enclave]
+    DS --> macOS[macOS Keychain]
+    DS --> Windows[Windows Credential Manager]
+    DS --> Linux[Linux Secret Service]
+```
 
-Implement platform-appropriate authentication:
+### Platform Auth Matrix
 
-| Platform | Auth Method | Storage | Security Level |
-|----------|-------------|---------|----------------|
-| **Android** | Hardware biometric (TEE) | AndroidKeyStore | Strongest |
-| **iOS** | Hardware biometric (Secure Enclave) | iOS Keychain | Strongest |
-| **macOS** | OS session (user login) | keyring → macOS Keychain | Good |
-| **Windows** | OS session (user login) | keyring → Credential Manager | Good |
-| **Linux** | OS session (user login) | keyring → Secret Service | Good |
-| **Fallback** | PIN (Argon2id) | Encrypted file | Good |
+| Platform | decentsecret Available | Auth Method | Key Storage           |
+|----------|------------------------|-------------|-----------------------|
+| Android  | Has biometrics         | Biometric   | AndroidKeyStore (TEE) |
+| Android  | No biometrics          | Unavailable | PIN fallback          |
+| iOS      | Has biometrics         | Biometric   | Secure Enclave        |
+| iOS      | No biometrics          | Unavailable | PIN fallback          |
+| macOS    | Always                 | Keyring     | macOS Keychain        |
+| Windows  | Always                 | Keyring     | Credential Manager    |
+| Linux    | Has Secret Service     | Keyring     | GNOME Keyring/KWallet |
+| Linux    | No Secret Service      | Unavailable | PIN fallback          |
+
+**Key insight**: App code only needs to:
+1. Check if `decentsecret` is available
+2. If yes, use plugin
+3. If no, fall back to PIN
 
 ---
 
-## Revised Architecture
+## `tauri-plugin-decentsecret` Design
 
-### Major Change: Remove Stronghold
+### Plugin Philosophy
 
-**Why Stronghold is being removed:**
-1. No security benefit - DecentPaste already has AES-256-GCM + Argon2id
-2. Work factor disabled to 0 (35-second delays were unacceptable)
-3. Features unused - client isolation, secret rotation, ACLs
-4. 20+ transitive dependencies for a simple encrypted JSON store
-5. Creates awkward constraints for biometric key storage
+This plugin provides **unified secure credential storage** across all platforms:
+- **Mobile**: Hardware-backed biometric authentication (TEE/Secure Enclave)
+- **Desktop**: OS-provided credential storage (Keychain/Credential Manager/Secret Service)
 
-**Replacement:** Simple encrypted file using existing crypto primitives.
+The plugin abstracts away platform differences. Consumers see ONE API.
+
+### Rust API (Public Interface)
 
 ```rust
-#[derive(Serialize, Deserialize)]
-pub struct VaultData {
-    pub clipboard_history: Vec<ClipboardEntry>,
-    pub paired_peers: Vec<PairedPeer>,
-    pub device_identity: Option<DeviceIdentity>,
-    pub libp2p_keypair: Option<Vec<u8>>,
+// tauri-plugin-decentsecret/src/lib.rs
+
+use serde::{Deserialize, Serialize};
+
+/// Check what secure storage capabilities are available on this platform
+#[tauri::command]
+pub async fn check_availability() -> SecretStorageStatus;
+
+/// Store a secret (vault key) in platform secure storage
+/// - Android: Wraps with biometric-protected key in AndroidKeyStore
+/// - iOS: Stores in Keychain with Secure Enclave protection
+/// - Desktop: Stores in OS keyring
+#[tauri::command]
+pub async fn store_secret(secret: Vec<u8>) -> Result<(), SecretStorageError>;
+
+/// Retrieve secret from platform secure storage
+/// - Android: Shows BiometricPrompt, unwraps with TEE
+/// - iOS: Shows Face ID/Touch ID, retrieves from Secure Enclave
+/// - Desktop: Retrieves from OS keyring (no prompt, session-based)
+#[tauri::command]
+pub async fn retrieve_secret() -> Result<Vec<u8>, SecretStorageError>;
+
+/// Delete secret from platform secure storage
+#[tauri::command]
+pub async fn delete_secret() -> Result<(), SecretStorageError>;
+
+// Types
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SecretStorageStatus {
+    pub available: bool,
+    pub method: Option<SecretStorageMethod>,
+    pub unavailable_reason: Option<String>,
 }
 
-// Encryption: AES-256-GCM (already exists in security/crypto.rs)
-// Key derivation: Argon2id for PIN, random for biometric/keyring
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SecretStorageMethod {
+    AndroidBiometric,
+    IOSBiometric,
+    MacOSKeychain,
+    WindowsCredentialManager,
+    LinuxSecretService,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SecretStorageError {
+    NotAvailable,
+    AuthenticationFailed,
+    BiometricEnrollmentChanged,
+    NoBiometricsEnrolled,
+    SecretNotFound,
+    AccessDenied,
+    InternalError(String),
+}
 ```
 
-### Security Model
+### TypeScript API
 
-```
-MOBILE (Android/iOS) - Hardware-Bound:
-──────────────────────────────────────
-┌─────────────┐     ┌──────────────────┐     ┌─────────────┐
-│ User opens  │ ──► │ Biometric prompt │ ──► │ Hardware    │
-│ app         │     │ (Fingerprint/    │     │ releases    │
-│             │     │  Face ID)        │     │ vault key   │
-└─────────────┘     └──────────────────┘     └─────────────┘
-                           │
-                           ▼
-                    Hardware-bound key
-                    (Cannot be accessed without biometric)
+```typescript
+export interface SecretStorageStatus {
+  available: boolean;
+  method: SecretStorageMethod | null;
+  unavailable_reason: string | null;
+}
 
-DESKTOP (macOS/Windows/Linux) - Session-Bound:
-──────────────────────────────────────────────
-┌─────────────┐     ┌──────────────────┐     ┌─────────────┐
-│ User logs   │ ──► │ OS keychain      │ ──► │ App reads   │
-│ into OS     │     │ unlocked         │     │ vault key   │
-│             │     │                  │     │ from keyring│
-└─────────────┘     └──────────────────┘     └─────────────┘
-                           │
-                           ▼
-                    Session-bound key
-                    (Accessible while user session active)
-```
+export type SecretStorageMethod =
+  | 'AndroidBiometric'
+  | 'IOSBiometric'
+  | 'MacOSKeychain'
+  | 'WindowsCredentialManager'
+  | 'LinuxSecretService';
 
-### Data Flow: Biometric Vault Setup
+export type SecretStorageError =
+  | 'NotAvailable'
+  | 'AuthenticationFailed'
+  | 'BiometricEnrollmentChanged'
+  | 'NoBiometricsEnrolled'
+  | 'SecretNotFound'
+  | 'AccessDenied'
+  | { InternalError: string };
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                  BIOMETRIC VAULT SETUP (Mobile)                  │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  1. Generate random 256-bit vault key                           │
-│     vault_key = rand::random::<[u8; 32]>()                      │
-│                                                                  │
-│  2. Wrap vault key with platform biometrics                     │
-│     ┌─────────────────────────────────────────────────────┐     │
-│     │ Android: AndroidKeyStore + AES-GCM                  │     │
-│     │   - Generate AES key in TEE                         │     │
-│     │   - setUserAuthenticationRequired(true)             │     │
-│     │   - setInvalidatedByBiometricEnrollment(true)       │     │
-│     │   - Encrypt vault_key → wrapped_key + iv            │     │
-│     ├─────────────────────────────────────────────────────┤     │
-│     │ iOS: Secure Enclave + ECIES                         │     │
-│     │   - Generate EC key in Secure Enclave               │     │
-│     │   - kSecAttrTokenIDSecureEnclave                    │     │
-│     │   - .biometryCurrentSet access control              │     │
-│     │   - ECIES encrypt vault_key → wrapped_key           │     │
-│     └─────────────────────────────────────────────────────┘     │
-│                                                                  │
-│  3. Store wrapped key in platform secure storage                │
-│     - Android: SharedPreferences (encrypted key in KeyStore)   │
-│     - iOS: Keychain (encrypted data)                           │
-│                                                                  │
-│  4. Create vault file with vault key                            │
-│     - Serialize VaultData to JSON                               │
-│     - Encrypt with AES-256-GCM using vault_key                  │
-│     - Write to vault.enc                                        │
-│                                                                  │
-│  5. Zeroize vault key from memory                               │
-│     vault_key.zeroize()  // Uses zeroize crate                  │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### Data Flow: Desktop Keyring Setup
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                  KEYRING VAULT SETUP (Desktop)                   │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  1. Generate random 256-bit vault key                           │
-│     vault_key = rand::random::<[u8; 32]>()                      │
-│                                                                  │
-│  2. Store vault key in OS keychain via keyring crate            │
-│     - macOS: Keychain Access                                    │
-│     - Windows: Credential Manager                               │
-│     - Linux: Secret Service (GNOME Keyring, KWallet)           │
-│                                                                  │
-│  3. Create vault file with vault key                            │
-│     - Same as mobile: JSON → AES-256-GCM → vault.enc            │
-│                                                                  │
-│  4. Zeroize vault key from memory                               │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+export async function checkAvailability(): Promise<SecretStorageStatus>;
+export async function storeSecret(secret: number[]): Promise<void>;
+export async function retrieveSecret(): Promise<number[]>;
+export async function deleteSecret(): Promise<void>;
 ```
 
 ---
 
-## Security Properties Comparison
+## Platform Implementations
 
-| Property | PIN Vault | Biometric Vault | Keyring Vault |
-|----------|-----------|-----------------|---------------|
-| **Key Type** | Derived (Argon2id) | Random 256-bit | Random 256-bit |
-| **Key Storage** | Not stored | Hardware (TEE/SE) | OS keychain |
-| **Brute-force** | ~10 years | Infeasible (2^256) | Infeasible (2^256) |
-| **Stolen device** | Requires PIN | Requires biometrics | Requires OS login |
-| **Biometric change** | N/A | Key invalidated | N/A |
-| **Memory exposure** | Brief (derivation) | Brief (unlock) | Brief (unlock) |
-| **Hardware binding** | No | Yes | No (session-bound) |
+### Android: `DecentsecretPlugin.kt`
 
----
-
-## Implementation Phases
-
-### Phase 0: Remove Stronghold & Add Zeroize
-**Goal**: Replace Stronghold with simple AES-256-GCM encrypted file
-
-**Tasks**:
-- Add `zeroize = "1.7"` to Cargo.toml
-- Remove `tauri-plugin-stronghold` and `iota_stronghold` dependencies
-- Create `vault/storage.rs` with `VaultData` struct
-- Create `ZeroingVaultKey` wrapper with secure memory clearing
-- Implement `save_vault()` / `load_vault()` using existing crypto
-- Update `VaultManager` to use new storage
-- Remove Stronghold plugin init from `lib.rs`
-
-**Files**:
-- `decentpaste-app/src-tauri/Cargo.toml`
-- `decentpaste-app/src-tauri/src/vault/storage.rs` (NEW)
-- `decentpaste-app/src-tauri/src/vault/manager.rs`
-- `decentpaste-app/src-tauri/src/lib.rs`
-
-### Phase 1: Desktop Keyring Integration
-**Goal**: Store vault key in OS keychain for session-based security
-
-**Tasks**:
-- Add `keyring = "3"` to Cargo.toml (desktop only)
-- Create `vault/keyring_storage.rs` with keyring wrapper
-- Add `AuthMethod::Keyring` variant
-- Implement `create_with_keyring()` and `open_with_keyring()`
-- Desktop auto-unlocks via OS keychain
-
-**Files**:
-- `decentpaste-app/src-tauri/Cargo.toml`
-- `decentpaste-app/src-tauri/src/vault/keyring_storage.rs` (NEW)
-- `decentpaste-app/src-tauri/src/vault/auth.rs`
-- `decentpaste-app/src-tauri/src/vault/manager.rs`
-
-### Phase 2: Mobile Biometric Plugin
-**Goal**: Create `tauri-plugin-decentsecret` for hardware-bound biometric auth
-
-**Critical Security Requirements**:
-- Android: Use `ConcurrentHashMap` for pending operations (NOT single variable)
-- Android: Set `setInvalidatedByBiometricEnrollment(true)`
-- Android: Use `CryptoObject` pattern for hardware binding
-- iOS: Use `.biometryCurrentSet` (NOT `.userPresence`)
-- iOS: Use `kSecAttrTokenIDSecureEnclave` for Secure Enclave
-
-**API**:
-```rust
-// Unified Rust API
-pub fn check_biometric_status() -> BiometricStatus;
-pub fn wrap_vault_key(key: Vec<u8>) -> WrapKeyResult;
-pub fn unwrap_vault_key() -> UnwrapKeyResult;
-pub fn delete_vault_key() -> DeleteKeyResult;
-```
-
-**Files**:
-- `tauri-plugin-decentsecret/` (entire plugin directory)
-- Android: `DecentsecretPlugin.kt`
-- iOS: `DecentsecretPlugin.swift`
-
-### Phase 3: VaultManager Mobile Integration
-**Goal**: Wire biometric plugin into vault system
-
-**Tasks**:
-- Add `AuthMethod::Biometric` variant
-- Implement `create_with_biometric()` and `open_with_biometric()`
-- Register plugin in `lib.rs` (mobile only)
-- Zeroize keys after use
-
-### Phase 4: Commands & Frontend Integration
-**Goal**: Unified API and UI for all auth methods
-
-**Tasks**:
-- Add `check_biometric_available()` command
-- Add `setup_vault_auto()` / `unlock_vault_auto()` commands
-- Update frontend to auto-detect auth method
-- Mobile: show biometric prompt
-- Desktop: auto-unlock via keyring
-
-### Phase 5: Testing & Documentation
-**Goal**: Validate security and update docs
-
-**Tests**:
-- Biometric enrollment change invalidates keys
-- Desktop keyring persistence across app restarts
-- PIN fallback works when biometric/keyring unavailable
-- Cross-device clipboard sync with new vault format
-
----
-
-## Android Implementation Details
-
-### BiometricPrompt with CryptoObject
-
-```kotlin
-// CRITICAL: Use ConcurrentHashMap for thread safety
-private val pendingOperations = ConcurrentHashMap<String, PendingOperation>()
-
-@Command
-fun wrapVaultKey(invoke: Invoke, key: ByteArray) {
-    val operationId = UUID.randomUUID().toString()
-    pendingOperations[operationId] = PendingOperation(invoke, OperationType.WRAP, key)
-
-    val secretKey = getOrCreateBiometricKey()
-    val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-    cipher.init(Cipher.ENCRYPT_MODE, secretKey)
-
-    showBiometricPrompt(operationId, cipher, "Secure your vault")
-}
-
-private fun getOrCreateBiometricKey(): SecretKey {
-    val builder = KeyGenParameterSpec.Builder(KEY_ALIAS, ...)
-        .setUserAuthenticationRequired(true)
-        .setInvalidatedByBiometricEnrollment(true)  // SECURITY: Invalidate on change
-    // ...
-}
-```
-
-### Key Generation Parameters
-
+**Critical security flags:**
 ```kotlin
 KeyGenParameterSpec.Builder(KEY_ALIAS, PURPOSE_ENCRYPT or PURPOSE_DECRYPT)
     .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
@@ -322,152 +163,239 @@ KeyGenParameterSpec.Builder(KEY_ALIAS, PURPOSE_ENCRYPT or PURPOSE_DECRYPT)
     .setKeySize(256)
     .setUserAuthenticationRequired(true)
     .setInvalidatedByBiometricEnrollment(true)  // CRITICAL
-    .setUserAuthenticationParameters(0, AUTH_BIOMETRIC_STRONG)  // Require each time
+    .setUserAuthenticationParameters(0, KeyProperties.AUTH_BIOMETRIC_STRONG)
 ```
 
----
+**Thread safety:** Use `ConcurrentHashMap` for pending biometric operations.
 
-## iOS Implementation Details
+### iOS: `DecentsecretPlugin.swift`
 
-### Secure Enclave + ECIES
-
+**Critical security flags:**
 ```swift
-// CRITICAL: Use .biometryCurrentSet (NOT .userPresence)
-guard let accessControl = SecAccessControlCreateWithFlags(
+let accessControl = SecAccessControlCreateWithFlags(
     nil,
     kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly,
-    [.privateKeyUsage, .biometryCurrentSet],  // SECURITY: Invalidate on change
+    [.privateKeyUsage, .biometryCurrentSet],  // CRITICAL: invalidate on change
     nil
-) else { ... }
+)
 
-// CRITICAL: Use Secure Enclave
 let keyParams: [String: Any] = [
-    kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
-    kSecAttrKeySizeInBits as String: 256,
-    kSecAttrTokenID as String: kSecAttrTokenIDSecureEnclave,  // SECURITY: Hardware
-    kSecPrivateKeyAttrs as String: [
-        kSecAttrIsPermanent as String: true,
-        kSecAttrApplicationTag as String: keyTag,
-        kSecAttrAccessControl as String: accessControl
-    ]
+    kSecAttrKeyType: kSecAttrKeyTypeECSECPrimeRandom,
+    kSecAttrKeySizeInBits: 256,
+    kSecAttrTokenID: kSecAttrTokenIDSecureEnclave,  // Hardware binding
+    // ...
 ]
 ```
 
-### ECIES Encryption
+### Desktop: `desktop.rs`
 
-```swift
-// Encrypt vault key with Secure Enclave public key
-let encryptedData = SecKeyCreateEncryptedData(
-    publicKey,
-    .eciesEncryptionCofactorVariableIVX963SHA256AESGCM,
-    vaultKey as CFData,
-    &error
-)
-```
+Uses `keyring` crate for cross-platform OS keychain access:
+- macOS: Keychain Access
+- Windows: Credential Manager
+- Linux: Secret Service API (GNOME Keyring, KWallet)
 
 ---
 
-## Desktop Keyring Implementation
+## Implementation Phases
 
-### Using keyring crate
+### Phase 0: Remove Stronghold + Add Zeroize
 
+**Goal**: Replace Stronghold with simple AES-256-GCM encrypted file.
+
+**Why remove Stronghold:**
+- Work factor disabled (0) = no security benefit
+- 20+ transitive dependencies for JSON encryption
+- Existing AES-256-GCM + Argon2id provides identical security
+
+**Tasks**:
+1. Add `zeroize = "1.7"` with `derive` feature
+2. Remove `tauri-plugin-stronghold` and `iota_stronghold`
+3. Create `vault/storage.rs` with `VaultKey` and `VaultData`
+4. Update `VaultManager` to use new storage
+5. Remove Stronghold plugin init from `lib.rs`
+
+**Files**:
+- `src-tauri/Cargo.toml`
+- `src-tauri/src/lib.rs`
+- `src-tauri/src/vault/storage.rs` (NEW)
+- `src-tauri/src/vault/manager.rs`
+- `src-tauri/src/vault/mod.rs`
+
+### Phase 1: Create `tauri-plugin-decentsecret`
+
+**Goal**: Unified plugin for ALL platforms.
+
+**Plugin Structure**:
+```
+tauri-plugin-decentsecret/
+├── Cargo.toml
+├── build.rs
+├── src/
+│   ├── lib.rs
+│   ├── commands.rs
+│   ├── error.rs
+│   ├── mobile.rs
+│   └── desktop.rs
+├── android/
+│   └── src/main/java/.../DecentsecretPlugin.kt
+├── ios/
+│   └── Sources/DecentsecretPlugin.swift
+└── permissions/
+    └── default.toml
+```
+
+**Tasks**:
+1. Create plugin directory structure
+2. Implement Rust wrapper
+3. Implement Android native code
+4. Implement iOS native code
+5. Add plugin to app's Cargo.toml
+6. Register plugin in `lib.rs`
+
+### Phase 2: VaultManager Integration
+
+**Goal**: Wire plugin into vault system.
+
+**AuthMethod enum**:
 ```rust
-use keyring::Entry;
-
-const SERVICE_NAME: &str = "com.decentpaste.vault";
-const KEY_NAME: &str = "vault_key";
-
-pub struct KeyringStorage {
-    entry: Entry,
-}
-
-impl KeyringStorage {
-    pub fn store_vault_key(&self, key: &[u8; 32]) -> Result<()> {
-        let encoded = base64::encode(key);
-        self.entry.set_password(&encoded)?;
-        Ok(())
-    }
-
-    pub fn retrieve_vault_key(&self) -> Result<[u8; 32]> {
-        let encoded = self.entry.get_password()?;
-        let decoded = base64::decode(&encoded)?;
-        Ok(decoded.try_into()?)
-    }
+pub enum AuthMethod {
+    SecureStorage,  // decentsecret plugin
+    Pin,            // Argon2id fallback
 }
 ```
 
----
-
-## Future Extensibility
-
-The `tauri-plugin-decentsecret` API is designed for future desktop biometric support:
-
-```
-Phase 2 (Current):  Android + iOS biometric
-Phase 6 (Future):   macOS TouchID via plugin
-Phase 7 (Future):   Windows Hello via plugin
+**VaultManager methods**:
+```rust
+pub async fn create_with_secure_storage(app_handle: &AppHandle) -> Result<Self>;
+pub async fn open_with_secure_storage(app_handle: &AppHandle) -> Result<Self>;
+pub fn create_with_pin(pin: &str) -> Result<Self>;
+pub fn open_with_pin(pin: &str) -> Result<Self>;
+pub fn set_device_name(&mut self, name: &str) -> Result<()>;
+pub fn get_device_name(&self) -> Option<&str>;
 ```
 
-When implementing desktop biometrics later:
-- Add `macos` and `windows` implementations to the same plugin
-- macOS: `LocalAuthentication` framework + Keychain access control
-- Windows: `Windows.Security.Credentials.UI` + DPAPI
-- The Rust API remains identical - frontend code requires zero changes
+**Note**: Device name is NOT part of vault setup. It's set separately after vault creation and can be changed anytime.
 
----
+**Files**:
+- `src-tauri/src/vault/auth.rs`
+- `src-tauri/src/vault/manager.rs`
+- `src-tauri/src/commands.rs`
 
-## Dependencies
+### Phase 3: Frontend Integration
 
-### New Dependencies
+**Goal**: Update UI for new auth flow.
 
-**App Cargo.toml**:
-```toml
-# Memory safety
-zeroize = { version = "1.7", features = ["derive"] }
-
-# Desktop keyring (not for mobile)
-[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
-keyring = "3"
-
-# Plugin
-tauri-plugin-decentsecret = { path = "../tauri-plugin-decentsecret" }
+**New TypeScript commands**:
+```typescript
+export async function checkSecretStorageAvailability(): Promise<SecretStorageStatus>;
+export async function getRecommendedAuthMethod(): Promise<AuthMethod>;
+export async function setupVaultWithSecureStorage(): Promise<void>;
+export async function setupVaultWithPin(pin: string): Promise<void>;
+export async function unlockVault(pin?: string): Promise<void>;
+export async function setDeviceName(name: string): Promise<void>;
+export async function getDeviceName(): Promise<string | null>;
 ```
 
-### Removed Dependencies
+**Onboarding flow**:
 
-```toml
-# REMOVED - no longer needed
-# tauri-plugin-stronghold = "2"
-# iota_stronghold = "2.1"
+```mermaid
+flowchart TD
+    Start[App Launch - No Vault] --> Check[checkSecretStorageAvailability]
+
+    Check -->|available = true| SS1[Step 1: Secure Setup<br/>setupVaultWithSecureStorage]
+    Check -->|available = false| PIN1[Step 1: PIN Setup<br/>setupVaultWithPin]
+
+    SS1 --> Name[Step 2: Device Name<br/>setDeviceName]
+    PIN1 --> Name
+
+    Name --> Done[Onboarding Complete]
 ```
 
+**Lock screen flow**:
+
+```mermaid
+flowchart TD
+    Locked[Vault Locked] --> CheckAuth{Auth Method?}
+
+    CheckAuth -->|SecureStorage + Mobile| Bio[Biometric prompt]
+    CheckAuth -->|SecureStorage + Desktop| Auto[Auto-unlock via keyring]
+    CheckAuth -->|PIN| PINInput[PIN input field]
+
+    Bio --> Unlocked[Vault Unlocked]
+    Auto --> Unlocked
+    PINInput --> Unlocked
+```
+
+**Files**:
+- `src/api/commands.ts`
+- `src/api/types.ts`
+- `src/app.ts`
+
 ---
 
-## Success Criteria
+## Files Summary
 
-- [ ] Stronghold completely removed from codebase
-- [ ] `zeroize` crate properly clears vault keys from memory
-- [ ] Desktop: Vault auto-unlocks via OS keychain
-- [ ] Android: Biometric auth with hardware binding works
-- [ ] iOS: Biometric auth with Secure Enclave works
-- [ ] Biometric enrollment change invalidates keys (mobile)
-- [ ] PIN fallback works for devices without biometrics
-- [ ] Cross-platform clipboard sync works with new vault format
-- [ ] Documentation updated (SECURITY.md, ARCHITECTURE.md)
+### Phase 0: Stronghold Removal
+| File                             | Action                              |
+|----------------------------------|-------------------------------------|
+| `src-tauri/Cargo.toml`           | Remove stronghold deps, add zeroize |
+| `src-tauri/src/lib.rs`           | Remove stronghold init              |
+| `src-tauri/src/vault/storage.rs` | Create - VaultKey, VaultData        |
+| `src-tauri/src/vault/manager.rs` | Modify - use new storage            |
+
+### Phase 1: Plugin Creation
+| File                         | Action               |
+|------------------------------|----------------------|
+| `tauri-plugin-decentsecret/` | Create entire plugin |
+
+### Phase 2: Integration
+| File                             | Action                     |
+|----------------------------------|----------------------------|
+| `src-tauri/Cargo.toml`           | Add plugin dep             |
+| `src-tauri/src/lib.rs`           | Register plugin            |
+| `src-tauri/src/vault/auth.rs`    | Simplify AuthMethod        |
+| `src-tauri/src/vault/manager.rs` | Add secure storage methods |
+| `src-tauri/src/commands.rs`      | New auth commands          |
+
+### Phase 3: Frontend
+| File                  | Action                          |
+|-----------------------|---------------------------------|
+| `src/api/types.ts`    | Add new types                   |
+| `src/api/commands.ts` | Add new commands                |
+| `src/app.ts`          | Update onboarding + lock screen |
 
 ---
 
-## References
+## Verification Plan
 
-### Libraries
-- [keyring crate](https://crates.io/crates/keyring) - Cross-platform credential storage
-- [zeroize crate](https://crates.io/crates/zeroize) - Secure memory zeroing
+### Desktop Keyring Flow
+1. Fresh install → `checkSecretStorageAvailability()` returns available
+2. Onboarding → `setupVaultWithSecureStorage()` → key stored in keyring
+3. Onboarding → `setDeviceName(name)` → device name saved
+4. App restart → auto-unlocks via keyring
 
-### Platform APIs
-- **Android**: [BiometricPrompt](https://developer.android.com/training/sign-in/biometric-auth), [AndroidKeyStore](https://developer.android.com/training/articles/keystore)
-- **iOS**: [LocalAuthentication](https://developer.apple.com/documentation/localauthentication), [Secure Enclave](https://developer.apple.com/documentation/security/certificate_key_and_trust_services/keys/protecting_keys_with_the_secure_enclave)
+### Desktop PIN Flow (Linux without Secret Service)
+1. Fresh install → `checkSecretStorageAvailability()` returns unavailable
+2. Onboarding → `setupVaultWithPin(pin)` → vault created with Argon2id
+3. App restart → shows PIN prompt
 
-### Security Guidelines
-- [OWASP Mobile Security](https://owasp.org/www-project-mobile-security/)
-- [Android Biometric Best Practices](https://developer.android.com/training/sign-in/biometric-auth#best-practices)
-- [Apple Secure Enclave Documentation](https://support.apple.com/guide/security/secure-enclave-sec59b0b31ff/web)
+### Mobile Biometric Flow
+1. Fresh install → `checkSecretStorageAvailability()` returns available
+2. Onboarding → `setupVaultWithSecureStorage()` → biometric prompt → key in TEE/SE
+3. App restart → biometric prompt
+4. Biometric change → key invalidated → **vault lost** (expected)
+
+### Mobile PIN Flow (no biometrics)
+1. Fresh install → `checkSecretStorageAvailability()` returns unavailable
+2. Onboarding → `setupVaultWithPin(pin)` → vault created with Argon2id
+3. App restart → shows PIN prompt
+
+---
+
+## Risk Acknowledgment
+
+**Accepted Risk**: Mobile biometric-only means biometric enrollment change = vault data loss.
+
+**Mitigation**: Clear warning during setup.
+
+**Desktop Security Note**: Keyring provides convenience (session-based auto-unlock), not per-operation security.
