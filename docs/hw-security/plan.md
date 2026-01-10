@@ -78,23 +78,6 @@
   - Shows PIN input for PIN auth
   - Desktop auto-unlock for keyring-based auth (session-based, no prompt)
 
-### Bug Fixes
-
-**Android JSON Serialization (Phase 3):**
-- **Issue**: `retrieveSecret()` returned error: `invalid type: string "[156, 44, ...]", expected a sequence`
-- **Cause**: Kotlin `List<Int>` passed to `JSObject.put()` was serialized via `.toString()` as a string, not a JSON array
-- **Fix**: Changed to use `org.json.JSONArray` explicitly in `DecentsecretPlugin.kt`:
-  ```kotlin
-  // Before (broken):
-  val secretList = decrypted.map { it.toInt() and 0xFF }
-  ret.put("secret", secretList)  // Becomes string "[1, 2, 3]"
-
-  // After (fixed):
-  val secretArray = JSONArray()
-  decrypted.forEach { secretArray.put(it.toInt() and 0xFF) }
-  ret.put("secret", secretArray)  // Becomes JSON array [1, 2, 3]
-  ```
-
 **Key Architecture Decision**: The vault key is either:
 - **SecureStorage**: Random 256-bit key stored in hardware (biometric/keyring protected)
 - **PIN**: Key derived from PIN via Argon2id (existing implementation)

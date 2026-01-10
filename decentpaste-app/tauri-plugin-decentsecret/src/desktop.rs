@@ -35,7 +35,10 @@ impl<R: Runtime> Decentsecret<R> {
     ///
     /// On desktop, we try to access the keyring to see if it's available.
     pub fn check_availability(&self) -> crate::Result<SecretStorageStatus> {
-        debug!("Checking keyring availability for service: {}", SERVICE_NAME);
+        debug!(
+            "Checking keyring availability for service: {}",
+            SERVICE_NAME
+        );
         // Try to create a keyring entry to check if the service is available
         match Entry::new(SERVICE_NAME, ACCOUNT_NAME) {
             Ok(_) => {
@@ -97,11 +100,16 @@ impl<R: Runtime> Decentsecret<R> {
                     Ok(())
                 } else {
                     error!("Secret verification failed - stored data doesn't match!");
-                    Err(Error::Internal("Keyring verification failed: data mismatch".into()))
+                    Err(Error::Internal(
+                        "Keyring verification failed: data mismatch".into(),
+                    ))
                 }
             }
             Err(e) => {
-                error!("Secret verification failed - cannot read back with new Entry: {:?}", e);
+                error!(
+                    "Secret verification failed - cannot read back with new Entry: {:?}",
+                    e
+                );
                 Err(Error::Internal(format!(
                     "Keyring verification failed: set_password() succeeded but get_password() on new Entry failed: {:?}",
                     e
@@ -138,7 +146,10 @@ impl<R: Runtime> Decentsecret<R> {
             Error::Internal(format!("Failed to decode secret: {}", e))
         })?;
 
-        info!("Secret successfully retrieved from OS keyring ({} bytes)", secret.len());
+        info!(
+            "Secret successfully retrieved from OS keyring ({} bytes)",
+            secret.len()
+        );
         Ok(secret)
     }
 
@@ -203,7 +214,9 @@ impl<R: Runtime> Decentsecret<R> {
             keyring::Error::NoStorageAccess(e) => {
                 Error::NotAvailable(format!("Keyring access denied: {:?}", e))
             }
-            keyring::Error::PlatformFailure(e) => Error::Internal(format!("Keyring error: {:?}", e)),
+            keyring::Error::PlatformFailure(e) => {
+                Error::Internal(format!("Keyring error: {:?}", e))
+            }
             keyring::Error::BadEncoding(e) => {
                 Error::Internal(format!("Keyring encoding error: {:?}", e))
             }

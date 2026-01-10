@@ -704,7 +704,10 @@ pub async fn setup_vault_with_secure_storage(
     state: State<'_, AppState>,
     device_name: String,
 ) -> Result<()> {
-    info!("Setting up vault with secure storage for device: {}", device_name);
+    info!(
+        "Setting up vault with secure storage for device: {}",
+        device_name
+    );
 
     // Create the vault with random key stored in secure storage
     let mut manager = VaultManager::new();

@@ -4,6 +4,7 @@
   "author": "You",
   "description": "",
   "type": "module",
+  "license": "Apache-2.0",
   "types": "./dist-js/index.d.ts",
   "main": "./dist-js/index.cjs",
   "module": "./dist-js/index.js",

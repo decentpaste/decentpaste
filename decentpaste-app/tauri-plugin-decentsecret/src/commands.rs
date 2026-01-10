@@ -13,7 +13,9 @@ use crate::Result;
 /// - Which method will be used (biometric, keychain, etc.)
 /// - Why it's unavailable (if applicable)
 #[command]
-pub(crate) async fn check_availability<R: Runtime>(app: AppHandle<R>) -> Result<SecretStorageStatus> {
+pub(crate) async fn check_availability<R: Runtime>(
+    app: AppHandle<R>,
+) -> Result<SecretStorageStatus> {
     app.decentsecret().check_availability()
 }
 
@@ -36,7 +38,9 @@ pub(crate) async fn store_secret<R: Runtime>(
 /// - **iOS**: Shows Face ID/Touch ID, retrieves from Secure Enclave
 /// - **Desktop**: Retrieves from OS keyring (no prompt, session-based)
 #[command]
-pub(crate) async fn retrieve_secret<R: Runtime>(app: AppHandle<R>) -> Result<RetrieveSecretResponse> {
+pub(crate) async fn retrieve_secret<R: Runtime>(
+    app: AppHandle<R>,
+) -> Result<RetrieveSecretResponse> {
     let secret = app.decentsecret().retrieve_secret()?;
     Ok(RetrieveSecretResponse { secret })
 }

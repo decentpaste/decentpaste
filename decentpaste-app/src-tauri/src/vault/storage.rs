@@ -166,8 +166,8 @@ pub fn read_vault(key: &VaultKey) -> Result<VaultData> {
     })?;
 
     // Deserialize JSON
-    let data: VaultData =
-        serde_json::from_slice(&plaintext).map_err(|e| DecentPasteError::Storage(format!("Vault data corrupted: {}", e)))?;
+    let data: VaultData = serde_json::from_slice(&plaintext)
+        .map_err(|e| DecentPasteError::Storage(format!("Vault data corrupted: {}", e)))?;
 
     Ok(data)
 }

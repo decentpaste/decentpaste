@@ -198,7 +198,10 @@ impl VaultManager {
         debug!("Attempting to retrieve vault key from secure storage...");
         let key_bytes = match app_handle.decentsecret().retrieve_secret() {
             Ok(bytes) => {
-                info!("Vault key successfully retrieved from secure storage ({} bytes)", bytes.len());
+                info!(
+                    "Vault key successfully retrieved from secure storage ({} bytes)",
+                    bytes.len()
+                );
                 bytes
             }
             Err(e) => {
