@@ -150,27 +150,41 @@ export async function getVaultStatus(): Promise<VaultStatus> {
 }
 
 /**
- * Set up a new vault during first-time onboarding.
- * Creates an encrypted Stronghold vault protected by the user's PIN.
+ * Set up a new vault with PIN-based authentication.
+ * The encryption key is derived from the PIN via Argon2id.
  * @param deviceName - The user's chosen device name
  * @param pin - The user's chosen PIN (4-8 digits)
- * @param authMethod - Auth method (currently only 'pin' is supported)
  */
-export async function setupVault(deviceName: string, pin: string, authMethod: AuthMethod): Promise<void> {
-  return invoke('setup_vault', {
-    deviceName,
-    pin,
-    authMethod,
-  });
+export async function setupVaultWithPin(deviceName: string, pin: string): Promise<void> {
+  return invoke('setup_vault_with_pin', { deviceName, pin });
 }
 
 /**
- * Unlock an existing vault with the user's PIN.
- * On success, loads all encrypted data and starts network/clipboard services.
- * @param pin - The user's PIN
+ * Set up a new vault with secure storage (biometric/keyring).
+ * Generates a random 256-bit key stored in platform secure storage.
+ * @param deviceName - The user's chosen device name
  */
-export async function unlockVault(pin: string): Promise<void> {
-  return invoke('unlock_vault', { pin });
+export async function setupVaultWithSecureStorage(deviceName: string): Promise<void> {
+  return invoke('setup_vault_with_secure_storage', { deviceName });
+}
+
+/**
+ * Legacy wrapper for setupVaultWithPin (for backward compatibility).
+ * @deprecated Use setupVaultWithPin or setupVaultWithSecureStorage instead.
+ */
+export async function setupVault(deviceName: string, pin: string, _authMethod: AuthMethod): Promise<void> {
+  return setupVaultWithPin(deviceName, pin);
+}
+
+/**
+ * Unlock an existing vault.
+ * Auto-detects the auth method from stored config.
+ * - SecureStorage: Triggers biometric prompt (mobile) or retrieves from keyring (desktop)
+ * - PIN: Requires the pin parameter
+ * @param pin - Optional PIN (required if vault uses PIN auth)
+ */
+export async function unlockVault(pin?: string): Promise<void> {
+  return invoke('unlock_vault', { pin: pin ?? null });
 }
 
 /**
