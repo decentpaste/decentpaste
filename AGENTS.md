@@ -11,7 +11,7 @@ Cross-platform clipboard sharing app (like Apple's Universal Clipboard) for all 
 - **mDNS** - Local network device discovery
 - **X25519 ECDH** - Secure key exchange during pairing
 - **AES-256-GCM** - End-to-end encryption
-- **IOTA Stronghold** - Encrypted local storage (PIN-protected vault)
+- **Hardware Security** - Platform-native key storage (TEE/Keychain) with PIN fallback
 
 ## Development Commands
 
@@ -87,7 +87,7 @@ decentpaste-app/
 │   ├── network/                  # libp2p (mDNS, gossipsub, request-response)
 │   ├── clipboard/                # Polling monitor + echo prevention
 │   ├── security/                 # AES-GCM, X25519, PIN pairing
-│   ├── vault/                    # Stronghold encrypted storage
+│   ├── vault/                    # Encrypted vault (hardware-backed or PIN)
 │   └── storage/                  # Settings & peer types
 └── tauri-plugin-decentshare/     # Android/iOS share plugin
 ```
@@ -121,13 +121,13 @@ export async function myCommand(arg: string): Promise<string> {
 
 ## Key Patterns
 
-| Pattern | Description |
-|---------|-------------|
-| **Flush-on-Write** | Always call `flush_*()` immediately after mutating vault data |
-| **Per-Peer Encryption** | Clipboard encrypted separately for each peer using their unique shared secret |
-| **Echo Prevention** | `ClipboardMonitor` tracks `last_hash` to prevent re-broadcasting received content |
-| **Event-Driven** | Rust emits → Frontend listens. Use `tokio::sync::Notify` (no polling) |
-| **Platform Conditionals** | `#[cfg(desktop)]` / `#[cfg(mobile)]` for platform-specific code |
+| Pattern                   | Description                                                                       |
+|---------------------------|-----------------------------------------------------------------------------------|
+| **Flush-on-Write**        | Always call `flush_*()` immediately after mutating vault data                     |
+| **Per-Peer Encryption**   | Clipboard encrypted separately for each peer using their unique shared secret     |
+| **Echo Prevention**       | `ClipboardMonitor` tracks `last_hash` to prevent re-broadcasting received content |
+| **Event-Driven**          | Rust emits → Frontend listens. Use `tokio::sync::Notify` (no polling)             |
+| **Platform Conditionals** | `#[cfg(desktop)]` / `#[cfg(mobile)]` for platform-specific code                   |
 
 ## Platform Notes
 

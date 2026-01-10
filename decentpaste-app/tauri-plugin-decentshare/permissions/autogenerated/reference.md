@@ -15,6 +15,7 @@ Default permissions for the decentshare plugin. Allows checking and clearing pen
 <th>Description</th>
 </tr>
 
+
 <tr>
 <td>
 

@@ -25,7 +25,7 @@ macOS, Linux, Android, iOS).
 - **Networking**: libp2p (mDNS, gossipsub, request-response)
 - **Encryption**: AES-256-GCM, SHA-256
 - **Key Exchange**: X25519 ECDH (Elliptic Curve Diffie-Hellman)
-- **Secure Storage**: IOTA Stronghold with Argon2id key derivation
+- **Secure Storage**: Hardware-backed (TEE/Keychain) via decentsecret, with Argon2id PIN fallback
 
 ---
 
@@ -45,7 +45,7 @@ decentpaste/
     ├── vite.config.ts
     ├── postcss.config.js
     ├── index.html                # App entry HTML
-    ├── tauri-plugin-decentshare/ # Android "share with" plugin
+    ├── tauri-plugin-decentshare/ # Android/iOS "share with" plugin
     │   ├── Cargo.toml            # Plugin Rust dependencies
     │   ├── src/                  # Plugin Rust code
     │   │   ├── lib.rs            # Plugin entry point
@@ -54,10 +54,23 @@ decentpaste/
     │   │   ├── commands.rs       # Plugin commands
     │   │   └── models.rs         # Shared types
     │   ├── android/              # Android Kotlin code
-    │   │   └── src/main/
-    │   │       ├── java/DecentsharePlugin.kt  # Intent handler
-    │   │       └── AndroidManifest.xml        # SEND intent filter
+    │   │   └── src/main/java/DecentsharePlugin.kt
     │   └── guest-js/             # TypeScript bindings
+    │       └── index.ts
+    ├── tauri-plugin-decentsecret/ # Hardware-backed secure storage
+    │   ├── Cargo.toml            # Plugin Rust dependencies
+    │   ├── src/
+    │   │   ├── lib.rs            # Plugin entry point
+    │   │   ├── commands.rs       # Tauri commands
+    │   │   ├── error.rs          # Error types
+    │   │   ├── models.rs         # SecretStorageStatus, etc.
+    │   │   ├── desktop.rs        # Keyring integration (keyring crate)
+    │   │   └── mobile.rs         # Mobile bridge
+    │   ├── android/              # BiometricPrompt + AndroidKeyStore
+    │   │   └── src/main/java/DecentsecretPlugin.kt
+    │   ├── ios/                  # Secure Enclave + LocalAuthentication
+    │   │   └── Sources/DecentsecretPlugin.swift
+    │   └── guest-js/
     │       └── index.ts
     ├── src/                      # Frontend TypeScript
     │   ├── main.ts               # Entry point + share intent handling
@@ -100,12 +113,14 @@ decentpaste/
             │   ├── crypto.rs     # AES-GCM encryption
             │   ├── identity.rs   # Device identity
             │   └── pairing.rs    # PIN pairing protocol
-            ├── vault/            # Secure encrypted storage
+            ├── vault/            # Encrypted vault storage
             │   ├── mod.rs        # Module exports
-            │   ├── auth.rs       # VaultStatus & AuthMethod types
+            │   ├── auth.rs       # VaultStatus & AuthMethod (SecureStorage|Pin)
+            │   ├── auth_persistence.rs  # Auth method file storage
             │   ├── error.rs      # Vault-specific error types
             │   ├── manager.rs    # VaultManager lifecycle & CRUD
-            │   └── salt.rs       # Installation-specific salt handling
+            │   ├── salt.rs       # Installation-specific salt handling
+            │   └── storage.rs    # VaultKey (zeroize) & VaultData types
             └── storage/          # Persistence
                 ├── mod.rs
                 ├── config.rs     # App settings
@@ -255,34 +270,23 @@ PIN-based pairing protocol with X25519 key exchange:
 
 ### 4. Vault & Secure Storage (`src/vault/`)
 
-The vault module provides encrypted storage for all sensitive data using IOTA Stronghold.
+The vault module provides AES-256-GCM encrypted storage for all sensitive data. The encryption key is protected using platform-native hardware security when available.
 
 #### Architecture Overview
 
 ```mermaid
-flowchart TB
-    PIN["User enters PIN (4-8 digits)"]
+flowchart TD
+    VK["VAULT KEY (256-bit random)"]
 
-    subgraph KDF["Argon2id KDF"]
-        direction TB
-        Inputs["Salt (16B from salt.bin) + PIN"]
-        Params["Memory: 64 MB, Time: 3, Lanes: 4"]
-        Key["256-bit Encryption Key"]
-        Inputs --> Params --> Key
-    end
+    VK --> DS["decentsecret plugin"]
+    VK --> PIN["PIN Fallback (Argon2id)"]
 
-    subgraph Stronghold["IOTA Stronghold (vault.hold)"]
-        direction TB
-        subgraph Store["Encrypted Store"]
-            clipboard_history
-            paired_peers
-            device_identity
-            libp2p_keypair
-        end
-    end
+    DS --> Android["Android: TEE via BiometricPrompt"]
+    DS --> iOS["iOS: Secure Enclave"]
+    DS --> Desktop["Desktop: OS Keyring"]
 
-    PIN --> KDF
-    KDF --> Stronghold
+    Vault["vault.enc (AES-256-GCM encrypted)"]
+    VK --> Vault
 ```
 
 #### `auth.rs` - Authentication Types
@@ -290,12 +294,13 @@ flowchart TB
 ```rust
 pub enum VaultStatus {
     NotSetup,  // First-time user, needs onboarding
-    Locked,    // Vault exists, requires PIN
+    Locked,    // Vault exists, requires unlock
     Unlocked,  // Vault open, data accessible
 }
 
 pub enum AuthMethod {
-    Pin,  // 4-8 digit PIN
+    SecureStorage,  // Hardware-backed (biometric/keyring)
+    Pin,            // Argon2id-derived key
 }
 ```
 
@@ -303,14 +308,16 @@ pub enum AuthMethod {
 
 Core vault lifecycle operations:
 
-| Method        | Description                                              |
-|---------------|----------------------------------------------------------|
-| `exists()`    | Check if vault.hold file exists (fast, no unlock needed) |
-| `create(pin)` | Create new vault with Argon2id-derived key               |
-| `open(pin)`   | Unlock existing vault                                    |
-| `destroy()`   | Delete vault and salt files (factory reset)              |
-| `flush()`     | Save in-memory data to encrypted file                    |
-| `lock()`      | Flush and clear encryption key from memory               |
+| Method                         | Description                                      |
+|--------------------------------|--------------------------------------------------|
+| `exists()`                     | Check if vault.enc file exists                   |
+| `create_with_secure_storage()` | Create vault with hardware-backed key            |
+| `create_with_pin(pin)`         | Create vault with Argon2id-derived key           |
+| `open_with_secure_storage()`   | Unlock via biometric/keyring                     |
+| `open_with_pin(pin)`           | Unlock with PIN                                  |
+| `destroy()`                    | Delete vault, salt, and secure storage key       |
+| `flush()`                      | Save in-memory data to encrypted file            |
+| `lock()`                       | Flush and zeroize encryption key from memory     |
 
 Data operations:
 - `get_clipboard_history()` / `set_clipboard_history()`
@@ -318,11 +325,20 @@ Data operations:
 - `get_device_identity()` / `set_device_identity()`
 - `get_libp2p_keypair()` / `set_libp2p_keypair()`
 
-#### `salt.rs` - Salt Management
+#### `storage.rs` - Secure Memory Types
+
+- `VaultKey` - 256-bit key with `Zeroize` derive (cleared on drop)
+- `VaultData` - Serializable vault contents
+
+#### `auth_persistence.rs` - Auth Method Storage
+
+- Stores chosen auth method in `auth-method.json`
+- Used at unlock to determine biometric vs PIN flow
+
+#### `salt.rs` - Salt Management (PIN mode only)
 
 - `get_or_create_salt()` - Returns 16-byte cryptographic salt
 - `delete_salt()` - Removes salt file during vault destruction
-- Salt is unique per installation, stored in `salt.bin`
 
 #### Flush-on-Write Pattern
 
@@ -343,10 +359,11 @@ Data is persisted immediately after every mutation (flush-on-write), ensuring no
 
 #### Security Properties
 
-- **PIN never stored** - Only the derived key is used temporarily in memory
-- **Per-installation salt** - Prevents rainbow table attacks
-- **Argon2id parameters** - 64 MB memory, 3 iterations makes brute-force expensive
-- **Memory isolation** - Stronghold uses secure memory allocation
+- **Hardware-backed keys** - Mobile keys stored in TEE/Secure Enclave (never extractable)
+- **Zeroize on drop** - Vault key securely cleared from memory when locked
+- **Biometric binding** - Mobile keys invalidated if biometric enrollment changes
+- **Per-installation salt** - Prevents rainbow table attacks (PIN mode)
+- **Argon2id parameters** - 64 MB memory, 3 iterations (PIN mode)
 
 ### 5. Storage Layer (`src/storage/`)
 
@@ -387,49 +404,49 @@ Defines data structures and directory management:
 
 Tauri commands exposed to frontend:
 
-| Command                            | Description                                                               |
-|------------------------------------|---------------------------------------------------------------------------|
-| `get_network_status`               | Get current network status                                                |
-| `get_discovered_peers`             | List discovered devices (excludes already-paired devices)                 |
-| `get_paired_peers`                 | List paired devices                                                       |
-| `remove_paired_peer`               | Unpair a device (re-emits as discovered if still online)                  |
-| `initiate_pairing`                 | Start pairing with a peer                                                 |
-| `respond_to_pairing`               | Accept/reject incoming pairing request                                    |
-| `confirm_pairing`                  | Confirm PIN match after user verification                                 |
-| `cancel_pairing`                   | Cancel an active pairing session                                          |
-| `get_clipboard_history`            | Get clipboard history                                                     |
-| `set_clipboard`                    | Set clipboard content                                                     |
-| `share_clipboard_content`          | Manually share clipboard with peers (for mobile)                          |
-| `clear_clipboard_history`          | Clear all clipboard history                                               |
-| `reconnect_peers`                  | Trigger reconnection to disconnected peers (for mobile background resume) |
+| Command                            | Description                                                                     |
+|------------------------------------|---------------------------------------------------------------------------------|
+| `get_network_status`               | Get current network status                                                      |
+| `get_discovered_peers`             | List discovered devices (excludes already-paired devices)                       |
+| `get_paired_peers`                 | List paired devices                                                             |
+| `remove_paired_peer`               | Unpair a device (re-emits as discovered if still online)                        |
+| `initiate_pairing`                 | Start pairing with a peer                                                       |
+| `respond_to_pairing`               | Accept/reject incoming pairing request                                          |
+| `confirm_pairing`                  | Confirm PIN match after user verification                                       |
+| `cancel_pairing`                   | Cancel an active pairing session                                                |
+| `get_clipboard_history`            | Get clipboard history                                                           |
+| `set_clipboard`                    | Set clipboard content                                                           |
+| `share_clipboard_content`          | Manually share clipboard with peers (for mobile)                                |
+| `clear_clipboard_history`          | Clear all clipboard history                                                     |
+| `reconnect_peers`                  | Trigger reconnection to disconnected peers (for mobile background resume)       |
 | `refresh_connections`              | Awaitable reconnection, returns `ConnectionSummary` with connected/failed count |
-| `get_settings` / `update_settings` | Manage app settings (broadcasts device name change)                       |
-| `get_device_info`                  | Get this device's info                                                    |
-| `get_pairing_sessions`             | Get active pairing sessions                                               |
-| `get_vault_status`                 | Get current vault state (NotSetup/Locked/Unlocked)                        |
-| `setup_vault`                      | Create new vault during onboarding (device_name, pin)                     |
-| `unlock_vault`                     | Unlock existing vault with PIN                                            |
-| `lock_vault`                       | Flush data and lock vault                                                 |
-| `reset_vault`                      | Destroy vault and all data (factory reset)                                |
-| `flush_vault`                      | Force save vault data to disk                                             |
-| `process_pending_clipboard`        | Process clipboard queued while app was backgrounded                       |
-| `handle_shared_content`            | Handle text shared from Android share sheet (awaits peers ≤3s, shares)    |
+| `get_settings` / `update_settings` | Manage app settings (broadcasts device name change)                             |
+| `get_device_info`                  | Get this device's info                                                          |
+| `get_pairing_sessions`             | Get active pairing sessions                                                     |
+| `get_vault_status`                 | Get current vault state (NotSetup/Locked/Unlocked)                              |
+| `setup_vault`                      | Create new vault during onboarding (device_name, pin)                           |
+| `unlock_vault`                     | Unlock existing vault with PIN                                                  |
+| `lock_vault`                       | Flush data and lock vault                                                       |
+| `reset_vault`                      | Destroy vault and all data (factory reset)                                      |
+| `flush_vault`                      | Force save vault data to disk                                                   |
+| `process_pending_clipboard`        | Process clipboard queued while app was backgrounded                             |
+| `handle_shared_content`            | Handle text shared from Android share sheet (awaits peers ≤3s, shares)          |
 
 ### 7. Events (Emitted to Frontend)
 
-| Event                | Payload                           | Description                                     |
-|----------------------|-----------------------------------|-------------------------------------------------|
-| `network-status`     | `NetworkStatus`                   | Network state changed                           |
-| `peer-discovered`    | `DiscoveredPeer`                  | New peer found                                  |
-| `peer-lost`          | `string` (peer_id)                | Peer went offline                               |
-| `peer-name-updated`  | `{peerId, deviceName}`            | Peer's device name changed (via DeviceAnnounce) |
-| `peer-connection-status` | `{peer_id, status}`           | Peer connection state changed (connected/connecting/disconnected) |
-| `clipboard-received` | `ClipboardEntry`                  | Clipboard from peer                             |
-| `pairing-request`    | `{sessionId, peerId, deviceName}` | Incoming pairing request                        |
-| `pairing-pin`        | `{sessionId, pin}`                | PIN ready to display                            |
-| `pairing-complete`   | `{sessionId, peerId, deviceName}` | Pairing succeeded                               |
-| `vault-status`       | `VaultStatus`                     | Vault state changed (NotSetup/Locked/Unlocked)  |
-| `settings-changed`   | `{auto_sync_enabled?: boolean}`   | Settings changed from system tray               |
+| Event                    | Payload                           | Description                                                       |
+|--------------------------|-----------------------------------|-------------------------------------------------------------------|
+| `network-status`         | `NetworkStatus`                   | Network state changed                                             |
+| `peer-discovered`        | `DiscoveredPeer`                  | New peer found                                                    |
+| `peer-lost`              | `string` (peer_id)                | Peer went offline                                                 |
+| `peer-name-updated`      | `{peerId, deviceName}`            | Peer's device name changed (via DeviceAnnounce)                   |
+| `peer-connection-status` | `{peer_id, status}`               | Peer connection state changed (connected/connecting/disconnected) |
+| `clipboard-received`     | `ClipboardEntry`                  | Clipboard from peer                                               |
+| `pairing-request`        | `{sessionId, peerId, deviceName}` | Incoming pairing request                                          |
+| `pairing-pin`            | `{sessionId, pin}`                | PIN ready to display                                              |
+| `pairing-complete`       | `{sessionId, peerId, deviceName}` | Pairing succeeded                                                 |
+| `vault-status`           | `VaultStatus`                     | Vault state changed (NotSetup/Locked/Unlocked)                    |
+| `settings-changed`       | `{auto_sync_enabled?: boolean}`   | Settings changed from system tray                                 |
 
 ---
 
@@ -713,13 +730,16 @@ git push origin main --tags
 
 ### Data Directory (`~/.local/share/com.decentpaste.application/`)
 
-**Encrypted (Stronghold vault):**
-- `vault.hold` - IOTA Stronghold encrypted vault containing:
+**Encrypted:**
+- `vault.enc` - AES-256-GCM encrypted vault containing:
   - Paired peers with shared secrets
   - Clipboard history (if `keep_history` enabled)
   - Device identity (device_id, device_name, keys)
   - libp2p Ed25519 keypair for consistent PeerId
-- `salt.bin` - 16-byte cryptographic salt for Argon2id key derivation
+
+**Auth-related:**
+- `auth-method.json` - Stores chosen auth method (SecureStorage or Pin)
+- `salt.bin` - 16-byte cryptographic salt (only used in PIN mode)
 
 **Plaintext:**
 - `settings.json` - App settings (non-sensitive preferences)
@@ -791,24 +811,26 @@ yarn build
 - `tauri` v2 - Application framework
 - `libp2p` v0.56 - P2P networking
 - `tauri-plugin-clipboard-manager` v2 - Cross-platform clipboard (including mobile)
-- `tauri-plugin-stronghold` v2 - IOTA Stronghold encrypted storage
 - `tauri-plugin-updater` v2 - Auto-updates for desktop
 - `tauri-plugin-process` v2 - App restart after update
 - `tauri-plugin-os` v2 - Platform/architecture detection for updater targets
-- `tauri-plugin-decentshare` (local) - Android share intent handling
-- `argon2` v0.5 - Argon2id key derivation
+- `tauri-plugin-decentshare` (local) - Android/iOS share intent handling
+- `tauri-plugin-decentsecret` (local) - Hardware-backed secure storage
+- `argon2` v0.5 - Argon2id key derivation (PIN fallback)
 - `aes-gcm` v0.10 - AES-256-GCM encryption
 - `x25519-dalek` v2 - X25519 ECDH key exchange
+- `zeroize` v1.7 - Secure memory clearing
+- `keyring` v3 - Desktop OS keychain access
 - `tokio` v1 - Async runtime
 
 ### Frontend (Key Dependencies)
 
 - `@tauri-apps/api` v2 - Tauri JavaScript API
 - `@tauri-apps/plugin-clipboard-manager` v2 - Clipboard access for mobile
-- `@tauri-apps/plugin-stronghold` v2 - Vault plugin (initialized from backend)
 - `@tauri-apps/plugin-updater` v2 - Auto-update UI
 - `@tauri-apps/plugin-process` v2 - App restart
 - `@tauri-apps/plugin-os` v2 - Platform/architecture detection
 - `tauri-plugin-decentshare-api` (local) - Share intent JS bindings
+- `tauri-plugin-decentsecret-api` (local) - Secure storage JS bindings
 - `tailwindcss` v4 - CSS framework
 - `lucide` - Icons (inline SVGs)
