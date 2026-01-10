@@ -45,6 +45,23 @@ yarn tauri ios dev
 yarn tauri ios build
 ```
 
+### Creating New Tauri Plugins
+
+When creating cross-platform plugins for DecentPaste:
+
+```bash
+npx @tauri-apps/cli plugin new --android --ios <plugin name>
+```
+
+**Naming conventions:**
+- **Plugin name**: Prefix with `decent` followed by nature of plugin (e.g., `decentshare`, `decentsecret`)
+- **Package name**: Use format `com.decentpaste.plugins.<plugin name>` (e.g., `com.decentpaste.plugins.decentshare`)
+
+**Note:** Run plugin creation commands in a separate terminal tab to avoid conflicts with any running development server.
+
+**Example - Existing Plugin:** The project includes `tauri-plugin-decentshare` for Android "share with" functionality, which follows these conventions.
+```
+
 ### Code Quality & Testing
 
 ```bash
@@ -62,17 +79,16 @@ cd decentpaste-app && yarn build
 ```
 
 **Note**: This project does not currently have automated tests. Manual testing involves running multiple instances (see below).
-
 ### Testing Multiple Instances
 
-Run two instances on the same machine for pairing tests:
+Run desktop and mobile instances together for pairing tests (same app supports single-instance per platform):
 
 ```bash
-# Terminal 1
+# Terminal 1: Desktop
 yarn tauri dev
 
-# Terminal 2 (different port)
-TAURI_DEV_PORT=1421 yarn tauri dev
+# Terminal 2: Mobile (requires Android/iOS setup)
+yarn tauri android dev  # or: yarn tauri ios dev
 ```
 
 ## Claude Code Skills
@@ -106,7 +122,7 @@ decentpaste/
 │   │   ├── security/             # AES-GCM encryption, X25519 identity, PIN pairing
 │   │   ├── vault/                # Stronghold encrypted storage lifecycle
 │   │   └── storage/              # Settings & peer types
-│   └── tauri-plugin-decentshare/ # Android "share with" plugin
+│   └── tauri-plugin-decentshare/ # Android "share with" plugin (follows plugin naming convention)
 │       ├── src/                  # Plugin Rust code
 │       ├── android/              # Kotlin intent handler
 │       └── guest-js/             # TypeScript bindings
@@ -183,17 +199,27 @@ listen<MyPayload>('my-event', (e) => {
 
 All sensitive data is stored in an encrypted IOTA Stronghold vault, protected by a user PIN.
 
-```
-User PIN (4-8 digits)
-       │
-       ▼
-┌─────────────────────────┐
-│    Argon2id KDF         │ ← salt.bin (16 bytes, unique per install)
-│  m=64MB, t=3, p=4       │
-└─────────────────────────┘
-       │
-       ▼
-   256-bit Key → vault.hold (paired_peers, clipboard_history, device_identity, libp2p_keypair)
+```mermaid
+flowchart TB
+    PIN["User PIN (4-8 digits)"]
+
+    subgraph KDF["Argon2id KDF"]
+        SALT["salt.bin (16 bytes, unique per install)"]
+        PARAMS["m=64MB, t=3, p=4"]
+    end
+
+    KEY["256-bit Encryption Key"]
+
+    subgraph VAULT["vault.hold (Stronghold)"]
+        V1["paired_peers"]
+        V2["clipboard_history"]
+        V3["device_identity"]
+        V4["libp2p_keypair"]
+    end
+
+    PIN --> KDF
+    KDF --> KEY
+    KEY --> VAULT
 ```
 
 **Vault States**: `NotSetup` → Onboarding wizard | `Locked` → PIN entry | `Unlocked` → Main app
