@@ -621,6 +621,9 @@ class App {
         try {
           await commands.setupVaultWithSecureStorage(deviceName);
 
+          // Set auth method so lock screen knows what to show
+          store.set('vaultAuthMethod', 'secure_storage');
+
           // Reset onboarding state
           store.set('onboardingStep', null);
           store.set('onboardingDeviceName', '');
@@ -707,7 +710,10 @@ class App {
         try {
           const deviceName = store.get('onboardingDeviceName');
 
-          await commands.setupVault(deviceName, pin, 'pin');
+          await commands.setupVaultWithPin(deviceName, pin);
+
+          // Set auth method so lock screen knows what to show
+          store.set('vaultAuthMethod', 'pin');
 
           // Reset onboarding state
           store.set('onboardingStep', null);

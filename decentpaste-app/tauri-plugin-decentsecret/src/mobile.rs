@@ -47,9 +47,11 @@ impl<R: Runtime> Decentsecret<R> {
     /// - **Android**: Shows BiometricPrompt, encrypts with TEE key
     /// - **iOS**: Stores in Keychain with Secure Enclave protection
     pub fn store_secret(&self, secret: Vec<u8>) -> crate::Result<()> {
-        self.0
+        let _response: EmptyResponse = self
+            .0
             .run_mobile_plugin("storeSecret", StoreSecretRequest { secret })
-            .map_err(|e| self.map_plugin_error(e))
+            .map_err(|e| self.map_plugin_error(e))?;
+        Ok(())
     }
 
     /// Retrieve the secret from biometric-protected storage.
@@ -66,9 +68,11 @@ impl<R: Runtime> Decentsecret<R> {
 
     /// Delete the secret from biometric-protected storage.
     pub fn delete_secret(&self) -> crate::Result<()> {
-        self.0
+        let _response: EmptyResponse = self
+            .0
             .run_mobile_plugin("deleteSecret", ())
-            .map_err(|e| self.map_plugin_error(e))
+            .map_err(|e| self.map_plugin_error(e))?;
+        Ok(())
     }
 
     /// Map native plugin errors to our error type.

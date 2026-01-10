@@ -143,10 +143,16 @@ impl VaultManager {
         let key = VaultKey::from_slice(&key_bytes);
 
         // Store key via plugin (triggers biometric on mobile)
-        app_handle
-            .decentsecret()
-            .store_secret(key_bytes.to_vec())
-            .map_err(|e| Self::map_plugin_error(e))?;
+        debug!("Attempting to store vault key in secure storage...");
+        match app_handle.decentsecret().store_secret(key_bytes.to_vec()) {
+            Ok(()) => {
+                info!("Vault key successfully stored in secure storage");
+            }
+            Err(e) => {
+                warn!("Failed to store vault key in secure storage: {:?}", e);
+                return Err(Self::map_plugin_error(e));
+            }
+        }
 
         // Initialize empty vault data
         let data = VaultData::default();
@@ -189,10 +195,17 @@ impl VaultManager {
         info!("Opening vault with secure storage");
 
         // Retrieve key via plugin (triggers biometric on mobile)
-        let key_bytes = app_handle
-            .decentsecret()
-            .retrieve_secret()
-            .map_err(|e| Self::map_plugin_error(e))?;
+        debug!("Attempting to retrieve vault key from secure storage...");
+        let key_bytes = match app_handle.decentsecret().retrieve_secret() {
+            Ok(bytes) => {
+                info!("Vault key successfully retrieved from secure storage ({} bytes)", bytes.len());
+                bytes
+            }
+            Err(e) => {
+                warn!("Failed to retrieve vault key from secure storage: {:?}", e);
+                return Err(Self::map_plugin_error(e));
+            }
+        };
 
         if key_bytes.len() != 32 {
             return Err(DecentPasteError::Encryption(format!(

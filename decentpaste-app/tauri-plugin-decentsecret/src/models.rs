@@ -65,3 +65,8 @@ pub struct RetrieveSecretResponse {
     /// The retrieved secret bytes.
     pub secret: Vec<u8>,
 }
+
+/// Empty response for store/delete operations.
+/// Mobile plugins return {} which needs to deserialize into a struct, not ().
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct EmptyResponse {}

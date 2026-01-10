@@ -8,6 +8,7 @@
 use keyring::Entry;
 use serde::de::DeserializeOwned;
 use tauri::{plugin::PluginApi, AppHandle, Runtime};
+use tracing::{debug, error, info, warn};
 
 use crate::error::Error;
 use crate::models::*;
@@ -34,15 +35,16 @@ impl<R: Runtime> Decentsecret<R> {
     ///
     /// On desktop, we try to access the keyring to see if it's available.
     pub fn check_availability(&self) -> crate::Result<SecretStorageStatus> {
+        debug!("Checking keyring availability for service: {}", SERVICE_NAME);
         // Try to create a keyring entry to check if the service is available
         match Entry::new(SERVICE_NAME, ACCOUNT_NAME) {
             Ok(_) => {
                 let method = Self::get_platform_method();
-                log::debug!("Keyring available, method: {:?}", method);
+                debug!("Keyring available, method: {:?}", method);
                 Ok(SecretStorageStatus::available(method))
             }
             Err(e) => {
-                log::warn!("Keyring not available: {}", e);
+                warn!("Keyring not available: {}", e);
                 Ok(SecretStorageStatus::unavailable(format!(
                     "OS keyring not available: {}",
                     e
@@ -55,53 +57,118 @@ impl<R: Runtime> Decentsecret<R> {
     ///
     /// The secret is stored as base64-encoded bytes to handle binary data safely.
     pub fn store_secret(&self, secret: Vec<u8>) -> crate::Result<()> {
-        let entry = Entry::new(SERVICE_NAME, ACCOUNT_NAME)
-            .map_err(|e| Error::Internal(format!("Failed to create keyring entry: {}", e)))?;
+        info!(
+            "Attempting to store {} byte secret in keyring (service: {}, account: {})",
+            secret.len(),
+            SERVICE_NAME,
+            ACCOUNT_NAME
+        );
+
+        let entry = Entry::new(SERVICE_NAME, ACCOUNT_NAME).map_err(|e| {
+            error!("Failed to create keyring entry: {}", e);
+            Error::Internal(format!("Failed to create keyring entry: {}", e))
+        })?;
 
         // Encode as base64 for safe storage (keyring APIs expect strings)
         let encoded = base64_encode(&secret);
+        debug!("Encoded secret length: {} chars", encoded.len());
 
-        entry
-            .set_password(&encoded)
-            .map_err(|e| Self::map_keyring_error(e))?;
+        match entry.set_password(&encoded) {
+            Ok(()) => {
+                info!("set_password() returned Ok");
+            }
+            Err(e) => {
+                error!("Failed to store secret in keyring: {:?}", e);
+                return Err(Self::map_keyring_error(e));
+            }
+        }
 
-        log::info!("Secret stored in OS keyring");
-        Ok(())
+        // Verify the secret was actually stored by creating a NEW Entry and reading back
+        // This ensures we're not just reading a cached value from the original Entry
+        let verify_entry = Entry::new(SERVICE_NAME, ACCOUNT_NAME).map_err(|e| {
+            error!("Failed to create verification entry: {}", e);
+            Error::Internal(format!("Failed to create verification entry: {}", e))
+        })?;
+
+        match verify_entry.get_password() {
+            Ok(readback) => {
+                if readback == encoded {
+                    info!("Secret verified with new Entry - successfully stored in OS keyring");
+                    Ok(())
+                } else {
+                    error!("Secret verification failed - stored data doesn't match!");
+                    Err(Error::Internal("Keyring verification failed: data mismatch".into()))
+                }
+            }
+            Err(e) => {
+                error!("Secret verification failed - cannot read back with new Entry: {:?}", e);
+                Err(Error::Internal(format!(
+                    "Keyring verification failed: set_password() succeeded but get_password() on new Entry failed: {:?}",
+                    e
+                )))
+            }
+        }
     }
 
     /// Retrieve the secret from the OS keyring.
     pub fn retrieve_secret(&self) -> crate::Result<Vec<u8>> {
-        let entry = Entry::new(SERVICE_NAME, ACCOUNT_NAME)
-            .map_err(|e| Error::Internal(format!("Failed to create keyring entry: {}", e)))?;
+        debug!(
+            "Attempting to retrieve secret from keyring (service: {}, account: {})",
+            SERVICE_NAME, ACCOUNT_NAME
+        );
 
-        let encoded = entry
-            .get_password()
-            .map_err(|e| Self::map_keyring_error(e))?;
+        let entry = Entry::new(SERVICE_NAME, ACCOUNT_NAME).map_err(|e| {
+            error!("Failed to create keyring entry for retrieval: {}", e);
+            Error::Internal(format!("Failed to create keyring entry: {}", e))
+        })?;
 
-        let secret = base64_decode(&encoded)
-            .map_err(|e| Error::Internal(format!("Failed to decode secret: {}", e)))?;
+        let encoded = match entry.get_password() {
+            Ok(password) => {
+                debug!("Retrieved encoded secret, length: {} chars", password.len());
+                password
+            }
+            Err(e) => {
+                error!("Failed to retrieve secret from keyring: {:?}", e);
+                return Err(Self::map_keyring_error(e));
+            }
+        };
 
-        log::debug!("Secret retrieved from OS keyring");
+        let secret = base64_decode(&encoded).map_err(|e| {
+            error!("Failed to decode secret from base64: {}", e);
+            Error::Internal(format!("Failed to decode secret: {}", e))
+        })?;
+
+        info!("Secret successfully retrieved from OS keyring ({} bytes)", secret.len());
         Ok(secret)
     }
 
     /// Delete the secret from the OS keyring.
     pub fn delete_secret(&self) -> crate::Result<()> {
-        let entry = Entry::new(SERVICE_NAME, ACCOUNT_NAME)
-            .map_err(|e| Error::Internal(format!("Failed to create keyring entry: {}", e)))?;
+        debug!(
+            "Attempting to delete secret from keyring (service: {}, account: {})",
+            SERVICE_NAME, ACCOUNT_NAME
+        );
+
+        let entry = Entry::new(SERVICE_NAME, ACCOUNT_NAME).map_err(|e| {
+            error!("Failed to create keyring entry for deletion: {}", e);
+            Error::Internal(format!("Failed to create keyring entry: {}", e))
+        })?;
 
         // delete_credential returns an error if the entry doesn't exist,
         // but we want delete to be idempotent
         match entry.delete_credential() {
             Ok(()) => {
-                log::info!("Secret deleted from OS keyring");
+                info!("Secret deleted from OS keyring");
                 Ok(())
             }
             Err(keyring::Error::NoEntry) => {
-                log::debug!("No secret to delete (already gone)");
+                debug!("No secret to delete (already gone)");
                 Ok(())
             }
-            Err(e) => Err(Self::map_keyring_error(e)),
+            Err(e) => {
+                error!("Failed to delete secret from keyring: {:?}", e);
+                Err(Self::map_keyring_error(e))
+            }
         }
     }
 
