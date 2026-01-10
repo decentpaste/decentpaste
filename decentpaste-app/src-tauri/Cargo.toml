@@ -22,6 +22,7 @@ tauri-plugin-process = "2"
 tauri-plugin-clipboard-manager = "2"
 tauri-plugin-os = "2"
 tauri-plugin-decentshare = { path = "../tauri-plugin-decentshare" }
+tauri-plugin-decentsecret = { path = "../tauri-plugin-decentsecret" }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }

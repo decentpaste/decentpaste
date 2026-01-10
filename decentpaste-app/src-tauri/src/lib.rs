@@ -60,6 +60,9 @@ pub fn run() {
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let builder = builder.plugin(tauri_plugin_notification::init());
 
+    // Secure secret storage plugin (biometric on mobile, keyring on desktop)
+    let builder = builder.plugin(tauri_plugin_decentsecret::init());
+
     builder
         .manage(AppState::new())
         .setup(|app| {

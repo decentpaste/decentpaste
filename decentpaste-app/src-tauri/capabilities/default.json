@@ -20,6 +20,7 @@
     "updater:default",
     "process:allow-restart",
     "os:default",
-    "decentshare:default"
+    "decentshare:default",
+    "decentsecret:default"
   ]
 }

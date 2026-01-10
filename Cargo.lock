@@ -1041,6 +1041,7 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-autostart",
  "tauri-plugin-clipboard-manager",
+ "tauri-plugin-decentsecret",
  "tauri-plugin-decentshare",
  "tauri-plugin-notification",
  "tauri-plugin-opener",
@@ -2680,6 +2681,16 @@ dependencies = [
  "bitflags 2.10.0",
  "serde",
  "unicode-segmentation",
+]
+
+[[package]]
+name = "keyring"
+version = "3.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eebcc3aff044e5944a8fbaf69eb277d11986064cba30c468730e8b9909fb551c"
+dependencies = [
+ "log",
+ "zeroize",
 ]
 
 [[package]]
@@ -5792,6 +5803,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "206dc20af4ed210748ba945c2774e60fd0acd52b9a73a028402caf809e9b6ecf"
 dependencies = [
  "arboard",
+ "log",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-plugin",
+ "thiserror 2.0.17",
+]
+
+[[package]]
+name = "tauri-plugin-decentsecret"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "keyring",
  "log",
  "serde",
  "serde_json",
