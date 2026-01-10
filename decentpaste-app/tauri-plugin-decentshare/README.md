@@ -5,7 +5,7 @@ Cross-platform share intent plugin for DecentPaste. Enables receiving shared tex
 ## Platform Support
 
 | Platform | Status          | Implementation                                  |
-| -------- | --------------- | ----------------------------------------------- |
+|----------|-----------------|-------------------------------------------------|
 | Android  | Fully supported | Kotlin plugin with `ACTION_SEND` intent handler |
 | iOS      | Fully supported | Swift plugin with Share Extension               |
 | Desktop  | N/A             | Desktop platforms don't have share sheets       |
@@ -153,7 +153,7 @@ The `setup-ios-share-extension.sh` script reads configuration from `tauri.conf.j
 These values are derived from `tauri.conf.json`:
 
 | Setting             | Derivation                        | Example (DecentPaste)                        |
-| ------------------- | --------------------------------- | -------------------------------------------- |
+|---------------------|-----------------------------------|----------------------------------------------|
 | Main App Bundle ID  | `identifier` from tauri.conf.json | `com.decentpaste.application`                |
 | Extension Bundle ID | `<identifier>.ShareExtension`     | `com.decentpaste.application.ShareExtension` |
 | App Group           | `group.<identifier>`              | `group.com.decentpaste.application`          |
@@ -162,7 +162,7 @@ These values are derived from `tauri.conf.json`:
 **Hardcoded values** (in Swift source files):
 
 | Setting          | Value                 | Location                                               |
-| ---------------- | --------------------- | ------------------------------------------------------ |
+|------------------|-----------------------|--------------------------------------------------------|
 | UserDefaults Key | `pendingShareContent` | `DecentsharePlugin.swift`, `ShareViewController.swift` |
 
 ---
@@ -242,3 +242,7 @@ decentpaste-app/
     └── guest-js/                         # TypeScript bindings
         └── index.ts
 ```
+
+## License
+
+Apache-2.0
