@@ -1,5 +1,56 @@
 # Hardware Security Implementation Plan
 
+## Current Status
+
+| Phase       | Status         | Description                                                             |
+|-------------|----------------|-------------------------------------------------------------------------|
+| **Phase 0** | ✅ COMPLETE     | Removed Stronghold, added zeroize, created vault/storage.rs             |
+| **Phase 1** | ✅ COMPLETE     | Created tauri-plugin-decentsecret with full Android/iOS/Desktop support |
+| **Phase 2** | 🔲 NOT STARTED | Wire plugin into VaultManager                                           |
+| **Phase 3** | 🔲 NOT STARTED | Frontend integration (onboarding UI)                                    |
+
+### What's Been Implemented
+
+**Phase 0 - Stronghold Removal:**
+- Removed `tauri-plugin-stronghold` and `iota_stronghold` dependencies
+- Added `zeroize = "1.7"` with derive feature for secure memory clearing
+- Created `vault/storage.rs` with `VaultKey` (zeroize-on-drop) and `VaultData`
+- Rewrote `vault/manager.rs` to use new AES-256-GCM encrypted file storage
+- Vault file changed from `vault.hold` to `vault.enc`
+- Updated `state.rs` flush helpers (changed `read()` → `write()` locks)
+
+**Phase 1 - decentsecret Plugin:**
+- Full plugin at `decentpaste-app/tauri-plugin-decentsecret/`
+- **Rust layer**: `error.rs`, `models.rs`, `commands.rs`, `desktop.rs`, `mobile.rs`, `lib.rs`
+- **Android**: `DecentsecretPlugin.kt` with BiometricPrompt + AndroidKeyStore (TEE)
+- **iOS**: `DecentsecretPlugin.swift` with Secure Enclave + LocalAuthentication
+- **Desktop**: Uses `keyring` crate (macOS Keychain, Windows Credential Manager, Linux Secret Service)
+- **TypeScript**: Full API in `guest-js/index.ts`
+- Plugin registered in app's `lib.rs` and `capabilities/default.json`
+- **Build verified**: `cargo check` passes
+
+### What's Next (Phase 2)
+
+**Goal**: Wire the decentsecret plugin into VaultManager so the app can use biometric/keyring auth.
+
+**Tasks**:
+1. Update `vault/auth.rs` - simplify `AuthMethod` enum to `SecureStorage | Pin`
+2. Update `vault/manager.rs` - add async methods:
+   - `create_with_secure_storage(app_handle)` - generates random 256-bit key, stores via plugin
+   - `open_with_secure_storage(app_handle)` - retrieves key via plugin (triggers biometric)
+   - Keep existing `create_with_pin()` and `open_with_pin()` for fallback
+3. Update `commands.rs` - add Tauri commands:
+   - `check_secret_storage_availability()` → calls plugin
+   - `setup_vault_with_secure_storage()` → creates vault with random key
+   - `setup_vault_with_pin(pin)` → existing PIN flow
+   - `unlock_vault()` → auto-detects method and unlocks
+
+**Key Architecture Decision**: The vault key is either:
+- **SecureStorage**: Random 256-bit key stored in hardware (biometric/keyring protected)
+- **PIN**: Key derived from PIN via Argon2id (existing implementation)
+
+---
+
 ## User Decisions (Confirmed)
 
 | Decision      | Choice                                   | Implication                                       |
@@ -49,7 +100,7 @@ flowchart TD
 
 ---
 
-## `tauri-plugin-decentsecret` Design
+## `tauri-plugin-decentsecret` Design (IMPLEMENTED)
 
 ### Plugin Philosophy
 
@@ -151,7 +202,7 @@ export async function deleteSecret(): Promise<void>;
 
 ---
 
-## Platform Implementations
+## Platform Implementations (IMPLEMENTED)
 
 ### Android: `DecentsecretPlugin.kt`
 
@@ -166,7 +217,7 @@ KeyGenParameterSpec.Builder(KEY_ALIAS, PURPOSE_ENCRYPT or PURPOSE_DECRYPT)
     .setUserAuthenticationParameters(0, KeyProperties.AUTH_BIOMETRIC_STRONG)
 ```
 
-**Thread safety:** Use `ConcurrentHashMap` for pending biometric operations.
+**Thread safety:** Uses `ConcurrentHashMap` for pending biometric operations.
 
 ### iOS: `DecentsecretPlugin.swift`
 
@@ -175,16 +226,9 @@ KeyGenParameterSpec.Builder(KEY_ALIAS, PURPOSE_ENCRYPT or PURPOSE_DECRYPT)
 let accessControl = SecAccessControlCreateWithFlags(
     nil,
     kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly,
-    [.privateKeyUsage, .biometryCurrentSet],  // CRITICAL: invalidate on change
+    [.biometryCurrentSet],  // CRITICAL: invalidate on biometric change
     nil
 )
-
-let keyParams: [String: Any] = [
-    kSecAttrKeyType: kSecAttrKeyTypeECSECPrimeRandom,
-    kSecAttrKeySizeInBits: 256,
-    kSecAttrTokenID: kSecAttrTokenIDSecureEnclave,  // Hardware binding
-    // ...
-]
 ```
 
 ### Desktop: `desktop.rs`
@@ -198,7 +242,7 @@ Uses `keyring` crate for cross-platform OS keychain access:
 
 ## Implementation Phases
 
-### Phase 0: Remove Stronghold + Add Zeroize
+### Phase 0: Remove Stronghold + Add Zeroize ✅ COMPLETE
 
 **Goal**: Replace Stronghold with simple AES-256-GCM encrypted file.
 
@@ -207,25 +251,42 @@ Uses `keyring` crate for cross-platform OS keychain access:
 - 20+ transitive dependencies for JSON encryption
 - Existing AES-256-GCM + Argon2id provides identical security
 
-**Tasks**:
-1. Add `zeroize = "1.7"` with `derive` feature
-2. Remove `tauri-plugin-stronghold` and `iota_stronghold`
-3. Create `vault/storage.rs` with `VaultKey` and `VaultData`
-4. Update `VaultManager` to use new storage
-5. Remove Stronghold plugin init from `lib.rs`
+**Completed:**
+- ✅ Added `zeroize = "1.7"` with `derive` feature
+- ✅ Removed `tauri-plugin-stronghold` and `iota_stronghold`
+- ✅ Created `vault/storage.rs` with `VaultKey` and `VaultData`
+- ✅ Updated `VaultManager` to use new storage
+- ✅ Removed Stronghold plugin init from `lib.rs`
+- ✅ Removed `stronghold:default` from capabilities
 
-**Files**:
+**Files Modified:**
 - `src-tauri/Cargo.toml`
 - `src-tauri/src/lib.rs`
 - `src-tauri/src/vault/storage.rs` (NEW)
 - `src-tauri/src/vault/manager.rs`
 - `src-tauri/src/vault/mod.rs`
+- `src-tauri/src/vault/error.rs`
+- `src-tauri/src/state.rs`
+- `src-tauri/capabilities/default.json`
 
-### Phase 1: Create `tauri-plugin-decentsecret`
+### Phase 1: Create `tauri-plugin-decentsecret` ✅ COMPLETE
 
 **Goal**: Unified plugin for ALL platforms.
 
-**Plugin Structure**:
+**Completed:**
+- ✅ Created plugin directory structure
+- ✅ Implemented Rust wrapper (error.rs, models.rs, commands.rs)
+- ✅ Implemented desktop.rs with keyring crate
+- ✅ Implemented mobile.rs bridge
+- ✅ Implemented Android native code (DecentsecretPlugin.kt)
+- ✅ Implemented iOS native code (DecentsecretPlugin.swift)
+- ✅ Updated TypeScript bindings (guest-js/index.ts)
+- ✅ Added plugin to app's Cargo.toml
+- ✅ Registered plugin in `lib.rs`
+- ✅ Added `decentsecret:default` to capabilities
+- ✅ Build verified with `cargo check`
+
+**Plugin Structure:**
 ```
 tauri-plugin-decentsecret/
 ├── Cargo.toml
@@ -234,29 +295,25 @@ tauri-plugin-decentsecret/
 │   ├── lib.rs
 │   ├── commands.rs
 │   ├── error.rs
+│   ├── models.rs
 │   ├── mobile.rs
 │   └── desktop.rs
 ├── android/
+│   ├── build.gradle.kts (added biometric dependency)
 │   └── src/main/java/.../DecentsecretPlugin.kt
 ├── ios/
 │   └── Sources/DecentsecretPlugin.swift
+├── guest-js/
+│   └── index.ts
 └── permissions/
     └── default.toml
 ```
 
-**Tasks**:
-1. Create plugin directory structure
-2. Implement Rust wrapper
-3. Implement Android native code
-4. Implement iOS native code
-5. Add plugin to app's Cargo.toml
-6. Register plugin in `lib.rs`
-
-### Phase 2: VaultManager Integration
+### Phase 2: VaultManager Integration 🔲 NOT STARTED
 
 **Goal**: Wire plugin into vault system.
 
-**AuthMethod enum**:
+**AuthMethod enum:**
 ```rust
 pub enum AuthMethod {
     SecureStorage,  // decentsecret plugin
@@ -264,7 +321,7 @@ pub enum AuthMethod {
 }
 ```
 
-**VaultManager methods**:
+**VaultManager methods:**
 ```rust
 pub async fn create_with_secure_storage(app_handle: &AppHandle) -> Result<Self>;
 pub async fn open_with_secure_storage(app_handle: &AppHandle) -> Result<Self>;
@@ -276,16 +333,16 @@ pub fn get_device_name(&self) -> Option<&str>;
 
 **Note**: Device name is NOT part of vault setup. It's set separately after vault creation and can be changed anytime.
 
-**Files**:
+**Files:**
 - `src-tauri/src/vault/auth.rs`
 - `src-tauri/src/vault/manager.rs`
 - `src-tauri/src/commands.rs`
 
-### Phase 3: Frontend Integration
+### Phase 3: Frontend Integration 🔲 NOT STARTED
 
 **Goal**: Update UI for new auth flow.
 
-**New TypeScript commands**:
+**New TypeScript commands:**
 ```typescript
 export async function checkSecretStorageAvailability(): Promise<SecretStorageStatus>;
 export async function getRecommendedAuthMethod(): Promise<AuthMethod>;
@@ -296,7 +353,7 @@ export async function setDeviceName(name: string): Promise<void>;
 export async function getDeviceName(): Promise<string | null>;
 ```
 
-**Onboarding flow**:
+**Onboarding flow:**
 
 ```mermaid
 flowchart TD
@@ -311,7 +368,7 @@ flowchart TD
     Name --> Done[Onboarding Complete]
 ```
 
-**Lock screen flow**:
+**Lock screen flow:**
 
 ```mermaid
 flowchart TD
@@ -326,7 +383,7 @@ flowchart TD
     PINInput --> Unlocked
 ```
 
-**Files**:
+**Files:**
 - `src/api/commands.ts`
 - `src/api/types.ts`
 - `src/app.ts`
@@ -335,34 +392,42 @@ flowchart TD
 
 ## Files Summary
 
-### Phase 0: Stronghold Removal
-| File                             | Action                              |
-|----------------------------------|-------------------------------------|
-| `src-tauri/Cargo.toml`           | Remove stronghold deps, add zeroize |
-| `src-tauri/src/lib.rs`           | Remove stronghold init              |
-| `src-tauri/src/vault/storage.rs` | Create - VaultKey, VaultData        |
-| `src-tauri/src/vault/manager.rs` | Modify - use new storage            |
+### Phase 0: Stronghold Removal ✅
+| File                             | Action                              | Status |
+|----------------------------------|-------------------------------------|--------|
+| `src-tauri/Cargo.toml`           | Remove stronghold deps, add zeroize | ✅      |
+| `src-tauri/src/lib.rs`           | Remove stronghold init              | ✅      |
+| `src-tauri/src/vault/storage.rs` | Create - VaultKey, VaultData        | ✅      |
+| `src-tauri/src/vault/manager.rs` | Modify - use new storage            | ✅      |
+| `src-tauri/src/vault/error.rs`   | Rename Stronghold → Encryption      | ✅      |
+| `src-tauri/src/state.rs`         | Change read() → write() locks       | ✅      |
 
-### Phase 1: Plugin Creation
-| File                         | Action               |
-|------------------------------|----------------------|
-| `tauri-plugin-decentsecret/` | Create entire plugin |
+### Phase 1: Plugin Creation ✅
+| File                                        | Action              | Status |
+|---------------------------------------------|---------------------|--------|
+| `tauri-plugin-decentsecret/src/error.rs`    | Error types         | ✅      |
+| `tauri-plugin-decentsecret/src/models.rs`   | Data types          | ✅      |
+| `tauri-plugin-decentsecret/src/commands.rs` | Tauri commands      | ✅      |
+| `tauri-plugin-decentsecret/src/desktop.rs`  | Keyring integration | ✅      |
+| `tauri-plugin-decentsecret/src/mobile.rs`   | Mobile bridge       | ✅      |
+| `tauri-plugin-decentsecret/src/lib.rs`      | Plugin init         | ✅      |
+| `tauri-plugin-decentsecret/android/...`     | BiometricPrompt     | ✅      |
+| `tauri-plugin-decentsecret/ios/...`         | Secure Enclave      | ✅      |
+| `tauri-plugin-decentsecret/guest-js/...`    | TypeScript API      | ✅      |
 
-### Phase 2: Integration
-| File                             | Action                     |
-|----------------------------------|----------------------------|
-| `src-tauri/Cargo.toml`           | Add plugin dep             |
-| `src-tauri/src/lib.rs`           | Register plugin            |
-| `src-tauri/src/vault/auth.rs`    | Simplify AuthMethod        |
-| `src-tauri/src/vault/manager.rs` | Add secure storage methods |
-| `src-tauri/src/commands.rs`      | New auth commands          |
+### Phase 2: Integration 🔲
+| File                             | Action                     | Status |
+|----------------------------------|----------------------------|--------|
+| `src-tauri/src/vault/auth.rs`    | Simplify AuthMethod        | 🔲     |
+| `src-tauri/src/vault/manager.rs` | Add secure storage methods | 🔲     |
+| `src-tauri/src/commands.rs`      | New auth commands          | 🔲     |
 
-### Phase 3: Frontend
-| File                  | Action                          |
-|-----------------------|---------------------------------|
-| `src/api/types.ts`    | Add new types                   |
-| `src/api/commands.ts` | Add new commands                |
-| `src/app.ts`          | Update onboarding + lock screen |
+### Phase 3: Frontend 🔲
+| File                  | Action                          | Status |
+|-----------------------|---------------------------------|--------|
+| `src/api/types.ts`    | Add new types                   | 🔲     |
+| `src/api/commands.ts` | Add new commands                | 🔲     |
+| `src/app.ts`          | Update onboarding + lock screen | 🔲     |
 
 ---
 
