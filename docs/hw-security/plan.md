@@ -6,7 +6,7 @@
 |-------------|----------------|-------------------------------------------------------------------------|
 | **Phase 0** | ✅ COMPLETE     | Removed Stronghold, added zeroize, created vault/storage.rs             |
 | **Phase 1** | ✅ COMPLETE     | Created tauri-plugin-decentsecret with full Android/iOS/Desktop support |
-| **Phase 2** | 🔲 NOT STARTED | Wire plugin into VaultManager                                           |
+| **Phase 2** | ✅ COMPLETE     | Wire plugin into VaultManager                                           |
 | **Phase 3** | 🔲 NOT STARTED | Frontend integration (onboarding UI)                                    |
 
 ### What's Been Implemented
@@ -29,21 +29,40 @@
 - Plugin registered in app's `lib.rs` and `capabilities/default.json`
 - **Build verified**: `cargo check` passes
 
-### What's Next (Phase 2)
+**Phase 2 - VaultManager Integration:**
+- **AuthMethod enum**: Updated to `SecureStorage | Pin` variants in `vault/auth.rs`
+- **Auth persistence**: New `vault/auth_persistence.rs` stores chosen method in `auth-method.json`
+- **VaultManager**: Added async methods in `vault/manager.rs`:
+  - `create_with_secure_storage(app_handle)` - generates random 256-bit key, stores via plugin
+  - `open_with_secure_storage(app_handle)` - retrieves key via plugin (triggers biometric)
+  - `delete_secure_storage_key(app_handle)` - cleanup for vault reset
+  - Renamed existing methods to `create_with_pin()` / `open_with_pin()`
+- **New error variants**: `BiometricEnrollmentChanged`, `AuthenticationCancelled`, `SecureStorage(String)`
+- **Tauri commands** in `commands.rs`:
+  - `check_secret_storage_availability()` - returns platform capabilities
+  - `get_vault_auth_method()` - returns stored auth method
+  - `setup_vault_with_secure_storage(device_name)` - biometric/keyring setup
+  - `setup_vault_with_pin(device_name, pin)` - PIN fallback setup
+  - `unlock_vault(pin?)` - auto-detects method from `auth-method.json`
+  - `reset_vault()` - updated to clean up secure storage key and auth method file
+- **Removed**: Old `setup_vault(device_name, pin, auth_method)` command
+- **Build verified**: `cargo check` passes
 
-**Goal**: Wire the decentsecret plugin into VaultManager so the app can use biometric/keyring auth.
+### What's Next (Phase 3)
+
+**Goal**: Update frontend to use new auth flow.
 
 **Tasks**:
-1. Update `vault/auth.rs` - simplify `AuthMethod` enum to `SecureStorage | Pin`
-2. Update `vault/manager.rs` - add async methods:
-   - `create_with_secure_storage(app_handle)` - generates random 256-bit key, stores via plugin
-   - `open_with_secure_storage(app_handle)` - retrieves key via plugin (triggers biometric)
-   - Keep existing `create_with_pin()` and `open_with_pin()` for fallback
-3. Update `commands.rs` - add Tauri commands:
-   - `check_secret_storage_availability()` → calls plugin
-   - `setup_vault_with_secure_storage()` → creates vault with random key
-   - `setup_vault_with_pin(pin)` → existing PIN flow
-   - `unlock_vault()` → auto-detects method and unlocks
+1. Update `src/api/commands.ts` - add TypeScript wrappers for new commands
+2. Update `src/api/types.ts` - add `AuthMethod` and `SecretStorageStatus` types
+3. Update onboarding flow in `src/app.ts`:
+   - Check `checkSecretStorageAvailability()` on startup
+   - If available → show "Setup with Biometric/Keyring" option
+   - If not → show PIN setup
+4. Update lock screen flow:
+   - Check `getVaultAuthMethod()` to determine which unlock UI to show
+   - SecureStorage: Show "Unlock" button (triggers biometric on mobile, auto-unlock on desktop)
+   - PIN: Show PIN input field
 
 **Key Architecture Decision**: The vault key is either:
 - **SecureStorage**: Random 256-bit key stored in hardware (biometric/keyring protected)
@@ -415,12 +434,16 @@ flowchart TD
 | `tauri-plugin-decentsecret/ios/...`         | Secure Enclave      | ✅      |
 | `tauri-plugin-decentsecret/guest-js/...`    | TypeScript API      | ✅      |
 
-### Phase 2: Integration 🔲
-| File                             | Action                     | Status |
-|----------------------------------|----------------------------|--------|
-| `src-tauri/src/vault/auth.rs`    | Simplify AuthMethod        | 🔲     |
-| `src-tauri/src/vault/manager.rs` | Add secure storage methods | 🔲     |
-| `src-tauri/src/commands.rs`      | New auth commands          | 🔲     |
+### Phase 2: Integration ✅
+| File                                       | Action                         | Status |
+|--------------------------------------------|--------------------------------|--------|
+| `src-tauri/src/vault/auth.rs`              | Add SecureStorage variant      | ✅      |
+| `src-tauri/src/vault/auth_persistence.rs`  | Auth method file storage (NEW) | ✅      |
+| `src-tauri/src/vault/mod.rs`               | Export new module              | ✅      |
+| `src-tauri/src/vault/manager.rs`           | Add secure storage methods     | ✅      |
+| `src-tauri/src/error.rs`                   | Add new error variants         | ✅      |
+| `src-tauri/src/commands.rs`                | New auth commands              | ✅      |
+| `src-tauri/src/lib.rs`                     | Register new commands          | ✅      |
 
 ### Phase 3: Frontend 🔲
 | File                  | Action                          | Status |

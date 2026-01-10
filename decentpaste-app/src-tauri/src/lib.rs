@@ -129,7 +129,10 @@ pub fn run() {
             commands::get_pairing_sessions,
             // Vault commands
             commands::get_vault_status,
-            commands::setup_vault,
+            commands::check_secret_storage_availability,
+            commands::get_vault_auth_method,
+            commands::setup_vault_with_secure_storage,
+            commands::setup_vault_with_pin,
             commands::unlock_vault,
             commands::lock_vault,
             commands::reset_vault,

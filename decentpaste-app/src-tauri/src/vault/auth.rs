@@ -8,9 +8,9 @@ use serde::{Deserialize, Serialize};
 /// Represents the current state of the vault.
 ///
 /// The vault transitions between these states:
-/// - `NotSetup` → `Unlocked` (after first-time setup with PIN)
+/// - `NotSetup` → `Unlocked` (after first-time setup with SecureStorage or PIN)
 /// - `Unlocked` → `Locked` (when user locks or app backgrounds)
-/// - `Locked` → `Unlocked` (after successful PIN auth)
+/// - `Locked` → `Unlocked` (after successful auth via biometric/keyring or PIN)
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub enum VaultStatus {
@@ -23,12 +23,19 @@ pub enum VaultStatus {
     Unlocked,
 }
 
-/// Authentication method preference for unlocking the vault.
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+/// Authentication method for vault encryption key.
+///
+/// Determines how the 256-bit vault encryption key is obtained:
+/// - `SecureStorage`: Random key stored in platform secure storage (biometric/keyring)
+/// - `Pin`: Key derived from user's PIN via Argon2id
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum AuthMethod {
-    /// PIN-based authentication (4-8 digits)
-    #[default]
+    /// Uses decentsecret plugin (biometric on mobile, keyring on desktop).
+    /// Key is a random 256-bit value stored in platform secure storage.
+    SecureStorage,
+    /// PIN-based authentication with Argon2id key derivation.
+    /// Key is derived from user's PIN + installation salt.
     Pin,
 }
 
@@ -45,6 +52,7 @@ impl std::fmt::Display for VaultStatus {
 impl std::fmt::Display for AuthMethod {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::SecureStorage => write!(f, "secure_storage"),
             Self::Pin => write!(f, "pin"),
         }
     }

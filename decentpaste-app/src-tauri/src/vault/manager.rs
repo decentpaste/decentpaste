@@ -2,17 +2,19 @@
 //!
 //! This module provides the VaultManager struct that handles:
 //! - Vault existence checking
-//! - Vault creation with PIN-derived encryption keys
-//! - Vault opening (unlocking) with PIN verification
+//! - Vault creation with either:
+//!   - **SecureStorage**: Random 256-bit key stored in platform secure storage
+//!   - **PIN**: Key derived from user's PIN via Argon2id
+//! - Vault opening (unlocking)
 //! - Vault destruction for factory reset
 //! - Encrypted storage for clipboard history, paired peers, device identity, and keypairs
-//!
-//! The encryption key is derived from the user's PIN using Argon2id with
-//! installation-specific salt, providing strong protection against brute-force attacks.
 
 use std::path::PathBuf;
 
 use argon2::{Algorithm, Argon2, Params, Version};
+use rand::RngCore;
+use tauri::{AppHandle, Runtime};
+use tauri_plugin_decentsecret::DecentsecretExt;
 use tracing::{debug, info, warn};
 
 use crate::clipboard::ClipboardEntry;
@@ -103,6 +105,151 @@ impl VaultManager {
         Ok(VaultKey::from_slice(&key_bytes))
     }
 
+    // =========================================================================
+    // SecureStorage Path (Biometric/Keyring)
+    // =========================================================================
+
+    /// Create a new vault using secure storage (biometric/keyring).
+    ///
+    /// Generates a random 256-bit key and stores it via the decentsecret plugin.
+    /// On mobile, this triggers a biometric prompt for key storage.
+    /// On desktop, the key is stored in the OS keyring.
+    ///
+    /// # Arguments
+    /// * `app_handle` - Tauri app handle for plugin access
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Vault already exists
+    /// - Secure storage is not available
+    /// - User cancels biometric prompt
+    pub async fn create_with_secure_storage<R: Runtime>(
+        &mut self,
+        app_handle: &AppHandle<R>,
+    ) -> Result<()> {
+        let vault_path = get_vault_path()?;
+
+        if vault_path.exists() {
+            return Err(DecentPasteError::Storage(
+                "Vault already exists. Use destroy() first to reset.".into(),
+            ));
+        }
+
+        info!("Creating new vault with secure storage");
+
+        // Generate random 256-bit key
+        let mut key_bytes = [0u8; 32];
+        rand::rng().fill_bytes(&mut key_bytes);
+        let key = VaultKey::from_slice(&key_bytes);
+
+        // Store key via plugin (triggers biometric on mobile)
+        app_handle
+            .decentsecret()
+            .store_secret(key_bytes.to_vec())
+            .map_err(|e| Self::map_plugin_error(e))?;
+
+        // Initialize empty vault data
+        let data = VaultData::default();
+
+        // Write encrypted vault to disk
+        write_vault(&data, &key)?;
+
+        self.key = Some(key);
+        self.data = data;
+
+        info!("Vault created with secure storage");
+        Ok(())
+    }
+
+    /// Open an existing vault using secure storage (biometric/keyring).
+    ///
+    /// Retrieves the encryption key via the decentsecret plugin.
+    /// On mobile, this triggers a biometric prompt.
+    /// On desktop, key is retrieved from OS keyring (no prompt).
+    ///
+    /// # Arguments
+    /// * `app_handle` - Tauri app handle for plugin access
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Vault doesn't exist
+    /// - User cancels biometric prompt
+    /// - Biometric enrollment changed (key invalidated)
+    /// - Key not found in secure storage
+    pub async fn open_with_secure_storage<R: Runtime>(
+        &mut self,
+        app_handle: &AppHandle<R>,
+    ) -> Result<()> {
+        let vault_path = get_vault_path()?;
+
+        if !vault_path.exists() {
+            return Err(DecentPasteError::Storage("Vault does not exist".into()));
+        }
+
+        info!("Opening vault with secure storage");
+
+        // Retrieve key via plugin (triggers biometric on mobile)
+        let key_bytes = app_handle
+            .decentsecret()
+            .retrieve_secret()
+            .map_err(|e| Self::map_plugin_error(e))?;
+
+        if key_bytes.len() != 32 {
+            return Err(DecentPasteError::Encryption(format!(
+                "Invalid key length: expected 32, got {}",
+                key_bytes.len()
+            )));
+        }
+
+        let key = VaultKey::from_slice(&key_bytes);
+
+        // Try to decrypt the vault
+        let data = read_vault(&key)?;
+
+        self.key = Some(key);
+        self.data = data;
+
+        info!("Vault opened with secure storage");
+        Ok(())
+    }
+
+    /// Delete the key from secure storage.
+    ///
+    /// Called during vault reset to ensure the key is removed from
+    /// biometric-protected storage. Idempotent - returns Ok even if no key exists.
+    pub async fn delete_secure_storage_key<R: Runtime>(app_handle: &AppHandle<R>) -> Result<()> {
+        app_handle
+            .decentsecret()
+            .delete_secret()
+            .map_err(|e| Self::map_plugin_error(e))?;
+        info!("Deleted key from secure storage");
+        Ok(())
+    }
+
+    /// Map plugin errors to DecentPasteError.
+    fn map_plugin_error(err: tauri_plugin_decentsecret::Error) -> DecentPasteError {
+        use tauri_plugin_decentsecret::Error as PluginError;
+
+        match err {
+            PluginError::BiometricEnrollmentChanged => DecentPasteError::BiometricEnrollmentChanged,
+            PluginError::UserCancelled => DecentPasteError::AuthenticationCancelled,
+            PluginError::AuthenticationFailed(msg) => {
+                DecentPasteError::SecureStorage(format!("Authentication failed: {}", msg))
+            }
+            PluginError::SecretNotFound => {
+                DecentPasteError::Storage("No vault key found in secure storage".into())
+            }
+            PluginError::NotAvailable(reason) => {
+                DecentPasteError::NotSupported(format!("Secure storage not available: {}", reason))
+            }
+            _ => DecentPasteError::SecureStorage(format!("Secure storage error: {}", err)),
+        }
+    }
+
+    // =========================================================================
+    // PIN Path (Argon2id Key Derivation)
+    // =========================================================================
+
     /// Create a new vault with the given PIN.
     ///
     /// This sets up a fresh encrypted vault with a key derived
@@ -113,7 +260,7 @@ impl VaultManager {
     ///
     /// # Errors
     /// Returns an error if a vault already exists or if creation fails.
-    pub fn create(&mut self, pin: &str) -> Result<()> {
+    pub fn create_with_pin(&mut self, pin: &str) -> Result<()> {
         let vault_path = get_vault_path()?;
 
         if vault_path.exists() {
@@ -122,7 +269,7 @@ impl VaultManager {
             ));
         }
 
-        info!("Creating new vault at {:?}", vault_path);
+        info!("Creating new vault with PIN");
 
         // Get or create installation-specific salt
         let salt = get_or_create_salt()?;
@@ -139,7 +286,7 @@ impl VaultManager {
         self.key = Some(key);
         self.data = data;
 
-        info!("Vault created successfully");
+        info!("Vault created with PIN");
         Ok(())
     }
 
@@ -154,14 +301,14 @@ impl VaultManager {
     /// # Errors
     /// Returns `InvalidPin` if the PIN is incorrect, or other errors
     /// if the vault file is corrupted or inaccessible.
-    pub fn open(&mut self, pin: &str) -> Result<()> {
+    pub fn open_with_pin(&mut self, pin: &str) -> Result<()> {
         let vault_path = get_vault_path()?;
 
         if !vault_path.exists() {
             return Err(DecentPasteError::Storage("Vault does not exist".into()));
         }
 
-        info!("Opening vault at {:?}", vault_path);
+        info!("Opening vault with PIN");
 
         // Get the salt (must exist if vault exists)
         let salt = get_or_create_salt()?;
@@ -175,7 +322,7 @@ impl VaultManager {
         self.key = Some(key);
         self.data = data;
 
-        info!("Vault opened successfully");
+        info!("Vault opened with PIN");
         Ok(())
     }
 

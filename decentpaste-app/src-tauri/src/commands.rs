@@ -631,8 +631,11 @@ pub async fn get_pairing_sessions(state: State<'_, AppState>) -> Result<Vec<Pair
 // Vault Commands - Secure storage authentication and management
 // ============================================================================
 
-use crate::vault::{VaultManager, VaultStatus};
+use crate::vault::{
+    delete_auth_method, load_auth_method, save_auth_method, AuthMethod, VaultManager, VaultStatus,
+};
 use tauri::Emitter;
+use tauri_plugin_decentsecret::{DecentsecretExt, SecretStorageStatus};
 
 /// Get the current vault status.
 ///
@@ -661,38 +664,51 @@ pub async fn get_vault_status(state: State<'_, AppState>) -> Result<VaultStatus>
     }
 }
 
-/// Set up a new vault during first-time onboarding.
+/// Check if secure storage (biometric/keyring) is available on this device.
 ///
-/// This creates an encrypted Stronghold vault protected by the user's PIN.
-/// The PIN is transformed via Argon2id into an encryption key.
-/// After setup, network services are started automatically.
+/// Returns status including:
+/// - Whether available
+/// - Which method (AndroidBiometric, IOSBiometric, MacOSKeychain, etc.)
+/// - Why unavailable (if not available)
+#[tauri::command]
+pub async fn check_secret_storage_availability(
+    app_handle: AppHandle,
+) -> Result<SecretStorageStatus> {
+    app_handle
+        .decentsecret()
+        .check_availability()
+        .map_err(|e| DecentPasteError::SecureStorage(e.to_string()))
+}
+
+/// Get the auth method used for the current vault (if any).
+///
+/// Returns `None` if no vault is set up.
+#[tauri::command]
+pub async fn get_vault_auth_method() -> Result<Option<AuthMethod>> {
+    if !VaultManager::exists()? {
+        return Ok(None);
+    }
+    load_auth_method()
+}
+
+/// Set up a new vault with secure storage (biometric/keyring).
+///
+/// Generates a random 256-bit key and stores it in platform secure storage.
+/// On mobile, this triggers a biometric prompt.
 ///
 /// # Arguments
 /// * `device_name` - The user's chosen device name
-/// * `pin` - The user's chosen PIN (4-8 digits)
-/// * `auth_method` - Auth method (currently only "pin" is supported)
 #[tauri::command]
-pub async fn setup_vault(
+pub async fn setup_vault_with_secure_storage(
     app_handle: AppHandle,
     state: State<'_, AppState>,
     device_name: String,
-    pin: String,
-    auth_method: String,
 ) -> Result<()> {
-    use tracing::info;
+    info!("Setting up vault with secure storage for device: {}", device_name);
 
-    // Validate PIN length (4-8 digits)
-    if pin.len() < 4 || pin.len() > 8 || !pin.chars().all(|c| c.is_ascii_digit()) {
-        return Err(DecentPasteError::InvalidInput(
-            "PIN must be 4-8 digits".into(),
-        ));
-    }
-
-    info!("Setting up new vault for device: {}", device_name);
-
-    // Create the vault
+    // Create the vault with random key stored in secure storage
     let mut manager = VaultManager::new();
-    manager.create(&pin)?;
+    manager.create_with_secure_storage(&app_handle).await?;
 
     // Create device identity with X25519 keypair for ECDH
     let identity = crate::security::generate_device_identity(&device_name);
@@ -704,6 +720,9 @@ pub async fn setup_vault(
 
     // Flush to ensure data is persisted
     manager.flush()?;
+
+    // Save auth method to disk
+    save_auth_method(AuthMethod::SecureStorage)?;
 
     // Update app state
     {
@@ -719,46 +738,140 @@ pub async fn setup_vault(
         *device_identity = Some(identity);
     }
 
-    // Update settings with auth method
+    // Update settings
     {
         let mut settings = state.settings.write().await;
         settings.device_name = device_name;
-        settings.auth_method = Some(auth_method);
+        settings.auth_method = Some("secure_storage".to_string());
         save_settings(&settings)?;
     }
 
     // Start network and clipboard services BEFORE emitting event
-    // This ensures network_command_tx is set when frontend processes pending share
     if let Err(e) = crate::start_network_services(app_handle.clone()).await {
         tracing::error!("Failed to start network services: {}", e);
-        // Don't fail the vault setup - services can be started later
     }
 
     // Emit vault status change AFTER network is ready
-    // Frontend may immediately try to send pending share content on this event
     let _ = app_handle.emit("vault-status", VaultStatus::Unlocked);
 
-    info!("Vault setup completed successfully");
+    info!("Vault setup with secure storage completed");
     Ok(())
 }
 
-/// Unlock an existing vault with the user's PIN.
+/// Set up a new vault with PIN-based authentication.
+///
+/// The encryption key is derived from the PIN via Argon2id.
+///
+/// # Arguments
+/// * `device_name` - The user's chosen device name
+/// * `pin` - The user's chosen PIN (4-8 digits)
+#[tauri::command]
+pub async fn setup_vault_with_pin(
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+    device_name: String,
+    pin: String,
+) -> Result<()> {
+    // Validate PIN length (4-8 digits)
+    if pin.len() < 4 || pin.len() > 8 || !pin.chars().all(|c| c.is_ascii_digit()) {
+        return Err(DecentPasteError::InvalidInput(
+            "PIN must be 4-8 digits".into(),
+        ));
+    }
+
+    info!("Setting up vault with PIN for device: {}", device_name);
+
+    // Create the vault with PIN-derived key
+    let mut manager = VaultManager::new();
+    manager.create_with_pin(&pin)?;
+
+    // Create device identity with X25519 keypair for ECDH
+    let identity = crate::security::generate_device_identity(&device_name);
+    manager.set_device_identity(&identity)?;
+
+    // Generate and store libp2p keypair
+    let keypair = libp2p::identity::Keypair::generate_ed25519();
+    manager.set_libp2p_keypair(&keypair)?;
+
+    // Flush to ensure data is persisted
+    manager.flush()?;
+
+    // Save auth method to disk
+    save_auth_method(AuthMethod::Pin)?;
+
+    // Update app state
+    {
+        let mut vault_manager = state.vault_manager.write().await;
+        *vault_manager = Some(manager);
+    }
+    {
+        let mut vault_status = state.vault_status.write().await;
+        *vault_status = VaultStatus::Unlocked;
+    }
+    {
+        let mut device_identity = state.device_identity.write().await;
+        *device_identity = Some(identity);
+    }
+
+    // Update settings
+    {
+        let mut settings = state.settings.write().await;
+        settings.device_name = device_name;
+        settings.auth_method = Some("pin".to_string());
+        save_settings(&settings)?;
+    }
+
+    // Start network and clipboard services BEFORE emitting event
+    if let Err(e) = crate::start_network_services(app_handle.clone()).await {
+        tracing::error!("Failed to start network services: {}", e);
+    }
+
+    // Emit vault status change AFTER network is ready
+    let _ = app_handle.emit("vault-status", VaultStatus::Unlocked);
+
+    info!("Vault setup with PIN completed");
+    Ok(())
+}
+
+/// Unlock an existing vault using the appropriate auth method.
+///
+/// Auto-detects the auth method from the stored config:
+/// - SecureStorage: Triggers biometric prompt (mobile) or retrieves from keyring (desktop)
+/// - Pin: Requires the PIN parameter
 ///
 /// On success, loads all encrypted data from the vault into app state
 /// and starts network/clipboard services.
+///
+/// # Arguments
+/// * `pin` - Optional PIN (required if auth method is Pin)
 #[tauri::command]
 pub async fn unlock_vault(
     app_handle: AppHandle,
     state: State<'_, AppState>,
-    pin: String,
+    pin: Option<String>,
 ) -> Result<()> {
-    use tracing::info;
-
     info!("Attempting to unlock vault");
 
-    // Try to open the vault with the provided PIN
+    // Load the auth method to determine which unlock path to use
+    let auth_method = load_auth_method()?.ok_or_else(|| {
+        DecentPasteError::Storage("No auth method configured - vault may be corrupted".into())
+    })?;
+
     let mut manager = VaultManager::new();
-    manager.open(&pin)?;
+
+    match auth_method {
+        AuthMethod::SecureStorage => {
+            info!("Unlocking with secure storage");
+            manager.open_with_secure_storage(&app_handle).await?;
+        }
+        AuthMethod::Pin => {
+            let pin = pin.ok_or_else(|| {
+                DecentPasteError::InvalidInput("PIN required for PIN-based vault".into())
+            })?;
+            info!("Unlocking with PIN");
+            manager.open_with_pin(&pin)?;
+        }
+    }
 
     // Load data from vault into app state
     if let Ok(Some(identity)) = manager.get_device_identity() {
@@ -787,14 +900,11 @@ pub async fn unlock_vault(
     }
 
     // Start network and clipboard services BEFORE emitting event
-    // This ensures network_command_tx is set when frontend processes pending share
     if let Err(e) = crate::start_network_services(app_handle.clone()).await {
         tracing::error!("Failed to start network services: {}", e);
-        // Don't fail the unlock - services can be started later
     }
 
     // Emit vault status change AFTER network is ready
-    // Frontend may immediately try to send pending share content on this event
     let _ = app_handle.emit("vault-status", VaultStatus::Unlocked);
 
     info!("Vault unlocked successfully");
@@ -838,18 +948,24 @@ pub async fn lock_vault(app_handle: AppHandle, state: State<'_, AppState>) -> Re
 /// Reset the vault, destroying all encrypted data.
 ///
 /// This is a destructive operation that:
-/// 1. Deletes the vault file
-/// 2. Deletes the salt file
-/// 3. Clears all app state
+/// 1. Deletes the vault file (vault.enc)
+/// 2. Deletes the salt file (salt.bin) for PIN-based vaults
+/// 3. Deletes the key from secure storage (if using biometric/keyring)
+/// 4. Deletes the auth method config file (auth-method.json)
+/// 5. Clears all app state
 ///
 /// After reset, the user must go through onboarding again.
 #[tauri::command]
 pub async fn reset_vault(app_handle: AppHandle, state: State<'_, AppState>) -> Result<()> {
-    use tracing::{info, warn};
-
     warn!("Resetting vault - all encrypted data will be lost!");
 
-    // Destroy the vault
+    // Delete key from secure storage if it exists (idempotent)
+    if let Err(e) = VaultManager::delete_secure_storage_key(&app_handle).await {
+        // Log but don't fail - key may not exist if using PIN auth
+        debug!("Could not delete secure storage key (may not exist): {}", e);
+    }
+
+    // Destroy the vault files
     {
         let mut manager = state.vault_manager.write().await;
         if let Some(ref mut m) = *manager {
@@ -861,6 +977,9 @@ pub async fn reset_vault(app_handle: AppHandle, state: State<'_, AppState>) -> R
         }
         *manager = None;
     }
+
+    // Delete auth method config file
+    delete_auth_method()?;
 
     // Clear app state
     {
