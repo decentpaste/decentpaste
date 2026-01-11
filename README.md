@@ -2,12 +2,12 @@
 
 **Universal Clipboard for Every Device** — A cross-platform clipboard sharing app that works like Apple's Universal Clipboard, but for all platforms.
 
-[![Alpha](https://img.shields.io/badge/Status-Alpha-orange.svg)](#project-status)
+[![Stable](https://img.shields.io/badge/Status-Stable-teal.svg)](https://github.com/decentpaste/decentpaste/releases)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Built with Tauri](https://img.shields.io/badge/Built%20with-Tauri%20v2-24C8D8.svg)](https://tauri.app)
 [![libp2p](https://img.shields.io/badge/Powered%20by-libp2p-blue.svg)](https://libp2p.io)
 
-> 🚀 **Early Alpha** — Things may break and there could be security bugs. [Feedback welcome!](https://github.com/decentpaste/decentpaste/issues)
+> 🆕 **New Release** — Actively developed with community feedback. [Share your ideas!](https://github.com/decentpaste/decentpaste/issues)
 
 <p align="center">
   <img src="website/assets/og-image.png" alt="DecentPaste Screenshot" width="600">
@@ -153,21 +153,17 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed technical documentation.
 
 ## Project Status
 
-**DecentPaste is currently in Alpha.** Here's what that means:
+**DecentPaste** — Production-ready and actively developed.
 
-| Aspect                    | Status                                                    |
-|---------------------------|-----------------------------------------------------------|
-| **Core functionality**    | ✅ Works reliably for daily use                            |
-| **Security fundamentals** | ✅ Sound cryptography (X25519 ECDH, AES-256-GCM, Argon2id) |
-| **Local-only design**     | ✅ Data never leaves your network                          |
-| **Security hardening**    | 🔄 Ongoing (community review welcome)                     |
-| **Production readiness**  | ⚠️ Not yet recommended for highly sensitive data          |
+| Aspect                 | Status                                                     |
+|------------------------|------------------------------------------------------------|
+| **Core functionality** | ✅ Reliable for daily use                                   |
+| **Cryptography**       | ✅ Production-grade (X25519 ECDH, AES-256-GCM, Argon2id)    |
+| **Privacy**            | ✅ Local-only — data never leaves your network              |
+| **Security**           | ✅ Hardware-backed storage (TEE/Keychain) with PIN fallback |
+| **Active Development** | 🚀 New features shipping regularly                         |
 
-**What I'd recommend:**
-- ✅ Great for: URLs, code snippets, notes, general text
-- ⚠️ Caution with: Passwords, API keys, financial data (use a password manager instead)
-
-The local-only (mDNS) design significantly limits the attack surface compared to cloud-based alternatives. If you find security issues, please [open an issue](https://github.com/decentpaste/decentpaste/issues) — I take them seriously and respond promptly.
+The local-only design (mDNS) significantly limits the attack surface compared to cloud-based alternatives. Security issues? [Open an issue](https://github.com/decentpaste/decentpaste/issues) — I respond promptly.
 
 ## Roadmap
 
