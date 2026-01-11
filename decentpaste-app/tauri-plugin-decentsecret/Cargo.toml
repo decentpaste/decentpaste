@@ -28,5 +28,7 @@ keyring = { version = "3", features = ["apple-native"] }
 [target.'cfg(target_os = "windows")'.dependencies]
 keyring = { version = "3", features = ["windows-native"] }
 
+# If we use a linux-native feature, it will only create session-based secret, which will be removed after reboot
+# I also used crypto-rust to not bundle openssl with vendored or require dependency from the user
 [target.'cfg(target_os = "linux")'.dependencies]
-keyring = { version = "3", default-features = false, features = ["linux-native"] }
+keyring = { version = "3", default-features = false, features = ["sync-secret-service", "crypto-rust"] }
