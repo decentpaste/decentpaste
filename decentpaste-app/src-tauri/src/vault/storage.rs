@@ -180,3 +180,50 @@ pub fn delete_vault() -> Result<()> {
     }
     Ok(())
 }
+
+// ============================================================================
+// EncryptedVaultKeyData - Desktop Keychain + PIN Storage
+// ============================================================================
+
+/// Encrypted vault key data stored in OS keychain (desktop only).
+///
+/// This struct is self-contained: it includes all data needed for decryption
+/// when the user provides their PIN. The format is:
+/// - `version`: Format version for future upgrades
+/// - `salt`: Argon2id salt for PIN-based key derivation
+/// - `nonce`: AES-GCM nonce for vault key encryption
+/// - `ciphertext`: Encrypted vault key (32 bytes) + auth tag (16 bytes)
+///
+/// Total size: ~77 bytes (1 + 16 + 12 + 48), stored as JSON in keychain.
+#[cfg(desktop)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EncryptedVaultKeyData {
+    /// Format version for future upgrades (currently 1)
+    pub version: u8,
+    /// Argon2id salt (16 bytes) for PIN-based key derivation
+    pub salt: [u8; 16],
+    /// AES-GCM nonce (12 bytes) for vault key encryption
+    pub nonce: [u8; 12],
+    /// Encrypted vault key (32 bytes) + AES-GCM auth tag (16 bytes) = 48 bytes
+    pub ciphertext: Vec<u8>,
+}
+
+#[cfg(desktop)]
+impl EncryptedVaultKeyData {
+    /// Current format version
+    pub const VERSION: u8 = 1;
+
+    /// Serialize to bytes for keychain storage (JSON format).
+    pub fn to_bytes(&self) -> Result<Vec<u8>> {
+        serde_json::to_vec(self).map_err(|e| {
+            DecentPasteError::Storage(format!("Failed to serialize encrypted key data: {}", e))
+        })
+    }
+
+    /// Deserialize from keychain bytes.
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
+        serde_json::from_slice(bytes).map_err(|e| {
+            DecentPasteError::Storage(format!("Failed to parse encrypted key data: {}", e))
+        })
+    }
+}

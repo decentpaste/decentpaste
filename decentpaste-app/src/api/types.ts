@@ -53,7 +53,7 @@ export interface PairingSession {
 
 // Vault types
 export type VaultStatus = 'NotSetup' | 'Locked' | 'Unlocked';
-export type AuthMethod = 'pin' | 'secure_storage';
+export type AuthMethod = 'pin' | 'secure_storage' | 'secure_storage_with_pin';
 
 // Secure storage types (from tauri-plugin-decentsecret)
 export type SecretStorageMethod =
@@ -78,7 +78,7 @@ export interface AppSettings {
   keep_history: boolean;
   show_notifications: boolean;
   clipboard_poll_interval_ms: number;
-  /** Authentication method for vault access ('pin' or 'secure_storage') */
+  /** Authentication method for vault access ('pin', 'secure_storage', or 'secure_storage_with_pin') */
   auth_method: AuthMethod | null;
   /** Whether to hide clipboard content in the UI (privacy mode) */
   hide_clipboard_content: boolean;

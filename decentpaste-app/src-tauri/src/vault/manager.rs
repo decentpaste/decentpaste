@@ -21,6 +21,8 @@ use crate::clipboard::ClipboardEntry;
 use crate::error::{DecentPasteError, Result};
 use crate::storage::{DeviceIdentity, PairedPeer};
 use crate::vault::salt::{delete_salt, get_or_create_salt};
+#[cfg(desktop)]
+use crate::vault::storage::EncryptedVaultKeyData;
 use crate::vault::storage::{
     delete_vault, get_vault_path, read_vault, vault_exists, write_vault, VaultData, VaultKey,
 };
@@ -260,6 +262,218 @@ impl VaultManager {
             }
             _ => DecentPasteError::SecureStorage(format!("Secure storage error: {}", err)),
         }
+    }
+
+    // =========================================================================
+    // SecureStorageWithPin Path (Desktop: Keychain + PIN)
+    // =========================================================================
+
+    /// Create a new vault using keychain + PIN (desktop only).
+    ///
+    /// This provides 2-factor security by:
+    /// 1. Generating a random 256-bit vault key
+    /// 2. Deriving an encryption key from the user's PIN (Argon2id)
+    /// 3. Encrypting the vault key with AES-256-GCM
+    /// 4. Storing the encrypted vault key in the OS keychain
+    ///
+    /// The salt is stored alongside the ciphertext in the keychain, not on disk.
+    /// This prevents offline PIN brute-forcing if only the vault file is stolen.
+    ///
+    /// # Arguments
+    /// * `app_handle` - Tauri app handle for keychain access
+    /// * `pin` - The user's chosen PIN (4-8 digits)
+    #[cfg(desktop)]
+    pub async fn create_with_secure_storage_and_pin<R: Runtime>(
+        &mut self,
+        app_handle: &AppHandle<R>,
+        pin: &str,
+    ) -> Result<()> {
+        use zeroize::Zeroize;
+
+        let vault_path = get_vault_path()?;
+        if vault_path.exists() {
+            return Err(DecentPasteError::Storage(
+                "Vault already exists. Use destroy() first to reset.".into(),
+            ));
+        }
+
+        info!("Creating new vault with secure storage + PIN");
+
+        // 1. Generate random vault key
+        let mut vault_key_bytes = [0u8; 32];
+        rand::rng().fill_bytes(&mut vault_key_bytes);
+
+        // 2. Generate salt and derive PIN encryption key
+        let mut salt = [0u8; 16];
+        rand::rng().fill_bytes(&mut salt);
+        let pin_key = Self::derive_key(pin, &salt)?;
+
+        // 3. Encrypt vault key with PIN-derived key
+        let encrypted_data = Self::encrypt_vault_key(&vault_key_bytes, pin_key.as_bytes(), &salt)?;
+
+        // 4. Store encrypted data in keychain
+        let keychain_bytes = encrypted_data.to_bytes()?;
+        debug!(
+            "Storing encrypted vault key in keychain ({} bytes)",
+            keychain_bytes.len()
+        );
+        app_handle
+            .decentsecret()
+            .store_secret(keychain_bytes)
+            .map_err(|e| Self::map_plugin_error(e))?;
+
+        // 5. Create vault with the original (unencrypted) vault key
+        let vault_key = VaultKey::from_slice(&vault_key_bytes);
+        let data = VaultData::default();
+        write_vault(&data, &vault_key)?;
+
+        self.key = Some(vault_key);
+        self.data = data;
+
+        // Zeroize temporary vault key bytes
+        vault_key_bytes.zeroize();
+
+        info!("Vault created with secure storage + PIN");
+        Ok(())
+    }
+
+    /// Open an existing vault using keychain + PIN (desktop only).
+    ///
+    /// 1. Retrieves the encrypted vault key from the OS keychain
+    /// 2. Derives the encryption key from the user's PIN
+    /// 3. Decrypts the vault key
+    /// 4. Opens the vault with the decrypted key
+    ///
+    /// # Arguments
+    /// * `app_handle` - Tauri app handle for keychain access
+    /// * `pin` - The user's PIN
+    ///
+    /// # Errors
+    /// Returns `InvalidPin` if the PIN is incorrect (decryption fails).
+    #[cfg(desktop)]
+    pub async fn open_with_secure_storage_and_pin<R: Runtime>(
+        &mut self,
+        app_handle: &AppHandle<R>,
+        pin: &str,
+    ) -> Result<()> {
+        use zeroize::Zeroize;
+
+        let vault_path = get_vault_path()?;
+        if !vault_path.exists() {
+            return Err(DecentPasteError::Storage("Vault does not exist".into()));
+        }
+
+        info!("Opening vault with secure storage + PIN");
+
+        // 1. Retrieve encrypted data from keychain
+        debug!("Retrieving encrypted vault key from keychain...");
+        let keychain_bytes = app_handle
+            .decentsecret()
+            .retrieve_secret()
+            .map_err(|e| Self::map_plugin_error(e))?;
+
+        let encrypted_data = EncryptedVaultKeyData::from_bytes(&keychain_bytes)?;
+
+        // 2. Derive PIN encryption key using stored salt
+        let pin_key = Self::derive_key(pin, &encrypted_data.salt)?;
+
+        // 3. Decrypt vault key
+        let mut vault_key_bytes = Self::decrypt_vault_key(&encrypted_data, pin_key.as_bytes())?;
+        let vault_key = VaultKey::from_slice(&vault_key_bytes);
+
+        // 4. Open vault
+        let data = read_vault(&vault_key)?;
+
+        self.key = Some(vault_key);
+        self.data = data;
+
+        // Zeroize temporary vault key bytes
+        vault_key_bytes.zeroize();
+
+        info!("Vault opened with secure storage + PIN");
+        Ok(())
+    }
+
+    /// Encrypt the vault key using AES-256-GCM with a PIN-derived key.
+    ///
+    /// Returns an `EncryptedVaultKeyData` struct containing the salt, nonce,
+    /// and ciphertext. This struct is self-contained and can be stored in
+    /// the keychain.
+    #[cfg(desktop)]
+    fn encrypt_vault_key(
+        vault_key: &[u8; 32],
+        pin_derived_key: &[u8; 32],
+        salt: &[u8; 16],
+    ) -> Result<EncryptedVaultKeyData> {
+        use aes_gcm::{aead::Aead, Aes256Gcm, KeyInit, Nonce};
+
+        let cipher = Aes256Gcm::new_from_slice(pin_derived_key)
+            .map_err(|e| DecentPasteError::Encryption(format!("Invalid encryption key: {}", e)))?;
+
+        let mut nonce_bytes = [0u8; 12];
+        rand::rng().fill_bytes(&mut nonce_bytes);
+        let nonce = Nonce::from_slice(&nonce_bytes);
+
+        let ciphertext = cipher.encrypt(nonce, vault_key.as_ref()).map_err(|e| {
+            DecentPasteError::Encryption(format!("Vault key encryption failed: {}", e))
+        })?;
+
+        debug!(
+            "Encrypted vault key: {} bytes ciphertext (includes 16-byte auth tag)",
+            ciphertext.len()
+        );
+
+        Ok(EncryptedVaultKeyData {
+            version: EncryptedVaultKeyData::VERSION,
+            salt: *salt,
+            nonce: nonce_bytes,
+            ciphertext,
+        })
+    }
+
+    /// Decrypt the vault key using AES-256-GCM with a PIN-derived key.
+    ///
+    /// # Errors
+    /// Returns `InvalidPin` if decryption fails (wrong PIN produces wrong key,
+    /// which causes AES-GCM authentication to fail).
+    #[cfg(desktop)]
+    fn decrypt_vault_key(
+        encrypted: &EncryptedVaultKeyData,
+        pin_derived_key: &[u8; 32],
+    ) -> Result<[u8; 32]> {
+        use aes_gcm::{aead::Aead, Aes256Gcm, KeyInit, Nonce};
+
+        // Check version for forward compatibility
+        if encrypted.version != EncryptedVaultKeyData::VERSION {
+            return Err(DecentPasteError::Storage(format!(
+                "Unsupported encrypted data version: {} (expected {})",
+                encrypted.version,
+                EncryptedVaultKeyData::VERSION
+            )));
+        }
+
+        let cipher = Aes256Gcm::new_from_slice(pin_derived_key)
+            .map_err(|e| DecentPasteError::Encryption(format!("Invalid decryption key: {}", e)))?;
+
+        let nonce = Nonce::from_slice(&encrypted.nonce);
+
+        // Decryption failure indicates wrong PIN (wrong key = auth tag mismatch)
+        let plaintext = cipher
+            .decrypt(nonce, encrypted.ciphertext.as_ref())
+            .map_err(|_| DecentPasteError::InvalidPin)?;
+
+        if plaintext.len() != 32 {
+            return Err(DecentPasteError::Encryption(format!(
+                "Invalid decrypted vault key length: {} (expected 32)",
+                plaintext.len()
+            )));
+        }
+
+        let mut key = [0u8; 32];
+        key.copy_from_slice(&plaintext);
+
+        debug!("Successfully decrypted vault key");
+        Ok(key)
     }
 
     // =========================================================================

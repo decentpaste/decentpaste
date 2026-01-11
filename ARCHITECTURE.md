@@ -115,7 +115,7 @@ decentpaste/
             │   └── pairing.rs    # PIN pairing protocol
             ├── vault/            # Encrypted vault storage
             │   ├── mod.rs        # Module exports
-            │   ├── auth.rs       # VaultStatus & AuthMethod (SecureStorage|Pin)
+            │   ├── auth.rs       # VaultStatus & AuthMethod enum
             │   ├── auth_persistence.rs  # Auth method file storage
             │   ├── error.rs      # Vault-specific error types
             │   ├── manager.rs    # VaultManager lifecycle & CRUD
@@ -299,8 +299,10 @@ pub enum VaultStatus {
 }
 
 pub enum AuthMethod {
-    SecureStorage,  // Hardware-backed (biometric/keyring)
-    Pin,            // Argon2id-derived key
+    SecureStorage,         // Hardware-backed (biometric on mobile, keyring on desktop)
+    Pin,                   // Argon2id-derived key
+    #[cfg(desktop)]
+    SecureStorageWithPin,  // Desktop-only: Keychain + PIN (true 2FA)
 }
 ```
 
@@ -308,16 +310,18 @@ pub enum AuthMethod {
 
 Core vault lifecycle operations:
 
-| Method                         | Description                                      |
-|--------------------------------|--------------------------------------------------|
-| `exists()`                     | Check if vault.enc file exists                   |
-| `create_with_secure_storage()` | Create vault with hardware-backed key            |
-| `create_with_pin(pin)`         | Create vault with Argon2id-derived key           |
-| `open_with_secure_storage()`   | Unlock via biometric/keyring                     |
-| `open_with_pin(pin)`           | Unlock with PIN                                  |
-| `destroy()`                    | Delete vault, salt, and secure storage key       |
-| `flush()`                      | Save in-memory data to encrypted file            |
-| `lock()`                       | Flush and zeroize encryption key from memory     |
+| Method                                 | Description                                        |
+|----------------------------------------|----------------------------------------------------|
+| `exists()`                             | Check if vault.enc file exists                     |
+| `create_with_secure_storage()`         | Create vault with hardware-backed key              |
+| `create_with_pin(pin)`                 | Create vault with Argon2id-derived key             |
+| `create_with_secure_storage_and_pin()` | Desktop: Create vault with keychain + PIN (2FA)    |
+| `open_with_secure_storage()`           | Unlock via biometric/keyring                       |
+| `open_with_pin(pin)`                   | Unlock with PIN                                    |
+| `open_with_secure_storage_and_pin()`   | Desktop: Decrypt keychain data with PIN, unlock    |
+| `destroy()`                            | Delete vault, salt, and secure storage key         |
+| `flush()`                              | Save in-memory data to encrypted file              |
+| `lock()`                               | Flush and zeroize encryption key from memory       |
 
 Data operations:
 - `get_clipboard_history()` / `set_clipboard_history()`
@@ -329,6 +333,11 @@ Data operations:
 
 - `VaultKey` - 256-bit key with `Zeroize` derive (cleared on drop)
 - `VaultData` - Serializable vault contents
+- `EncryptedVaultKeyData` - Desktop-only struct for keychain + PIN mode:
+  - `version: u8` - Format version for future upgrades
+  - `salt: [u8; 16]` - Argon2id salt for PIN key derivation
+  - `nonce: [u8; 12]` - AES-GCM nonce for vault key encryption
+  - `ciphertext: Vec<u8>` - Encrypted vault key (32 bytes) + auth tag (16 bytes)
 
 #### `auth_persistence.rs` - Auth Method Storage
 
@@ -364,6 +373,41 @@ Data is persisted immediately after every mutation (flush-on-write), ensuring no
 - **Biometric binding** - Mobile keys invalidated if biometric enrollment changes
 - **Per-installation salt** - Prevents rainbow table attacks (PIN mode)
 - **Argon2id parameters** - 64 MB memory, 3 iterations (PIN mode)
+- **Desktop 2FA** - SecureStorageWithPin combines keychain access + PIN knowledge
+
+#### Platform Auth Methods
+
+| Platform | Keychain Available | Default Auth Method                   |
+|----------|--------------------|---------------------------------------|
+| Desktop  | Yes                | SecureStorageWithPin (keychain + PIN) |
+| Desktop  | No                 | Pin (fallback)                        |
+| Mobile   | Yes                | SecureStorage (biometrics)            |
+| Mobile   | No                 | Pin (fallback)                        |
+
+#### Migration Screen Pattern
+
+When introducing breaking changes that require existing users to reset their vault or take action, the app uses a migration screen pattern:
+
+1. **Detection**: In `render()`, before showing normal UI, check if migration is required
+2. **Block Access**: Show migration screen instead of normal lock screen / main app
+3. **Clear Action**: Provide a single button to perform the migration (e.g., "Reset & Upgrade")
+4. **Automatic Transition**: After migration, app automatically proceeds to the appropriate screen
+
+**Implementation:**
+- Add detection logic in `render()` method
+- Create `renderMigrationRequired()` or similar method for the migration UI
+- Add click handler for the migration action button
+- Migration screen should explain what's changing and what user needs to do
+
+**Example (SecureStorageWithPin migration):**
+- Detected: `authMethod === 'secure_storage' && isDesktop()`
+- Action: Reset vault, proceed to onboarding with new auth method
+- Screen: "Security Upgrade Required" with "Reset & Upgrade" button
+
+This pattern ensures:
+- Users cannot bypass the migration
+- Clear communication about what's happening
+- Consistent UX for future breaking changes
 
 ### 5. Storage Layer (`src/storage/`)
 

@@ -5,7 +5,7 @@ Hardware-backed secure secret storage for Tauri v2 applications.
 This plugin provides a unified API for storing secrets using platform-native security mechanisms:
 
 | Platform | Backend                           | Security Level  |
-|----------|-----------------------------------|-----------------|
+| -------- | --------------------------------- | --------------- |
 | Android  | AndroidKeyStore + BiometricPrompt | TEE/StrongBox   |
 | iOS      | Keychain + Secure Enclave         | Hardware-backed |
 | macOS    | Keychain Access                   | Session-based   |

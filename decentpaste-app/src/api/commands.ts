@@ -186,6 +186,20 @@ export async function setupVaultWithSecureStorage(deviceName: string): Promise<v
 }
 
 /**
+ * Set up a new vault with keychain + PIN (desktop only).
+ * Provides 2-factor security by:
+ * 1. Generating a random 256-bit vault key
+ * 2. Encrypting it with a PIN-derived key (Argon2id)
+ * 3. Storing the encrypted key in the OS keychain
+ *
+ * @param deviceName - The user's chosen device name
+ * @param pin - The user's chosen PIN (4-8 digits)
+ */
+export async function setupVaultWithSecureStorageAndPin(deviceName: string, pin: string): Promise<void> {
+  return invoke('setup_vault_with_secure_storage_and_pin', { deviceName, pin });
+}
+
+/**
  * Legacy wrapper for setupVaultWithPin (for backward compatibility).
  * @deprecated Use setupVaultWithPin or setupVaultWithSecureStorage instead.
  */
@@ -198,7 +212,8 @@ export async function setupVault(deviceName: string, pin: string, _authMethod: A
  * Auto-detects the auth method from stored config.
  * - SecureStorage: Triggers biometric prompt (mobile) or retrieves from keyring (desktop)
  * - PIN: Requires the pin parameter
- * @param pin - Optional PIN (required if vault uses PIN auth)
+ * - SecureStorageWithPin (desktop): Retrieves encrypted key from keychain, decrypts with PIN
+ * @param pin - Optional PIN (required if vault uses PIN or SecureStorageWithPin auth)
  */
 export async function unlockVault(pin?: string): Promise<void> {
   return invoke('unlock_vault', { pin: pin ?? null });

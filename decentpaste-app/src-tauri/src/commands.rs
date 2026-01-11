@@ -836,17 +836,106 @@ pub async fn setup_vault_with_pin(
     Ok(())
 }
 
+/// Set up a new vault with secure storage + PIN (desktop only).
+///
+/// This provides 2-factor security:
+/// - Factor 1: Physical access to device with keychain
+/// - Factor 2: Knowledge of PIN
+///
+/// The encryption key is:
+/// 1. Randomly generated (256-bit)
+/// 2. Encrypted with a PIN-derived key (Argon2id)
+/// 3. Stored in the OS keychain
+///
+/// # Arguments
+/// * `device_name` - The user's chosen device name
+/// * `pin` - The user's chosen PIN (4-8 digits)
+#[cfg(desktop)]
+#[tauri::command]
+pub async fn setup_vault_with_secure_storage_and_pin(
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+    device_name: String,
+    pin: String,
+) -> Result<()> {
+    // Validate PIN length (4-8 digits)
+    if pin.len() < 4 || pin.len() > 8 || !pin.chars().all(|c| c.is_ascii_digit()) {
+        return Err(DecentPasteError::InvalidInput(
+            "PIN must be 4-8 digits".into(),
+        ));
+    }
+
+    info!(
+        "Setting up vault with secure storage + PIN for device: {}",
+        device_name
+    );
+
+    // Create the vault with keychain + PIN
+    let mut manager = VaultManager::new();
+    manager
+        .create_with_secure_storage_and_pin(&app_handle, &pin)
+        .await?;
+
+    // Create device identity with X25519 keypair for ECDH
+    let identity = crate::security::generate_device_identity(&device_name);
+    manager.set_device_identity(&identity)?;
+
+    // Generate and store libp2p keypair
+    let keypair = libp2p::identity::Keypair::generate_ed25519();
+    manager.set_libp2p_keypair(&keypair)?;
+
+    // Flush to ensure data is persisted
+    manager.flush()?;
+
+    // Save auth method to disk
+    save_auth_method(AuthMethod::SecureStorageWithPin)?;
+
+    // Update app state
+    {
+        let mut vault_manager = state.vault_manager.write().await;
+        *vault_manager = Some(manager);
+    }
+    {
+        let mut vault_status = state.vault_status.write().await;
+        *vault_status = VaultStatus::Unlocked;
+    }
+    {
+        let mut device_identity = state.device_identity.write().await;
+        *device_identity = Some(identity);
+    }
+
+    // Update settings
+    {
+        let mut settings = state.settings.write().await;
+        settings.device_name = device_name;
+        settings.auth_method = Some("secure_storage_with_pin".to_string());
+        save_settings(&settings)?;
+    }
+
+    // Start network and clipboard services BEFORE emitting event
+    if let Err(e) = crate::start_network_services(app_handle.clone()).await {
+        tracing::error!("Failed to start network services: {}", e);
+    }
+
+    // Emit vault status change AFTER network is ready
+    let _ = app_handle.emit("vault-status", VaultStatus::Unlocked);
+
+    info!("Vault setup with secure storage + PIN completed");
+    Ok(())
+}
+
 /// Unlock an existing vault using the appropriate auth method.
 ///
 /// Auto-detects the auth method from the stored config:
 /// - SecureStorage: Triggers biometric prompt (mobile) or retrieves from keyring (desktop)
 /// - Pin: Requires the PIN parameter
+/// - SecureStorageWithPin (desktop): Retrieves encrypted key from keychain, decrypts with PIN
 ///
 /// On success, loads all encrypted data from the vault into app state
 /// and starts network/clipboard services.
 ///
 /// # Arguments
-/// * `pin` - Optional PIN (required if auth method is Pin)
+/// * `pin` - Optional PIN (required if auth method is Pin or SecureStorageWithPin)
 #[tauri::command]
 pub async fn unlock_vault(
     app_handle: AppHandle,
@@ -873,6 +962,16 @@ pub async fn unlock_vault(
             })?;
             info!("Unlocking with PIN");
             manager.open_with_pin(&pin)?;
+        }
+        #[cfg(desktop)]
+        AuthMethod::SecureStorageWithPin => {
+            let pin = pin.ok_or_else(|| {
+                DecentPasteError::InvalidInput("PIN required for secure storage + PIN vault".into())
+            })?;
+            info!("Unlocking with secure storage + PIN");
+            manager
+                .open_with_secure_storage_and_pin(&app_handle, &pin)
+                .await?;
         }
     }
 

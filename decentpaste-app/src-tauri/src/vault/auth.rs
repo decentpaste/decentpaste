@@ -28,6 +28,7 @@ pub enum VaultStatus {
 /// Determines how the 256-bit vault encryption key is obtained:
 /// - `SecureStorage`: Random key stored in platform secure storage (biometric/keyring)
 /// - `Pin`: Key derived from user's PIN via Argon2id
+/// - `SecureStorageWithPin` (desktop only): Random key encrypted with PIN, stored in keychain
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AuthMethod {
@@ -37,6 +38,12 @@ pub enum AuthMethod {
     /// PIN-based authentication with Argon2id key derivation.
     /// Key is derived from user's PIN + installation salt.
     Pin,
+    /// Desktop-only: Encrypted vault key stored in OS keychain, requires PIN to decrypt.
+    /// Provides 2-factor security: keychain access (what you have) + PIN (what you know).
+    /// The vault key is encrypted with a PIN-derived key (Argon2id) before storage.
+    #[cfg(desktop)]
+    #[serde(rename = "secure_storage_with_pin")]
+    SecureStorageWithPin,
 }
 
 impl std::fmt::Display for VaultStatus {
@@ -54,6 +61,8 @@ impl std::fmt::Display for AuthMethod {
         match self {
             Self::SecureStorage => write!(f, "secure_storage"),
             Self::Pin => write!(f, "pin"),
+            #[cfg(desktop)]
+            Self::SecureStorageWithPin => write!(f, "secure_storage_with_pin"),
         }
     }
 }

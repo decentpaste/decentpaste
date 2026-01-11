@@ -19,7 +19,6 @@ class App {
   private pairingInProgress: boolean = false; // Guard against duplicate pairing operations
   private modalRenderPending: boolean = false; // Debounce modal renders
   private autoLockTimer: ReturnType<typeof setTimeout> | null = null; // Auto-lock timer
-  private desktopAutoUnlockAttempted: boolean = false; // Prevent duplicate auto-unlock attempts
 
   constructor(rootElement: HTMLElement) {
     this.root = rootElement;
@@ -42,49 +41,6 @@ class App {
         return 'System Keyring';
       default:
         return 'Secure Storage';
-    }
-  }
-
-  /**
-   * Attempt to auto-unlock on desktop with secure storage.
-   * Called after lock screen renders. Desktop keyrings are session-based,
-   * so we can unlock without user interaction.
-   */
-  private async attemptDesktopAutoUnlock(): Promise<void> {
-    // Guard against duplicate attempts
-    if (this.desktopAutoUnlockAttempted) return;
-    this.desktopAutoUnlockAttempted = true;
-
-    const btn = document.getElementById('btn-unlock-secure') as HTMLButtonElement | null;
-    const errorEl = document.getElementById('lock-error');
-
-    if (!btn) return;
-
-    const secretStorageStatus = store.get('secretStorageStatus');
-    const methodLabel = this.getSecureStorageLabel(secretStorageStatus?.method ?? null);
-
-    try {
-      btn.disabled = true;
-      btn.innerHTML = `${icon('loader', 18, 'animate-spin')}<span>Unlocking...</span>`;
-
-      await commands.unlockVault();
-      // Success - vault status event will trigger re-render
-      // Reset the flag on success so we can auto-unlock again after lock
-      this.desktopAutoUnlockAttempted = false;
-    } catch (error) {
-      // On failure, re-enable button for manual retry
-      const errorMessage = getErrorMessage(error);
-      let displayMessage = errorMessage;
-      if (errorMessage.toLowerCase().includes('not found')) {
-        displayMessage = 'Security key not found. You may need to reset your vault.';
-      }
-
-      if (errorEl) {
-        errorEl.textContent = displayMessage;
-        errorEl.classList.remove('hidden');
-      }
-      btn.disabled = false;
-      btn.innerHTML = `${icon('shield', 18)}<span>Unlock with ${escapeHtml(methodLabel)}</span>`;
     }
   }
 
@@ -537,6 +493,24 @@ class App {
         return;
       }
 
+      // Migration screen: Reset & Upgrade button
+      const migrationResetBtn = target.closest('#btn-migration-reset') as HTMLButtonElement | null;
+      if (migrationResetBtn) {
+        migrationResetBtn.disabled = true;
+        migrationResetBtn.innerHTML = `${icon('loader', 18, 'animate-spin')}<span>Resetting...</span>`;
+
+        try {
+          await commands.resetVault();
+          // Vault status becomes NotSetup, triggering re-render to onboarding
+          store.addToast('Vault reset. Please set up again.', 'info');
+        } catch (error) {
+          store.addToast(`Failed to reset vault: ${getErrorMessage(error)}`, 'error');
+          migrationResetBtn.disabled = false;
+          migrationResetBtn.innerHTML = `${icon('refreshCw', 18)}<span>Reset & Upgrade</span>`;
+        }
+        return;
+      }
+
       // Reset confirmation: Cancel button
       if (target.closest('#btn-reset-cancel')) {
         store.set('showResetConfirmation', false);
@@ -596,12 +570,17 @@ class App {
 
         store.set('onboardingDeviceName', deviceName);
 
-        // Check if secure storage is available - if so, show auth choice
+        // Determine next step based on platform and secure storage availability
         const secretStorageStatus = store.get('secretStorageStatus');
-        if (secretStorageStatus?.available) {
+        if (isDesktop()) {
+          // Desktop: always go to PIN setup (SecureStorageWithPin or PIN-only)
+          // No auth choice on desktop - we always want the PIN requirement
+          store.set('onboardingStep', 'pin-setup');
+        } else if (secretStorageStatus?.available) {
+          // Mobile with biometrics: show auth choice
           store.set('onboardingStep', 'auth-choice');
         } else {
-          // Skip to PIN setup if secure storage not available
+          // Mobile without biometrics: go to PIN setup
           store.set('onboardingStep', 'pin-setup');
         }
         this.render();
@@ -709,11 +688,17 @@ class App {
 
         try {
           const deviceName = store.get('onboardingDeviceName');
+          const secretStorageStatus = store.get('secretStorageStatus');
 
-          await commands.setupVaultWithPin(deviceName, pin);
-
-          // Set auth method so lock screen knows what to show
-          store.set('vaultAuthMethod', 'pin');
+          // Desktop with keychain: use SecureStorageWithPin for true 2FA
+          // Mobile or no keychain: use PIN-only
+          if (isDesktop() && secretStorageStatus?.available) {
+            await commands.setupVaultWithSecureStorageAndPin(deviceName, pin);
+            store.set('vaultAuthMethod', 'secure_storage_with_pin');
+          } else {
+            await commands.setupVaultWithPin(deviceName, pin);
+            store.set('vaultAuthMethod', 'pin');
+          }
 
           // Reset onboarding state
           store.set('onboardingStep', null);
@@ -1073,14 +1058,7 @@ class App {
     store.subscribe('activePairingSession', () => this.renderPairingModal());
     store.subscribe('showClearHistoryConfirm', () => this.updateClearHistoryModal());
     store.subscribe('isLoading', () => this.render());
-    store.subscribe('vaultStatus', (status) => {
-      // Reset auto-unlock flag when vault becomes unlocked (via any method)
-      // This allows auto-unlock to trigger again after next lock
-      if (status === 'Unlocked') {
-        this.desktopAutoUnlockAttempted = false;
-      }
-      this.render();
-    });
+    store.subscribe('vaultStatus', () => this.render());
     store.subscribe('onboardingStep', () => this.render());
     store.subscribe('showResetConfirmation', () => this.render());
     store.subscribe('updateStatus', () => {
@@ -1212,14 +1190,17 @@ class App {
 
     // Show lock screen if vault is locked
     if (state.vaultStatus === 'Locked') {
-      this.root.innerHTML = this.renderLockScreen();
-
-      // Desktop auto-unlock with secure storage (keyring is session-based)
       const authMethod = store.get('vaultAuthMethod');
+
+      // Legacy desktop SecureStorage users must migrate (force reset)
+      // Desktop keychain-only auth is "security theater" - it auto-unlocks without user interaction
       if (authMethod === 'secure_storage' && isDesktop()) {
-        // Use setTimeout to avoid blocking render
-        setTimeout(() => this.attemptDesktopAutoUnlock(), 100);
+        this.root.innerHTML = this.renderMigrationRequired();
+        return;
       }
+
+      // Normal lock screen for PIN, mobile SecureStorage, or desktop SecureStorageWithPin
+      this.root.innerHTML = this.renderLockScreen();
       return;
     }
 
@@ -1704,6 +1685,63 @@ class App {
   }
 
   /**
+   * Renders the migration screen for legacy desktop SecureStorage users.
+   * These users must reset their vault to upgrade to SecureStorageWithPin.
+   */
+  private renderMigrationRequired(): string {
+    return `
+      <div class="flex flex-col h-screen relative" style="background: #0a0a0b;">
+        <!-- Ambient background orbs -->
+        <div class="orb orb-orange animate-float" style="width: 400px; height: 400px; top: -15%; left: -10%;"></div>
+        <div class="orb orb-teal animate-float-delayed" style="width: 300px; height: 300px; bottom: 10%; right: -15%;"></div>
+
+        <!-- Migration Content -->
+        <div class="flex-1 flex flex-col items-center justify-center relative z-10 p-6 pt-safe-top pb-safe-bottom">
+          <!-- Warning Icon -->
+          <div class="w-20 h-20 rounded-2xl mx-auto mb-6 flex items-center justify-center" style="background: linear-gradient(135deg, rgba(251, 191, 36, 0.2) 0%, rgba(245, 158, 11, 0.1) 100%); border: 1px solid rgba(251, 191, 36, 0.3);">
+            ${icon('alertTriangle', 36, 'text-amber-400')}
+          </div>
+
+          <h1 class="text-xl font-semibold text-white mb-2 font-display text-center">Security Upgrade Required</h1>
+          <p class="text-white/50 text-sm text-center mb-6 max-w-xs">
+            DecentPaste now uses stronger security for desktop. Your vault needs to be reset to continue.
+          </p>
+
+          <!-- What You'll Need To Do -->
+          <div class="card p-4 mb-6 w-full max-w-xs">
+            <p class="text-xs text-white/40 uppercase tracking-wide mb-3">What you'll need to do</p>
+            <ul class="space-y-2 text-sm text-white/70">
+              <li class="flex items-center gap-2">
+                ${icon('key', 14, 'text-teal-400')}
+                <span>Set up a new PIN</span>
+              </li>
+              <li class="flex items-center gap-2">
+                ${icon('users', 14, 'text-teal-400')}
+                <span>Re-pair your devices</span>
+              </li>
+            </ul>
+          </div>
+
+          <!-- Reset Button -->
+          <button id="btn-migration-reset" class="btn-primary w-full max-w-xs">
+            ${icon('refreshCw', 18)}
+            <span>Reset & Upgrade</span>
+          </button>
+
+          <p class="text-white/30 text-xs text-center mt-4 max-w-xs">
+            This will delete your paired devices and clipboard history. Your data on other devices is not affected.
+          </p>
+        </div>
+
+        <!-- Toast Container -->
+        <div id="toast-container" class="fixed bottom-20 left-4 right-4 flex flex-col gap-2 z-50">
+          ${this.renderToastsContent()}
+        </div>
+      </div>
+    `;
+  }
+
+  /**
    * Renders the onboarding wizard for first-time setup.
    * Flow: Device Name → Auth Choice (if available) → PIN Setup (if chosen)
    */
@@ -1711,15 +1749,19 @@ class App {
     const step = store.get('onboardingStep') || 'device-name';
     const secretStorageStatus = store.get('secretStorageStatus');
 
-    // Determine number of steps based on secure storage availability
+    // Determine number of steps based on platform and secure storage availability
+    // Desktop: always 2 steps (device-name -> pin-setup), no auth choice
+    // Mobile with biometrics: 3 steps (device-name -> auth-choice -> optional pin-setup)
+    // Mobile without biometrics: 2 steps (device-name -> pin-setup)
     const hasSecureStorage = secretStorageStatus?.available ?? false;
-    const totalSteps = hasSecureStorage ? 3 : 2;
+    const showAuthChoice = !isDesktop() && hasSecureStorage;
+    const totalSteps = showAuthChoice ? 3 : 2;
 
     // Step number mapping
     let stepNumber: number;
     if (step === 'device-name') stepNumber = 1;
     else if (step === 'auth-choice') stepNumber = 2;
-    else stepNumber = hasSecureStorage ? 3 : 2; // pin-setup
+    else stepNumber = showAuthChoice ? 3 : 2; // pin-setup
 
     const progressIndicator = `
       <div class="flex items-center justify-center gap-2 mb-8">

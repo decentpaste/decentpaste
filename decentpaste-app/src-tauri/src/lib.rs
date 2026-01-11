@@ -133,6 +133,8 @@ pub fn run() {
             commands::get_vault_auth_method,
             commands::setup_vault_with_secure_storage,
             commands::setup_vault_with_pin,
+            #[cfg(desktop)]
+            commands::setup_vault_with_secure_storage_and_pin,
             commands::unlock_vault,
             commands::lock_vault,
             commands::reset_vault,

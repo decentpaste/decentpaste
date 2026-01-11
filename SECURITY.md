@@ -142,13 +142,17 @@ flowchart TD
 
 ### Platform Auth Methods
 
-| Platform | Primary Method   | Key Storage           | Fallback |
-|----------|------------------|-----------------------|----------|
-| Android  | Biometric prompt | AndroidKeyStore (TEE) | PIN      |
-| iOS      | Face ID/Touch ID | Secure Enclave        | PIN      |
-| macOS    | Auto (session)   | Keychain              | PIN      |
-| Windows  | Auto (session)   | Credential Manager    | PIN      |
-| Linux    | Auto (session)   | Secret Service        | PIN      |
+| Platform | Primary Method       | Key Storage               | Fallback |
+|----------|----------------------|---------------------------|----------|
+| Android  | Biometric prompt     | AndroidKeyStore (TEE)     | PIN      |
+| iOS      | Face ID/Touch ID     | Secure Enclave            | PIN      |
+| macOS    | Keychain + PIN (2FA) | Encrypted key in Keychain | PIN-only |
+| Windows  | Credential Mgr + PIN | Encrypted key in CM       | PIN-only |
+| Linux    | Secret Service + PIN | Encrypted key in SS       | PIN-only |
+
+**Desktop 2FA (SecureStorageWithPin)**: On desktop platforms, the vault key is encrypted with a PIN-derived key (Argon2id) before being stored in the OS keychain. This provides 2-factor authentication:
+- **What you have**: Physical access to a device with a keychain
+- **What you know**: PIN to decrypt the keychain data
 
 ### What's Protected
 
@@ -163,8 +167,9 @@ flowchart TD
 
 - **Hardware-backed keys**: On mobile, keys are stored in TEE/Secure Enclave (never extractable)
 - **Biometric binding**: Mobile keys are invalidated if biometric enrollment changes
-- **Key never stored in vault**: Vault key is either in hardware or derived from PIN
-- **Per-device salt**: 16-byte random salt for PIN fallback prevents rainbow table attacks
+- **Desktop 2FA**: Vault key encrypted with PIN-derived key, stored in OS keychain
+- **Key never stored in plaintext**: Vault key is in hardware (mobile), encrypted in keychain (desktop), or derived from PIN
+- **Per-device salt**: 16-byte random salt stored with an encrypted key (desktop) or in a separate file (PIN-only)
 - **Auto-lock**: Vault locks after configurable inactivity timeout
 - **Zeroize on drop**: Vault key is securely cleared from memory when locked
 
