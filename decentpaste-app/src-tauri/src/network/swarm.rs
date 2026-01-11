@@ -195,20 +195,30 @@ impl NetworkManager {
                                 warn!("Failed to dial {}: {}", peer_id, e);
                             }
 
-                            // Track discovered peer
-                            let discovered = DiscoveredPeer {
-                                peer_id: peer_id.to_string(),
-                                device_name: None,
-                                addresses: vec![addr.to_string()],
-                                discovered_at: Utc::now(),
-                                is_paired: false,
-                            };
-
-                            self.discovered_peers.insert(peer_id, discovered.clone());
-                            let _ = self
-                                .event_tx
-                                .send(NetworkEvent::PeerDiscovered(discovered))
-                                .await;
+                            // Check if peer already exists (preserve device_name from Identify)
+                            if let Some(existing) = self.discovered_peers.get_mut(&peer_id) {
+                                // Update address if new, but preserve device_name
+                                let addr_str = addr.to_string();
+                                if !existing.addresses.contains(&addr_str) {
+                                    existing.addresses.push(addr_str);
+                                }
+                                existing.discovered_at = Utc::now();
+                                // Don't re-emit - no significant change (device_name preserved)
+                            } else {
+                                // New peer - create entry and emit event
+                                let discovered = DiscoveredPeer {
+                                    peer_id: peer_id.to_string(),
+                                    device_name: None,
+                                    addresses: vec![addr.to_string()],
+                                    discovered_at: Utc::now(),
+                                    is_paired: false,
+                                };
+                                self.discovered_peers.insert(peer_id, discovered.clone());
+                                let _ = self
+                                    .event_tx
+                                    .send(NetworkEvent::PeerDiscovered(discovered))
+                                    .await;
+                            }
                         }
                     }
                     mdns::Event::Expired(peers) => {
