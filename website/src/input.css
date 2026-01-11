@@ -238,8 +238,8 @@ body::after {
 }
 
 .cta-secondary:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(20, 184, 166, 0.5); /* Teal hint on hover */
   transform: translateY(-3px);
   box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.3);
 }
@@ -350,6 +350,7 @@ body::after {
   justify-content: center;
   margin-bottom: 1rem;
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .feature-card:hover .feature-icon {
