@@ -184,16 +184,22 @@ body::after {
   background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
   color: white;
   box-shadow:
-    0 4px 24px -4px rgba(20, 184, 166, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    0 4px 24px -4px rgba(20, 184, 166, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+  font-size: 1.125rem;
+  font-weight: 700;
+  padding: 1.125rem 2.5rem;
+  letter-spacing: 0.01em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .cta-primary:hover {
-  transform: translateY(-3px) scale(1.02);
+  transform: translateY(-4px) scale(1.02);
   box-shadow:
-    0 12px 40px -4px rgba(20, 184, 166, 0.5),
-    0 0 20px rgba(20, 184, 166, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    0 20px 40px -8px rgba(20, 184, 166, 0.6),
+    0 0 30px rgba(20, 184, 166, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  filter: brightness(1.1);
 }
 
 .cta-primary:active {
@@ -246,31 +252,6 @@ body::after {
 
 .cta-secondary:active {
   transform: translateY(-1px);
-}
-
-/* Shimmering Hero Badge */
-@keyframes border-shimmer {
-  0% {
-    background-position: 0% 50%;
-  }
-  100% {
-    background-position: 200% 50%;
-  }
-}
-
-.hero-badge {
-  background: linear-gradient(#0a0a0b, #0a0a0b) padding-box,
-    linear-gradient(90deg, rgba(20, 184, 166, 0.3), rgba(249, 115, 22, 0.3), rgba(20, 184, 166, 0.3)) border-box;
-  border: 1px solid transparent;
-  background-size: 100% 100%, 200% 100%;
-  animation: border-shimmer 6s linear infinite;
-  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.5);
-  transition: all 0.3s ease;
-}
-
-.hero-badge:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 8px 30px -4px rgba(20, 184, 166, 0.2);
 }
 
 /* =============================================================================
