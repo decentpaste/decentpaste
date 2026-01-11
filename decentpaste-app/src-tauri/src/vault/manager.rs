@@ -1,25 +1,31 @@
-//! VaultManager - Core vault lifecycle management using IOTA Stronghold.
+//! VaultManager - Core vault lifecycle management using AES-256-GCM encryption.
 //!
 //! This module provides the VaultManager struct that handles:
 //! - Vault existence checking
-//! - Vault creation with PIN-derived encryption keys
-//! - Vault opening (unlocking) with PIN verification
+//! - Vault creation with either:
+//!   - **SecureStorage**: Random 256-bit key stored in platform secure storage
+//!   - **PIN**: Key derived from user's PIN via Argon2id
+//! - Vault opening (unlocking)
 //! - Vault destruction for factory reset
 //! - Encrypted storage for clipboard history, paired peers, device identity, and keypairs
-//!
-//! The encryption key is derived from the user's PIN using Argon2id with
-//! installation-specific salt, providing strong protection against brute-force attacks.
 
 use std::path::PathBuf;
 
 use argon2::{Algorithm, Argon2, Params, Version};
-use tauri_plugin_stronghold::stronghold::Stronghold;
-use tracing::{debug, error, info, warn};
+use rand::RngCore;
+use tauri::{AppHandle, Runtime};
+use tauri_plugin_decentsecret::DecentsecretExt;
+use tracing::{debug, info, warn};
 
 use crate::clipboard::ClipboardEntry;
 use crate::error::{DecentPasteError, Result};
-use crate::storage::{get_data_dir, DeviceIdentity, PairedPeer};
+use crate::storage::{DeviceIdentity, PairedPeer};
 use crate::vault::salt::{delete_salt, get_or_create_salt};
+#[cfg(desktop)]
+use crate::vault::storage::EncryptedVaultKeyData;
+use crate::vault::storage::{
+    delete_vault, get_vault_path, read_vault, vault_exists, write_vault, VaultData, VaultKey,
+};
 
 /// Argon2id parameters for key derivation.
 /// These are chosen to balance security and usability:
@@ -31,40 +37,32 @@ const ARGON2_TIME_COST: u32 = 3;
 const ARGON2_PARALLELISM: u32 = 4;
 const ARGON2_OUTPUT_LEN: usize = 32; // 256-bit key for AES-256
 
-/// Vault file name
-const VAULT_FILE_NAME: &str = "vault.hold";
-
-/// Client name within the Stronghold vault
-const VAULT_CLIENT_NAME: &str = "decentpaste";
-
-/// Store keys for different data types
-const STORE_KEY_CLIPBOARD_HISTORY: &[u8] = b"clipboard_history";
-const STORE_KEY_PAIRED_PEERS: &[u8] = b"paired_peers";
-const STORE_KEY_DEVICE_IDENTITY: &[u8] = b"device_identity";
-const STORE_KEY_LIBP2P_KEYPAIR: &[u8] = b"libp2p_keypair";
-
 /// VaultManager handles the lifecycle of the encrypted vault.
 ///
-/// The vault uses IOTA Stronghold for secure storage, with the encryption
+/// The vault uses AES-256-GCM for secure storage, with the encryption
 /// key derived from the user's PIN via Argon2id. This ensures:
 /// - The PIN itself is never stored
 /// - Each installation has a unique salt
 /// - Strong resistance to brute-force attacks
 pub struct VaultManager {
-    /// The Stronghold instance (only present when vault is open)
-    stronghold: Option<Stronghold>,
+    /// The derived encryption key (only present when vault is open)
+    key: Option<VaultKey>,
+    /// In-memory vault data (loaded when vault is opened)
+    data: VaultData,
 }
 
 impl VaultManager {
     /// Create a new VaultManager instance.
     pub fn new() -> Self {
-        Self { stronghold: None }
+        Self {
+            key: None,
+            data: VaultData::default(),
+        }
     }
 
     /// Get the path to the vault file.
     pub fn get_vault_path() -> Result<PathBuf> {
-        let data_dir = get_data_dir()?;
-        Ok(data_dir.join(VAULT_FILE_NAME))
+        get_vault_path()
     }
 
     /// Check if a vault file exists.
@@ -72,8 +70,7 @@ impl VaultManager {
     /// Returns `true` if the vault has been set up previously.
     /// This is a fast, non-blocking check that doesn't require unlocking.
     pub fn exists() -> Result<bool> {
-        let vault_path = Self::get_vault_path()?;
-        Ok(vault_path.exists())
+        vault_exists()
     }
 
     /// Derive an encryption key from the PIN using Argon2id.
@@ -87,8 +84,8 @@ impl VaultManager {
     /// * `salt` - Installation-specific 16-byte salt
     ///
     /// # Returns
-    /// A 32-byte key suitable for AES-256-GCM encryption.
-    pub fn derive_key(pin: &str, salt: &[u8; 16]) -> Result<Vec<u8>> {
+    /// A VaultKey suitable for AES-256-GCM encryption.
+    pub fn derive_key(pin: &str, salt: &[u8; 16]) -> Result<VaultKey> {
         // Configure Argon2id with our security parameters
         let params = Params::new(
             ARGON2_MEMORY_COST,
@@ -101,27 +98,38 @@ impl VaultManager {
         let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
 
         // Derive the key
-        let mut key = vec![0u8; ARGON2_OUTPUT_LEN];
+        let mut key_bytes = [0u8; ARGON2_OUTPUT_LEN];
         argon2
-            .hash_password_into(pin.as_bytes(), salt, &mut key)
+            .hash_password_into(pin.as_bytes(), salt, &mut key_bytes)
             .map_err(|e| DecentPasteError::Encryption(format!("Key derivation failed: {}", e)))?;
 
-        debug!("Derived {}-byte key from PIN", key.len());
-        Ok(key)
+        debug!("Derived {}-byte key from PIN", key_bytes.len());
+        Ok(VaultKey::from_slice(&key_bytes))
     }
 
-    /// Create a new vault with the given PIN.
+    // =========================================================================
+    // SecureStorage Path (Biometric/Keyring)
+    // =========================================================================
+
+    /// Create a new vault using secure storage (biometric/keyring).
     ///
-    /// This sets up a fresh Stronghold vault encrypted with a key derived
-    /// from the PIN. Should only be called when no vault exists.
+    /// Generates a random 256-bit key and stores it via the decentsecret plugin.
+    /// On mobile, this triggers a biometric prompt for key storage.
+    /// On desktop, the key is stored in the OS keyring.
     ///
     /// # Arguments
-    /// * `pin` - The user's chosen PIN (4-8 digits)
+    /// * `app_handle` - Tauri app handle for plugin access
     ///
     /// # Errors
-    /// Returns an error if a vault already exists or if creation fails.
-    pub fn create(&mut self, pin: &str) -> Result<()> {
-        let vault_path = Self::get_vault_path()?;
+    /// Returns an error if:
+    /// - Vault already exists
+    /// - Secure storage is not available
+    /// - User cancels biometric prompt
+    pub async fn create_with_secure_storage<R: Runtime>(
+        &mut self,
+        app_handle: &AppHandle<R>,
+    ) -> Result<()> {
+        let vault_path = get_vault_path()?;
 
         if vault_path.exists() {
             return Err(DecentPasteError::Storage(
@@ -129,7 +137,369 @@ impl VaultManager {
             ));
         }
 
-        info!("Creating new vault at {:?}", vault_path);
+        info!("Creating new vault with secure storage");
+
+        // Generate random 256-bit key
+        let mut key_bytes = [0u8; 32];
+        rand::rng().fill_bytes(&mut key_bytes);
+        let key = VaultKey::from_slice(&key_bytes);
+
+        // Store key via plugin (triggers biometric on mobile)
+        debug!("Attempting to store vault key in secure storage...");
+        match app_handle.decentsecret().store_secret(key_bytes.to_vec()) {
+            Ok(()) => {
+                info!("Vault key successfully stored in secure storage");
+            }
+            Err(e) => {
+                warn!("Failed to store vault key in secure storage: {:?}", e);
+                return Err(Self::map_plugin_error(e));
+            }
+        }
+
+        // Initialize empty vault data
+        let data = VaultData::default();
+
+        // Write encrypted vault to disk
+        write_vault(&data, &key)?;
+
+        self.key = Some(key);
+        self.data = data;
+
+        info!("Vault created with secure storage");
+        Ok(())
+    }
+
+    /// Open an existing vault using secure storage (biometric/keyring).
+    ///
+    /// Retrieves the encryption key via the decentsecret plugin.
+    /// On mobile, this triggers a biometric prompt.
+    /// On desktop, key is retrieved from OS keyring (no prompt).
+    ///
+    /// # Arguments
+    /// * `app_handle` - Tauri app handle for plugin access
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Vault doesn't exist
+    /// - User cancels biometric prompt
+    /// - Biometric enrollment changed (key invalidated)
+    /// - Key not found in secure storage
+    pub async fn open_with_secure_storage<R: Runtime>(
+        &mut self,
+        app_handle: &AppHandle<R>,
+    ) -> Result<()> {
+        let vault_path = get_vault_path()?;
+
+        if !vault_path.exists() {
+            return Err(DecentPasteError::Storage("Vault does not exist".into()));
+        }
+
+        info!("Opening vault with secure storage");
+
+        // Retrieve key via plugin (triggers biometric on mobile)
+        debug!("Attempting to retrieve vault key from secure storage...");
+        let key_bytes = match app_handle.decentsecret().retrieve_secret() {
+            Ok(bytes) => {
+                info!(
+                    "Vault key successfully retrieved from secure storage ({} bytes)",
+                    bytes.len()
+                );
+                bytes
+            }
+            Err(e) => {
+                warn!("Failed to retrieve vault key from secure storage: {:?}", e);
+                return Err(Self::map_plugin_error(e));
+            }
+        };
+
+        if key_bytes.len() != 32 {
+            return Err(DecentPasteError::Encryption(format!(
+                "Invalid key length: expected 32, got {}",
+                key_bytes.len()
+            )));
+        }
+
+        let key = VaultKey::from_slice(&key_bytes);
+
+        // Try to decrypt the vault
+        let data = read_vault(&key)?;
+
+        self.key = Some(key);
+        self.data = data;
+
+        info!("Vault opened with secure storage");
+        Ok(())
+    }
+
+    /// Delete the key from secure storage.
+    ///
+    /// Called during vault reset to ensure the key is removed from
+    /// biometric-protected storage. Idempotent - returns Ok even if no key exists.
+    pub async fn delete_secure_storage_key<R: Runtime>(app_handle: &AppHandle<R>) -> Result<()> {
+        app_handle
+            .decentsecret()
+            .delete_secret()
+            .map_err(|e| Self::map_plugin_error(e))?;
+        info!("Deleted key from secure storage");
+        Ok(())
+    }
+
+    /// Map plugin errors to DecentPasteError.
+    fn map_plugin_error(err: tauri_plugin_decentsecret::Error) -> DecentPasteError {
+        use tauri_plugin_decentsecret::Error as PluginError;
+
+        match err {
+            PluginError::BiometricEnrollmentChanged => DecentPasteError::BiometricEnrollmentChanged,
+            PluginError::UserCancelled => DecentPasteError::AuthenticationCancelled,
+            PluginError::AuthenticationFailed(msg) => {
+                DecentPasteError::SecureStorage(format!("Authentication failed: {}", msg))
+            }
+            PluginError::SecretNotFound => {
+                DecentPasteError::Storage("No vault key found in secure storage".into())
+            }
+            PluginError::NotAvailable(reason) => {
+                DecentPasteError::NotSupported(format!("Secure storage not available: {}", reason))
+            }
+            _ => DecentPasteError::SecureStorage(format!("Secure storage error: {}", err)),
+        }
+    }
+
+    // =========================================================================
+    // SecureStorageWithPin Path (Desktop: Keychain + PIN)
+    // =========================================================================
+
+    /// Create a new vault using keychain + PIN (desktop only).
+    ///
+    /// This provides 2-factor security by:
+    /// 1. Generating a random 256-bit vault key
+    /// 2. Deriving an encryption key from the user's PIN (Argon2id)
+    /// 3. Encrypting the vault key with AES-256-GCM
+    /// 4. Storing the encrypted vault key in the OS keychain
+    ///
+    /// The salt is stored alongside the ciphertext in the keychain, not on disk.
+    /// This prevents offline PIN brute-forcing if only the vault file is stolen.
+    ///
+    /// # Arguments
+    /// * `app_handle` - Tauri app handle for keychain access
+    /// * `pin` - The user's chosen PIN (4-8 digits)
+    #[cfg(desktop)]
+    pub async fn create_with_secure_storage_and_pin<R: Runtime>(
+        &mut self,
+        app_handle: &AppHandle<R>,
+        pin: &str,
+    ) -> Result<()> {
+        use zeroize::Zeroize;
+
+        let vault_path = get_vault_path()?;
+        if vault_path.exists() {
+            return Err(DecentPasteError::Storage(
+                "Vault already exists. Use destroy() first to reset.".into(),
+            ));
+        }
+
+        info!("Creating new vault with secure storage + PIN");
+
+        // 1. Generate random vault key
+        let mut vault_key_bytes = [0u8; 32];
+        rand::rng().fill_bytes(&mut vault_key_bytes);
+
+        // 2. Generate salt and derive PIN encryption key
+        let mut salt = [0u8; 16];
+        rand::rng().fill_bytes(&mut salt);
+        let pin_key = Self::derive_key(pin, &salt)?;
+
+        // 3. Encrypt vault key with PIN-derived key
+        let encrypted_data = Self::encrypt_vault_key(&vault_key_bytes, pin_key.as_bytes(), &salt)?;
+
+        // 4. Store encrypted data in keychain
+        let keychain_bytes = encrypted_data.to_bytes()?;
+        debug!(
+            "Storing encrypted vault key in keychain ({} bytes)",
+            keychain_bytes.len()
+        );
+        app_handle
+            .decentsecret()
+            .store_secret(keychain_bytes)
+            .map_err(|e| Self::map_plugin_error(e))?;
+
+        // 5. Create vault with the original (unencrypted) vault key
+        let vault_key = VaultKey::from_slice(&vault_key_bytes);
+        let data = VaultData::default();
+        write_vault(&data, &vault_key)?;
+
+        self.key = Some(vault_key);
+        self.data = data;
+
+        // Zeroize temporary vault key bytes
+        vault_key_bytes.zeroize();
+
+        info!("Vault created with secure storage + PIN");
+        Ok(())
+    }
+
+    /// Open an existing vault using keychain + PIN (desktop only).
+    ///
+    /// 1. Retrieves the encrypted vault key from the OS keychain
+    /// 2. Derives the encryption key from the user's PIN
+    /// 3. Decrypts the vault key
+    /// 4. Opens the vault with the decrypted key
+    ///
+    /// # Arguments
+    /// * `app_handle` - Tauri app handle for keychain access
+    /// * `pin` - The user's PIN
+    ///
+    /// # Errors
+    /// Returns `InvalidPin` if the PIN is incorrect (decryption fails).
+    #[cfg(desktop)]
+    pub async fn open_with_secure_storage_and_pin<R: Runtime>(
+        &mut self,
+        app_handle: &AppHandle<R>,
+        pin: &str,
+    ) -> Result<()> {
+        use zeroize::Zeroize;
+
+        let vault_path = get_vault_path()?;
+        if !vault_path.exists() {
+            return Err(DecentPasteError::Storage("Vault does not exist".into()));
+        }
+
+        info!("Opening vault with secure storage + PIN");
+
+        // 1. Retrieve encrypted data from keychain
+        debug!("Retrieving encrypted vault key from keychain...");
+        let keychain_bytes = app_handle
+            .decentsecret()
+            .retrieve_secret()
+            .map_err(|e| Self::map_plugin_error(e))?;
+
+        let encrypted_data = EncryptedVaultKeyData::from_bytes(&keychain_bytes)?;
+
+        // 2. Derive PIN encryption key using stored salt
+        let pin_key = Self::derive_key(pin, &encrypted_data.salt)?;
+
+        // 3. Decrypt vault key
+        let mut vault_key_bytes = Self::decrypt_vault_key(&encrypted_data, pin_key.as_bytes())?;
+        let vault_key = VaultKey::from_slice(&vault_key_bytes);
+
+        // 4. Open vault
+        let data = read_vault(&vault_key)?;
+
+        self.key = Some(vault_key);
+        self.data = data;
+
+        // Zeroize temporary vault key bytes
+        vault_key_bytes.zeroize();
+
+        info!("Vault opened with secure storage + PIN");
+        Ok(())
+    }
+
+    /// Encrypt the vault key using AES-256-GCM with a PIN-derived key.
+    ///
+    /// Returns an `EncryptedVaultKeyData` struct containing the salt, nonce,
+    /// and ciphertext. This struct is self-contained and can be stored in
+    /// the keychain.
+    #[cfg(desktop)]
+    fn encrypt_vault_key(
+        vault_key: &[u8; 32],
+        pin_derived_key: &[u8; 32],
+        salt: &[u8; 16],
+    ) -> Result<EncryptedVaultKeyData> {
+        use aes_gcm::{aead::Aead, Aes256Gcm, KeyInit, Nonce};
+
+        let cipher = Aes256Gcm::new_from_slice(pin_derived_key)
+            .map_err(|e| DecentPasteError::Encryption(format!("Invalid encryption key: {}", e)))?;
+
+        let mut nonce_bytes = [0u8; 12];
+        rand::rng().fill_bytes(&mut nonce_bytes);
+        let nonce = Nonce::from_slice(&nonce_bytes);
+
+        let ciphertext = cipher.encrypt(nonce, vault_key.as_ref()).map_err(|e| {
+            DecentPasteError::Encryption(format!("Vault key encryption failed: {}", e))
+        })?;
+
+        debug!(
+            "Encrypted vault key: {} bytes ciphertext (includes 16-byte auth tag)",
+            ciphertext.len()
+        );
+
+        Ok(EncryptedVaultKeyData {
+            version: EncryptedVaultKeyData::VERSION,
+            salt: *salt,
+            nonce: nonce_bytes,
+            ciphertext,
+        })
+    }
+
+    /// Decrypt the vault key using AES-256-GCM with a PIN-derived key.
+    ///
+    /// # Errors
+    /// Returns `InvalidPin` if decryption fails (wrong PIN produces wrong key,
+    /// which causes AES-GCM authentication to fail).
+    #[cfg(desktop)]
+    fn decrypt_vault_key(
+        encrypted: &EncryptedVaultKeyData,
+        pin_derived_key: &[u8; 32],
+    ) -> Result<[u8; 32]> {
+        use aes_gcm::{aead::Aead, Aes256Gcm, KeyInit, Nonce};
+
+        // Check version for forward compatibility
+        if encrypted.version != EncryptedVaultKeyData::VERSION {
+            return Err(DecentPasteError::Storage(format!(
+                "Unsupported encrypted data version: {} (expected {})",
+                encrypted.version,
+                EncryptedVaultKeyData::VERSION
+            )));
+        }
+
+        let cipher = Aes256Gcm::new_from_slice(pin_derived_key)
+            .map_err(|e| DecentPasteError::Encryption(format!("Invalid decryption key: {}", e)))?;
+
+        let nonce = Nonce::from_slice(&encrypted.nonce);
+
+        // Decryption failure indicates wrong PIN (wrong key = auth tag mismatch)
+        let plaintext = cipher
+            .decrypt(nonce, encrypted.ciphertext.as_ref())
+            .map_err(|_| DecentPasteError::InvalidPin)?;
+
+        if plaintext.len() != 32 {
+            return Err(DecentPasteError::Encryption(format!(
+                "Invalid decrypted vault key length: {} (expected 32)",
+                plaintext.len()
+            )));
+        }
+
+        let mut key = [0u8; 32];
+        key.copy_from_slice(&plaintext);
+
+        debug!("Successfully decrypted vault key");
+        Ok(key)
+    }
+
+    // =========================================================================
+    // PIN Path (Argon2id Key Derivation)
+    // =========================================================================
+
+    /// Create a new vault with the given PIN.
+    ///
+    /// This sets up a fresh encrypted vault with a key derived
+    /// from the PIN. Should only be called when no vault exists.
+    ///
+    /// # Arguments
+    /// * `pin` - The user's chosen PIN (4-8 digits)
+    ///
+    /// # Errors
+    /// Returns an error if a vault already exists or if creation fails.
+    pub fn create_with_pin(&mut self, pin: &str) -> Result<()> {
+        let vault_path = get_vault_path()?;
+
+        if vault_path.exists() {
+            return Err(DecentPasteError::Storage(
+                "Vault already exists. Use destroy() first to reset.".into(),
+            ));
+        }
+
+        info!("Creating new vault with PIN");
 
         // Get or create installation-specific salt
         let salt = get_or_create_salt()?;
@@ -137,42 +507,16 @@ impl VaultManager {
         // Derive encryption key from PIN
         let key = Self::derive_key(pin, &salt)?;
 
-        debug!("Initializing Stronghold...");
+        // Initialize empty vault data
+        let data = VaultData::default();
 
-        // Initialize Stronghold with the derived key
-        // Stronghold::new automatically creates a new vault if file doesn't exist
-        let stronghold = Stronghold::new(&vault_path, key)
-            .map_err(|e| DecentPasteError::Storage(format!("Failed to create vault: {}", e)))?;
+        // Write encrypted vault to disk
+        write_vault(&data, &key)?;
 
-        debug!("Stronghold initialized, creating client...");
+        self.key = Some(key);
+        self.data = data;
 
-        // Create the client within the vault for storing data
-        // NOTE: We must use create_client() first to create the client in memory,
-        // then write_client() or save() to persist it to disk.
-        // write_client() alone fails because it expects an existing in-memory client.
-        stronghold.create_client(VAULT_CLIENT_NAME).map_err(|e| {
-            DecentPasteError::Storage(format!("Failed to create vault client: {}", e))
-        })?;
-
-        debug!("Client created, writing to snapshot...");
-
-        // Write the newly created client to the snapshot
-        stronghold.write_client(VAULT_CLIENT_NAME).map_err(|e| {
-            DecentPasteError::Storage(format!("Failed to write vault client: {}", e))
-        })?;
-
-        debug!("Client written, saving vault...");
-
-        // Save the vault to disk
-        stronghold
-            .save()
-            .map_err(|e| DecentPasteError::Storage(format!("Failed to save vault: {}", e)))?;
-
-        debug!("Vault saved successfully");
-
-        self.stronghold = Some(stronghold);
-
-        info!("Vault created successfully");
+        info!("Vault created with PIN");
         Ok(())
     }
 
@@ -187,14 +531,14 @@ impl VaultManager {
     /// # Errors
     /// Returns `InvalidPin` if the PIN is incorrect, or other errors
     /// if the vault file is corrupted or inaccessible.
-    pub fn open(&mut self, pin: &str) -> Result<()> {
-        let vault_path = Self::get_vault_path()?;
+    pub fn open_with_pin(&mut self, pin: &str) -> Result<()> {
+        let vault_path = get_vault_path()?;
 
         if !vault_path.exists() {
             return Err(DecentPasteError::Storage("Vault does not exist".into()));
         }
 
-        info!("Opening vault at {:?}", vault_path);
+        info!("Opening vault with PIN");
 
         // Get the salt (must exist if vault exists)
         let salt = get_or_create_salt()?;
@@ -202,37 +546,13 @@ impl VaultManager {
         // Derive the key from PIN
         let key = Self::derive_key(pin, &salt)?;
 
-        // Try to load the vault with the derived key
-        // Stronghold::new will attempt to load the existing snapshot
-        let stronghold = Stronghold::new(&vault_path, key).map_err(|e| {
-            let error_msg = e.to_string().to_lowercase();
-            if error_msg.contains("decrypt")
-                || error_msg.contains("invalid")
-                || error_msg.contains("authentication")
-                || error_msg.contains("mac")
-            {
-                warn!("Invalid PIN attempt");
-                DecentPasteError::InvalidPin
-            } else {
-                DecentPasteError::Storage(format!("Failed to open vault: {}", e))
-            }
-        })?;
+        // Try to decrypt the vault
+        let data = read_vault(&key)?;
 
-        // Verify we can load the client (additional validation that vault opened correctly)
-        stronghold.load_client(VAULT_CLIENT_NAME).map_err(|e| {
-            let error_msg = e.to_string().to_lowercase();
-            if error_msg.contains("decrypt") || error_msg.contains("not found") {
-                // Client not found could mean corrupted vault or wrong key
-                warn!("Could not load vault client - may be wrong PIN or corrupted");
-                DecentPasteError::InvalidPin
-            } else {
-                DecentPasteError::Storage(format!("Failed to load vault client: {}", e))
-            }
-        })?;
+        self.key = Some(key);
+        self.data = data;
 
-        self.stronghold = Some(stronghold);
-
-        info!("Vault opened successfully");
+        info!("Vault opened with PIN");
         Ok(())
     }
 
@@ -240,7 +560,7 @@ impl VaultManager {
     ///
     /// This is a destructive operation that:
     /// 1. Closes the vault if open
-    /// 2. Deletes the vault file (vault.hold)
+    /// 2. Deletes the vault file (vault.enc)
     /// 3. Deletes the salt file (salt.bin)
     ///
     /// After calling this, the app will need to go through onboarding again.
@@ -250,15 +570,13 @@ impl VaultManager {
     pub fn destroy(&mut self) -> Result<()> {
         info!("Destroying vault - all data will be lost!");
 
-        // Clear the stronghold reference first
-        self.stronghold = None;
+        // Clear the key and data from memory
+        self.key = None;
+        self.data = VaultData::default();
 
         // Delete vault file
-        let vault_path = Self::get_vault_path()?;
-        if vault_path.exists() {
-            std::fs::remove_file(&vault_path)?;
-            info!("Deleted vault file: {:?}", vault_path);
-        }
+        delete_vault()?;
+        info!("Deleted vault file");
 
         // Delete salt file
         delete_salt()?;
@@ -270,38 +588,7 @@ impl VaultManager {
 
     /// Check if the vault is currently open (unlocked).
     pub fn is_open(&self) -> bool {
-        self.stronghold.is_some()
-    }
-
-    /// Get a reference to the Stronghold instance.
-    ///
-    /// Returns `None` if the vault is not open.
-    pub fn stronghold(&self) -> Option<&Stronghold> {
-        self.stronghold.as_ref()
-    }
-
-    /// Get a mutable reference to the Stronghold instance.
-    ///
-    /// Returns `None` if the vault is not open.
-    pub fn stronghold_mut(&mut self) -> Option<&mut Stronghold> {
-        self.stronghold.as_mut()
-    }
-
-    /// Get the client's store for data operations.
-    ///
-    /// Returns an error if the vault is not open or client is not loaded.
-    fn get_client_store(&self) -> Result<iota_stronghold::Store> {
-        let stronghold = self
-            .stronghold
-            .as_ref()
-            .ok_or_else(|| DecentPasteError::Storage("Vault is not open".into()))?;
-
-        // Get the client we created/loaded
-        let client = stronghold
-            .get_client(VAULT_CLIENT_NAME)
-            .map_err(|e| DecentPasteError::Storage(format!("Failed to get vault client: {}", e)))?;
-
-        Ok(client.store())
+        self.key.is_some()
     }
 
     // =========================================================================
@@ -312,39 +599,20 @@ impl VaultManager {
     ///
     /// Returns an empty vector if no history is stored or vault is not open.
     pub fn get_clipboard_history(&self) -> Result<Vec<ClipboardEntry>> {
-        let store = self.get_client_store()?;
-        match store.get(STORE_KEY_CLIPBOARD_HISTORY) {
-            Ok(Some(data)) => {
-                let history: Vec<ClipboardEntry> = serde_json::from_slice(&data)?;
-                debug!("Loaded {} clipboard entries from vault", history.len());
-                Ok(history)
-            }
-            Ok(None) => {
-                debug!("No clipboard history in vault");
-                Ok(Vec::new())
-            }
-            Err(e) => {
-                error!("Failed to get clipboard history: {}", e);
-                Err(DecentPasteError::Storage(format!(
-                    "Failed to get clipboard history: {}",
-                    e
-                )))
-            }
+        if !self.is_open() {
+            return Err(DecentPasteError::Storage("Vault is not open".into()));
         }
+        Ok(self.data.clipboard_history.clone())
     }
 
     /// Set clipboard history in the vault.
     ///
-    /// This overwrites any existing history. Call `flush()` to persist.
-    pub fn set_clipboard_history(&self, history: &[ClipboardEntry]) -> Result<()> {
-        let store = self.get_client_store()?;
-        let data = serde_json::to_vec(history)?;
-        store
-            .insert(STORE_KEY_CLIPBOARD_HISTORY.to_vec(), data, None)
-            .map_err(|e| {
-                DecentPasteError::Storage(format!("Failed to set clipboard history: {}", e))
-            })?;
-
+    /// This updates the in-memory data. Call `flush()` to persist.
+    pub fn set_clipboard_history(&mut self, history: &[ClipboardEntry]) -> Result<()> {
+        if !self.is_open() {
+            return Err(DecentPasteError::Storage("Vault is not open".into()));
+        }
+        self.data.clipboard_history = history.to_vec();
         debug!("Stored {} clipboard entries in vault", history.len());
         Ok(())
     }
@@ -357,37 +625,20 @@ impl VaultManager {
     ///
     /// Returns an empty vector if no peers are stored or vault is not open.
     pub fn get_paired_peers(&self) -> Result<Vec<PairedPeer>> {
-        let store = self.get_client_store()?;
-        match store.get(STORE_KEY_PAIRED_PEERS) {
-            Ok(Some(data)) => {
-                let peers: Vec<PairedPeer> = serde_json::from_slice(&data)?;
-                debug!("Loaded {} paired peers from vault", peers.len());
-                Ok(peers)
-            }
-            Ok(None) => {
-                debug!("No paired peers in vault");
-                Ok(Vec::new())
-            }
-            Err(e) => {
-                error!("Failed to get paired peers: {}", e);
-                Err(DecentPasteError::Storage(format!(
-                    "Failed to get paired peers: {}",
-                    e
-                )))
-            }
+        if !self.is_open() {
+            return Err(DecentPasteError::Storage("Vault is not open".into()));
         }
+        Ok(self.data.paired_peers.clone())
     }
 
     /// Set paired peers in the vault.
     ///
-    /// This overwrites any existing peers. Call `flush()` to persist.
-    pub fn set_paired_peers(&self, peers: &[PairedPeer]) -> Result<()> {
-        let store = self.get_client_store()?;
-        let data = serde_json::to_vec(peers)?;
-        store
-            .insert(STORE_KEY_PAIRED_PEERS.to_vec(), data, None)
-            .map_err(|e| DecentPasteError::Storage(format!("Failed to set paired peers: {}", e)))?;
-
+    /// This updates the in-memory data. Call `flush()` to persist.
+    pub fn set_paired_peers(&mut self, peers: &[PairedPeer]) -> Result<()> {
+        if !self.is_open() {
+            return Err(DecentPasteError::Storage("Vault is not open".into()));
+        }
+        self.data.paired_peers = peers.to_vec();
         debug!("Stored {} paired peers in vault", peers.len());
         Ok(())
     }
@@ -400,39 +651,20 @@ impl VaultManager {
     ///
     /// Returns `None` if no identity is stored or vault is not open.
     pub fn get_device_identity(&self) -> Result<Option<DeviceIdentity>> {
-        let store = self.get_client_store()?;
-        match store.get(STORE_KEY_DEVICE_IDENTITY) {
-            Ok(Some(data)) => {
-                let identity: DeviceIdentity = serde_json::from_slice(&data)?;
-                debug!("Loaded device identity from vault: {}", identity.device_id);
-                Ok(Some(identity))
-            }
-            Ok(None) => {
-                debug!("No device identity in vault");
-                Ok(None)
-            }
-            Err(e) => {
-                error!("Failed to get device identity: {}", e);
-                Err(DecentPasteError::Storage(format!(
-                    "Failed to get device identity: {}",
-                    e
-                )))
-            }
+        if !self.is_open() {
+            return Err(DecentPasteError::Storage("Vault is not open".into()));
         }
+        Ok(self.data.device_identity.clone())
     }
 
     /// Set device identity in the vault.
     ///
     /// Call `flush()` to persist.
-    pub fn set_device_identity(&self, identity: &DeviceIdentity) -> Result<()> {
-        let store = self.get_client_store()?;
-        let data = serde_json::to_vec(identity)?;
-        store
-            .insert(STORE_KEY_DEVICE_IDENTITY.to_vec(), data, None)
-            .map_err(|e| {
-                DecentPasteError::Storage(format!("Failed to set device identity: {}", e))
-            })?;
-
+    pub fn set_device_identity(&mut self, identity: &DeviceIdentity) -> Result<()> {
+        if !self.is_open() {
+            return Err(DecentPasteError::Storage("Vault is not open".into()));
+        }
+        self.data.device_identity = Some(identity.clone());
         debug!("Stored device identity in vault: {}", identity.device_id);
         Ok(())
     }
@@ -446,26 +678,22 @@ impl VaultManager {
     /// Returns `None` if no keypair is stored or vault is not open.
     /// The keypair is stored in protobuf encoding.
     pub fn get_libp2p_keypair(&self) -> Result<Option<libp2p::identity::Keypair>> {
-        let store = self.get_client_store()?;
-        match store.get(STORE_KEY_LIBP2P_KEYPAIR) {
-            Ok(Some(data)) => {
+        if !self.is_open() {
+            return Err(DecentPasteError::Storage("Vault is not open".into()));
+        }
+
+        match &self.data.libp2p_keypair {
+            Some(data) => {
                 let keypair =
-                    libp2p::identity::Keypair::from_protobuf_encoding(&data).map_err(|e| {
+                    libp2p::identity::Keypair::from_protobuf_encoding(data).map_err(|e| {
                         DecentPasteError::Storage(format!("Failed to decode libp2p keypair: {}", e))
                     })?;
                 debug!("Loaded libp2p keypair from vault");
                 Ok(Some(keypair))
             }
-            Ok(None) => {
+            None => {
                 debug!("No libp2p keypair in vault");
                 Ok(None)
-            }
-            Err(e) => {
-                error!("Failed to get libp2p keypair: {}", e);
-                Err(DecentPasteError::Storage(format!(
-                    "Failed to get libp2p keypair: {}",
-                    e
-                )))
             }
         }
     }
@@ -473,17 +701,15 @@ impl VaultManager {
     /// Set libp2p keypair in the vault.
     ///
     /// The keypair is stored in protobuf encoding. Call `flush()` to persist.
-    pub fn set_libp2p_keypair(&self, keypair: &libp2p::identity::Keypair) -> Result<()> {
-        let store = self.get_client_store()?;
+    pub fn set_libp2p_keypair(&mut self, keypair: &libp2p::identity::Keypair) -> Result<()> {
+        if !self.is_open() {
+            return Err(DecentPasteError::Storage("Vault is not open".into()));
+        }
+
         let data = keypair.to_protobuf_encoding().map_err(|e| {
             DecentPasteError::Storage(format!("Failed to encode libp2p keypair: {}", e))
         })?;
-        store
-            .insert(STORE_KEY_LIBP2P_KEYPAIR.to_vec(), data, None)
-            .map_err(|e| {
-                DecentPasteError::Storage(format!("Failed to set libp2p keypair: {}", e))
-            })?;
-
+        self.data.libp2p_keypair = Some(data);
         debug!("Stored libp2p keypair in vault");
         Ok(())
     }
@@ -500,36 +726,34 @@ impl VaultManager {
     /// - Periodically to prevent data loss
     /// - Before app exit
     pub fn flush(&self) -> Result<()> {
-        let stronghold = self
-            .stronghold
+        let key = self
+            .key
             .as_ref()
             .ok_or_else(|| DecentPasteError::Storage("Vault is not open".into()))?;
 
-        stronghold.save().map_err(|e| {
-            error!("Failed to flush vault: {}", e);
-            DecentPasteError::Storage(format!("Failed to flush vault: {}", e))
-        })?;
-
+        write_vault(&self.data, key)?;
         debug!("Vault flushed to disk");
         Ok(())
     }
 
-    /// Lock the vault by flushing and clearing the Stronghold reference.
+    /// Lock the vault by flushing and clearing the key from memory.
     ///
     /// This saves all data and clears the decryption key from memory.
     /// The vault file remains on disk but requires the PIN to open again.
     pub fn lock(&mut self) -> Result<()> {
-        if let Some(ref stronghold) = self.stronghold {
+        if self.is_open() {
             info!("Locking vault");
 
             // Flush before locking to ensure all data is saved
-            if let Err(e) = stronghold.save() {
+            if let Err(e) = self.flush() {
                 warn!("Failed to save vault before locking: {}", e);
                 // Continue with lock even if save fails
             }
         }
 
-        self.stronghold = None;
+        // Clear key (VaultKey implements ZeroizeOnDrop, so memory is securely erased)
+        self.key = None;
+        // Keep data in memory but it can't be persisted without key
         Ok(())
     }
 }
@@ -550,8 +774,16 @@ mod tests {
         let key1 = VaultManager::derive_key("1234", &salt).unwrap();
         let key2 = VaultManager::derive_key("1234", &salt).unwrap();
 
-        assert_eq!(key1, key2, "Same PIN and salt should produce same key");
-        assert_eq!(key1.len(), ARGON2_OUTPUT_LEN, "Key should be 32 bytes");
+        assert_eq!(
+            key1.as_bytes(),
+            key2.as_bytes(),
+            "Same PIN and salt should produce same key"
+        );
+        assert_eq!(
+            key1.as_bytes().len(),
+            ARGON2_OUTPUT_LEN,
+            "Key should be 32 bytes"
+        );
     }
 
     #[test]
@@ -560,7 +792,11 @@ mod tests {
         let key1 = VaultManager::derive_key("1234", &salt).unwrap();
         let key2 = VaultManager::derive_key("5678", &salt).unwrap();
 
-        assert_ne!(key1, key2, "Different PINs should produce different keys");
+        assert_ne!(
+            key1.as_bytes(),
+            key2.as_bytes(),
+            "Different PINs should produce different keys"
+        );
     }
 
     #[test]
@@ -570,6 +806,10 @@ mod tests {
         let key1 = VaultManager::derive_key("1234", &salt1).unwrap();
         let key2 = VaultManager::derive_key("1234", &salt2).unwrap();
 
-        assert_ne!(key1, key2, "Different salts should produce different keys");
+        assert_ne!(
+            key1.as_bytes(),
+            key2.as_bytes(),
+            "Different salts should produce different keys"
+        );
     }
 }

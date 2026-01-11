@@ -58,6 +58,15 @@ pub enum DecentPasteError {
 
     #[error("No paired peers available")]
     NoPeersAvailable,
+
+    #[error("Biometric enrollment changed - vault key is inaccessible")]
+    BiometricEnrollmentChanged,
+
+    #[error("Authentication cancelled by user")]
+    AuthenticationCancelled,
+
+    #[error("Secure storage error: {0}")]
+    SecureStorage(String),
 }
 
 impl serde::Serialize for DecentPasteError {

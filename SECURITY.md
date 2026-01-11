@@ -19,14 +19,14 @@ Project takes all reports seriously and will respond promptly.
 
 ### Cryptographic Stack
 
-| Layer              | Technology      | Purpose                                            |
-|--------------------|-----------------|----------------------------------------------------|
-| **Key Exchange**   | X25519 ECDH     | Secure key derivation without transmitting secrets |
-| **Encryption**     | AES-256-GCM     | Authenticated encryption for clipboard content     |
-| **Hashing**        | SHA-256         | Echo prevention and integrity verification         |
-| **Transport**      | libp2p Noise    | Encrypted peer-to-peer connections                 |
-| **Key Derivation** | Argon2id        | PIN-to-key derivation with memory-hard function    |
-| **Secure Storage** | IOTA Stronghold | Encrypted vault for secrets                        |
+| Layer              | Technology      | Purpose                                                    |
+|--------------------|-----------------|------------------------------------------------------------|
+| **Key Exchange**   | X25519 ECDH     | Secure key derivation without transmitting secrets         |
+| **Encryption**     | AES-256-GCM     | Authenticated encryption for clipboard and vault           |
+| **Hashing**        | SHA-256         | Echo prevention and integrity verification                 |
+| **Transport**      | libp2p Noise    | Encrypted peer-to-peer connections                         |
+| **Key Derivation** | Argon2id        | PIN-to-key derivation (fallback when hardware unavailable) |
+| **Secure Storage** | decentsecret    | Hardware-backed key storage (platform-native)              |
 
 ### Design Principles
 
@@ -48,11 +48,6 @@ When two devices pair, they perform a Diffie-Hellman key exchange:
 5. Each device pair has a **unique encryption key**
 
 ### Pairing Flow Diagram
-
-![Pairing Flow](docs/diagrams/pairing_flow.png)
-
-<details>
-<summary>Mermaid source</summary>
 
 ```mermaid
 sequenceDiagram
@@ -87,8 +82,6 @@ sequenceDiagram
     Note over A,B: Secret never transmitted - derived independently
 ```
 
-</details>
-
 ### Why This Is Secure
 
 - **ECDH math**: Both parties compute `shared = their_private × peer_public`, which yields identical results
@@ -100,11 +93,6 @@ sequenceDiagram
 ## Clipboard Sync Security
 
 ### Encryption Flow
-
-![Network Encryption Flow](docs/diagrams/network_encryption_flow.png)
-
-<details>
-<summary>Mermaid source</summary>
 
 ```mermaid
 flowchart LR
@@ -124,8 +112,6 @@ flowchart LR
     style Network fill:#14b8a6,stroke:#0d9488,color:#fff
 ```
 
-</details>
-
 ### Per-Peer Encryption
 
 Content is encrypted **separately for each paired peer** using their specific shared secret. This means:
@@ -138,20 +124,35 @@ Content is encrypted **separately for each paired peer** using their specific sh
 
 ## Secure Vault Storage
 
-All sensitive data is stored in an encrypted IOTA Stronghold vault:
+All sensitive data is stored in an AES-256-GCM encrypted vault file (`vault.enc`). The encryption key is protected using platform-native hardware security when available, with PIN as a fallback.
 
+```mermaid
+flowchart TD
+    VK["VAULT KEY (256-bit random)"]
+
+    VK --> DS["decentsecret plugin"]
+    VK --> PIN["PIN Fallback (Argon2id)"]
+
+    DS --> Android["Android: TEE via BiometricPrompt"]
+    DS --> iOS["iOS: Secure Enclave via Face ID/Touch ID"]
+    DS --> macOS["macOS: Keychain"]
+    DS --> Windows["Windows: Credential Manager"]
+    DS --> Linux["Linux: Secret Service (GNOME/KWallet)"]
 ```
-User PIN (4-8 digits)
-       │
-       ▼
-┌─────────────────────────┐
-│      Argon2id KDF       │ ← salt.bin (unique per device)
-│  m=64MB, t=3, p=4       │
-└─────────────────────────┘
-       │
-       ▼
-   256-bit Key → vault.hold (encrypted)
-```
+
+### Platform Auth Methods
+
+| Platform | Primary Method       | Key Storage               | Fallback |
+|----------|----------------------|---------------------------|----------|
+| Android  | Biometric prompt     | AndroidKeyStore (TEE)     | PIN      |
+| iOS      | Face ID/Touch ID     | Secure Enclave            | PIN      |
+| macOS    | Keychain + PIN (2FA) | Encrypted key in Keychain | PIN-only |
+| Windows  | Credential Mgr + PIN | Encrypted key in CM       | PIN-only |
+| Linux    | Secret Service + PIN | Encrypted key in SS       | PIN-only |
+
+**Desktop 2FA (SecureStorageWithPin)**: On desktop platforms, the vault key is encrypted with a PIN-derived key (Argon2id) before being stored in the OS keychain. This provides 2-factor authentication:
+- **What you have**: Physical access to a device with a keychain
+- **What you know**: PIN to decrypt the keychain data
 
 ### What's Protected
 
@@ -164,26 +165,23 @@ User PIN (4-8 digits)
 
 ### Security Properties
 
-- **PIN never stored**: Only the derived key exists temporarily in memory
-- **Per-device salt**: 16-byte random salt prevents rainbow table attacks
+- **Hardware-backed keys**: On mobile, keys are stored in TEE/Secure Enclave (never extractable)
+- **Biometric binding**: Mobile keys are invalidated if biometric enrollment changes
+- **Desktop 2FA**: Vault key encrypted with PIN-derived key, stored in OS keychain
+- **Key never stored in plaintext**: Vault key is in hardware (mobile), encrypted in keychain (desktop), or derived from PIN
+- **Per-device salt**: 16-byte random salt stored with an encrypted key (desktop) or in a separate file (PIN-only)
 - **Auto-lock**: Vault locks after configurable inactivity timeout
+- **Zeroize on drop**: Vault key is securely cleared from memory when locked
 
-### Known Limitation: PIN-Based Vault Unlock
+### PIN Fallback Mode
 
-> **Honest assessment**: The current Argon2id + numeric PIN approach is brute-forceable if an attacker has physical access to the vault file.
+When hardware security is unavailable (e.g., Linux without Secret Service, devices without biometrics):
 
-The PIN-based vault was the initial implementation to establish the storage mechanism and ensure future compatibility. Argon2id parameters (m=64MB, t=3, p=4) are tuned for usability on mobile devices, not maximum security.
+- User sets a 4-8 digit PIN during setup
+- Vault key is derived via Argon2id (m=64MB, t=3, p=4)
+- PIN is brute-forceable with physical access to `vault.enc` + `salt.bin`
 
-**Important**: This only affects local storage security. Peer-to-peer encryption uses X25519 ECDH, which is not affected.
-
-### Planned Improvement
-
-Future versions will leverage platform-native secure authentication where the key never leaves the hardware:
-
-- **CTAP/FIDO2**: Biometrics (fingerprint, Face ID) and hardware keys (YubiKey)
-- **TPM**: For devices without biometric hardware
-
-Silent storage upgrades will maintain app compatibility. See [Roadmap](README.md#roadmap).
+**Important**: PIN mode only affects local storage. Peer-to-peer encryption always uses X25519 ECDH.
 
 ---
 
@@ -211,7 +209,8 @@ This is a deliberate security choice — your clipboard data never traverses the
 
 ## Security Checklist for Users
 
-- [ ] Use a 6+ digit PIN for your vault
+- [ ] Use biometric/hardware security when available (preferred over PIN)
+- [ ] If using PIN, choose 6+ digits
 - [ ] Verify the 6-digit pairing PIN matches on both devices
 - [ ] Only pair with devices you control
 - [ ] Keep DecentPaste updated for security fixes
@@ -223,6 +222,7 @@ This is a deliberate security choice — your clipboard data never traverses the
 
 | Date       | Change                                                                                                                |
 |------------|-----------------------------------------------------------------------------------------------------------------------|
+| 2026-01-11 | Added: Hardware-backed vault security (biometrics, TEE, Keychain) via `tauri-plugin-decentsecret`                     |
 | 2026-01-01 | Fixed: Shared secret no longer transmitted during pairing ([#25](https://github.com/decentpaste/decentpaste/pull/25)) |
 
 ---
@@ -231,5 +231,4 @@ This is a deliberate security choice — your clipboard data never traverses the
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) — Technical implementation details
 - [libp2p Security](https://docs.libp2p.io/concepts/secure-comm/) — Transport layer security
-- IOTA Stronghold — Vault implementation
-- Argon2 — Password hashing competition winner
+- [Argon2](https://en.wikipedia.org/wiki/Argon2) — Password hashing for PIN fallback

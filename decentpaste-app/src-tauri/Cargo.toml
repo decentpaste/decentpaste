@@ -19,11 +19,10 @@ tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-opener = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
-tauri-plugin-stronghold = "2"
 tauri-plugin-clipboard-manager = "2"
 tauri-plugin-os = "2"
 tauri-plugin-decentshare = { path = "../tauri-plugin-decentshare" }
-iota_stronghold = "2.1"  # For accessing snapshot encryption work factor
+tauri-plugin-decentsecret = { path = "../tauri-plugin-decentsecret" }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
@@ -52,6 +51,7 @@ rand = "0.9"
 sha2 = "0.10"
 hex = "0.4"
 x25519-dalek = { version = "2", features = ["static_secrets"] }
+zeroize = { version = "1.7", features = ["derive"] }
 
 # Storage & utilities
 hostname = "0.4"

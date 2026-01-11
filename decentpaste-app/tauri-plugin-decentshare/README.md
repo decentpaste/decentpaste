@@ -242,3 +242,7 @@ decentpaste-app/
     └── guest-js/                         # TypeScript bindings
         └── index.ts
 ```
+
+## License
+
+Apache-2.0

@@ -108,12 +108,12 @@ On Android, clipboard access is restricted for privacy. Two ways to share:
 
 DecentPaste is designed with security as a priority:
 
-| Layer            | Technology                 | Purpose                                   |
-|------------------|----------------------------|-------------------------------------------|
-| **Key Exchange** | X25519 ECDH                | Shared secrets derived, never transmitted |
-| **Encryption**   | AES-256-GCM                | Authenticated encryption for clipboard    |
-| **Storage**      | IOTA Stronghold + Argon2id | PIN-protected encrypted vault             |
-| **Transport**    | libp2p Noise               | Encrypted P2P connections                 |
+| Layer            | Technology                     | Purpose                                   |
+|------------------|--------------------------------|-------------------------------------------|
+| **Key Exchange** | X25519 ECDH                    | Shared secrets derived, never transmitted |
+| **Encryption**   | AES-256-GCM                    | Authenticated encryption for clipboard    |
+| **Storage**      | Hardware-backed (TEE/Keychain) | Platform-native secure key storage        |
+| **Transport**    | libp2p Noise                   | Encrypted P2P connections                 |
 
 **Key security properties:**
 - **Local-only**: Data never leaves your network (mDNS discovery)
@@ -173,9 +173,9 @@ The local-only (mDNS) design significantly limits the attack surface compared to
 
 - [ ] Image and file clipboard support
 - [ ] Internet relay for cross-network sync (leverages libp2p Kademlia DHT)
-- [ ] Leverage platform-native secure authentication instead of PIN-based vault encryption (CTAP/FIDO2/TPM)
-- [ ] Zeroization: Key cleared from memory on lock
-- [x] Encrypted vault storage (IOTA Stronghold)
+- [x] Hardware-backed vault security (TEE/Secure Enclave/Keychain)
+- [x] Zeroization: Keys cleared from memory on lock
+- [x] Encrypted vault storage
 - [x] Persistent clipboard history
 - [x] System tray improvements
 

@@ -1,0 +1,8 @@
+[default]
+description = "Default permissions for the decentsecret plugin - secure secret storage"
+permissions = [
+    "allow-check-availability",
+    "allow-store-secret",
+    "allow-retrieve-secret",
+    "allow-delete-secret",
+]

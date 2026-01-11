@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-check-availability"
+description = "Enables the check_availability command without any pre-configured scope."
+commands.allow = ["check_availability"]
+
+[[permission]]
+identifier = "deny-check-availability"
+description = "Denies the check_availability command without any pre-configured scope."
+commands.deny = ["check_availability"]

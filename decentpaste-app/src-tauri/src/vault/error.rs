@@ -34,9 +34,9 @@ pub enum VaultError {
     #[error("Vault data is corrupted: {0}")]
     Corrupted(String),
 
-    /// An error occurred in the underlying Stronghold library.
-    #[error("Stronghold error: {0}")]
-    Stronghold(String),
+    /// An error occurred in the encryption layer.
+    #[error("Encryption error: {0}")]
+    Encryption(String),
 
     /// An I/O error occurred (file access, permissions, etc.)
     #[error("I/O error: {0}")]
@@ -77,8 +77,8 @@ impl From<VaultError> for crate::error::DecentPasteError {
             VaultError::Corrupted(msg) => {
                 crate::error::DecentPasteError::Storage(format!("Vault corrupted: {}", msg))
             }
-            VaultError::Stronghold(msg) => {
-                crate::error::DecentPasteError::Storage(format!("Stronghold error: {}", msg))
+            VaultError::Encryption(msg) => {
+                crate::error::DecentPasteError::Encryption(format!("Vault encryption: {}", msg))
             }
             VaultError::Io(e) => crate::error::DecentPasteError::Io(e),
             VaultError::Serialization(e) => crate::error::DecentPasteError::Serialization(e),
@@ -115,7 +115,7 @@ impl serde::Serialize for VaultError {
             VaultError::NotSetup => "NOT_SETUP",
             VaultError::Locked => "LOCKED",
             VaultError::Corrupted(_) => "CORRUPTED",
-            VaultError::Stronghold(_) => "STRONGHOLD_ERROR",
+            VaultError::Encryption(_) => "ENCRYPTION_ERROR",
             VaultError::Io(_) => "IO_ERROR",
             VaultError::Serialization(_) => "SERIALIZATION_ERROR",
             VaultError::Salt(_) => "SALT_ERROR",
