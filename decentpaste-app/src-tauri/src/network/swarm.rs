@@ -190,8 +190,10 @@ impl NetworkManager {
                         for (peer_id, addr) in peers {
                             debug!("mDNS discovered: {} at {}", peer_id, addr);
 
-                            // Add to dial queue
-                            if let Err(e) = self.swarm.dial(addr.clone()) {
+                            // Dial by PeerId - libp2p uses addresses from its address book (populated by mDNS)
+                            // This avoids the "Handshake failed: input error" that occurs when
+                            // dialing addresses with /p2p/ suffix directly
+                            if let Err(e) = self.swarm.dial(peer_id) {
                                 warn!("Failed to dial {}: {}", peer_id, e);
                             }
 
