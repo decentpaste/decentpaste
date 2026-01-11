@@ -22,6 +22,13 @@
     <meta name="apple-mobile-web-app-title" content="DecentPaste" />
     <meta name="mobile-web-app-capable" content="yes" />
 
+    <!-- Security Headers -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.amplitude.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://api.amplitude.com https://api2.amplitude.com; object-src 'none'; base-uri 'self';"
+    />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+
     <!-- Canonical URL -->
     <link rel="canonical" href="https://decentpaste.com/" />
 

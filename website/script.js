@@ -743,7 +743,7 @@ function highlightPlatformCard() {
  */
 async function populateDownloadLinks() {
   try {
-    const response = await fetch('downloads.json');
+    const response = await fetch(`downloads.json?t=${Date.now()}`);
     if (!response.ok) throw new Error('downloads.json not found');
 
     const data = await response.json();

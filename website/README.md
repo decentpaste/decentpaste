@@ -100,16 +100,21 @@ website/
 
 ### Update Download Links
 
-Edit the `platformConfig` object in `script.js`:
+Edit `downloads.json` to update the version and asset URLs:
 
-```javascript
-const platformConfig = {
-  windows: {
-    downloadUrl: 'https://github.com/your-org/your-repo/releases/latest/download/App.exe',
-  },
-  // ...
-};
+```json
+{
+  "version": "0.5.0",
+  "tag": "v0.5.0",
+  "assets": {
+    "exe": "https://...",
+    "dmg-arm": "https://...",
+    "dmg-intel": "https://..."
+  }
+}
 ```
+
+The `script.js` file fetches this JSON to populate the download buttons dynamically.
 
 ### Change Colors
 
