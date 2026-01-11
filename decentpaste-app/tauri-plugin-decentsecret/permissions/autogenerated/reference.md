@@ -17,7 +17,6 @@ Default permissions for the decentsecret plugin - secure secret storage
 <th>Description</th>
 </tr>
 
-
 <tr>
 <td>
 

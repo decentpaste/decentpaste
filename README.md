@@ -153,12 +153,12 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed technical documentation.
 
 ## Project Status
 
-**DecentPaste** — Production-ready and actively developed.
+**DecentPaste** — actively developed.
 
 | Aspect                 | Status                                                     |
 |------------------------|------------------------------------------------------------|
 | **Core functionality** | ✅ Reliable for daily use                                   |
-| **Cryptography**       | ✅ Production-grade (X25519 ECDH, AES-256-GCM, Argon2id)    |
+| **Cryptography**       | ✅ (X25519 ECDH, AES-256-GCM, Argon2id)                     |
 | **Privacy**            | ✅ Local-only — data never leaves your network              |
 | **Security**           | ✅ Hardware-backed storage (TEE/Keychain) with PIN fallback |
 | **Active Development** | 🚀 New features shipping regularly                         |
