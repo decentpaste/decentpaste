@@ -22,13 +22,6 @@
     <meta name="apple-mobile-web-app-title" content="DecentPaste" />
     <meta name="mobile-web-app-capable" content="yes" />
 
-    <!-- Security Headers -->
-    <meta
-      http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.amplitude.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://api.amplitude.com https://api2.amplitude.com; object-src 'none'; base-uri 'self';"
-    />
-    <meta name="referrer" content="strict-origin-when-cross-origin" />
-
     <!-- Canonical URL -->
     <link rel="canonical" href="https://decentpaste.com/" />
 
@@ -335,18 +328,18 @@
         <div class="max-w-5xl mx-auto px-6 lg:px-8 py-32 text-center relative z-10">
           <!-- Badge -->
           <div
-            class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-teal-500/30 text-white/80 text-sm font-medium mb-8 fade-in-up backdrop-blur-sm"
+            class="hero-badge inline-flex items-center gap-2 px-4 py-2 rounded-full text-white/90 text-sm font-medium mb-8 fade-in-up backdrop-blur-sm"
           >
-            <span class="w-2 h-2 rounded-full bg-teal-400 animate-pulse"></span>
+            <span class="w-2 h-2 rounded-full bg-teal-400 animate-pulse shadow-[0_0_10px_rgba(45,212,191,0.5)]"></span>
             Open Source & Free Forever
           </div>
 
           <!-- Headline -->
           <h1
-            class="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-black tracking-tighter mb-8 fade-in-up leading-[0.9]"
+            class="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-extrabold tracking-tighter mb-8 fade-in-up leading-[0.95]"
             style="animation-delay: 0.1s"
           >
-            <span class="block">Clipboard sync for</span>
+            <span class="block text-white">Clipboard sync for</span>
             <span class="gradient-text">every device.</span>
           </h1>
 
@@ -1457,58 +1450,63 @@
     </main>
 
     <!-- Footer -->
-    <footer class="py-12 border-t border-white/10" role="contentinfo">
+    <footer class="py-16 border-t border-white/5 bg-white/[0.01] backdrop-blur-sm" role="contentinfo">
       <div class="max-w-6xl mx-auto px-6 lg:px-8">
-        <div class="flex flex-col items-center gap-6">
+        <div class="flex flex-col items-center gap-8">
           <!-- Logo -->
-          <a href="/" class="flex items-center gap-3 hover:opacity-80 transition-opacity">
+          <a href="/" class="flex items-center gap-3 hover:opacity-80 transition-all duration-300 group">
             <img
               src="assets/logo_dark.svg"
               alt="DecentPaste logo"
-              class="h-10 w-10"
+              class="h-10 w-10 transition-transform duration-500 group-hover:rotate-[360deg]"
               width="40"
               height="40"
               loading="lazy"
               decoding="async"
             />
-            <span class="font-semibold">DecentPaste</span>
+            <span class="font-bold text-lg tracking-tight">DecentPaste</span>
           </a>
 
           <!-- Links -->
-          <div class="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-white/60">
+          <div class="flex flex-wrap justify-center gap-x-8 gap-y-4 text-sm font-medium text-white/40">
             <a
               href="https://github.com/decentpaste/decentpaste"
               target="_blank"
               rel="noopener noreferrer"
-              class="hover:text-white transition-colors"
+              class="hover:text-white transition-colors duration-300"
               >GitHub</a
             >
             <a
               href="https://github.com/decentpaste/decentpaste#readme"
               target="_blank"
               rel="noopener noreferrer"
-              class="hover:text-white transition-colors"
-              >Docs</a
+              class="hover:text-white transition-colors duration-300"
+              >Documentation</a
             >
             <a
               href="https://github.com/decentpaste/decentpaste/issues"
               target="_blank"
               rel="noopener noreferrer"
-              class="hover:text-white transition-colors"
-              >Issues</a
+              class="hover:text-white transition-colors duration-300"
+              >Issue Tracker</a
             >
-            <a href="privacy.html" class="hover:text-white transition-colors">Privacy</a>
+            <a href="privacy.html" class="hover:text-white transition-colors duration-300">Privacy Policy</a>
             <a
               href="https://github.com/decentpaste/decentpaste/blob/main/LICENSE"
               target="_blank"
               rel="noopener noreferrer"
-              class="hover:text-white transition-colors"
+              class="hover:text-white transition-colors duration-300"
               >License</a
             >
           </div>
 
-          <!-- Made with -->
-          <p class="text-sm text-white/30">Made with <span class="text-red-400">&#10084;</span> for privacy</p>
+          <!-- Bottom Meta -->
+          <div class="flex flex-col items-center gap-4 border-t border-white/5 pt-8 w-full max-w-xs">
+            <p class="text-xs text-white/20 uppercase tracking-widest font-semibold">
+              Built for Privacy & Transparency
+            </p>
+            <p class="text-sm text-white/30">Made with <span class="text-red-500/60 animate-pulse">❤</span> by the community</p>
+          </div>
         </div>
       </div>
     </footer>

@@ -31,9 +31,10 @@ html {
 
 body {
   background-color: #0a0a0b;
-  color: #ffffff;
+  color: rgba(255, 255, 255, 0.9);
   overflow-x: hidden;
   position: relative;
+  line-height: 1.6;
 }
 
 /* Headings use display font (Outfit) - matching app */
@@ -44,7 +45,30 @@ h4,
 h5,
 h6 {
   font-family: var(--font-display);
-  letter-spacing: -0.02em;
+  letter-spacing: var(--tracking-tighter);
+  line-height: 1.1;
+  color: #ffffff;
+}
+
+/* =============================================================================
+   Navbar - Sophisticated Glassmorphism
+   ============================================================================= */
+
+#navbar {
+  border-bottom: 1px solid transparent;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#navbar.scrolled {
+  background: rgba(10, 10, 11, 0.7);
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  height: 4.5rem; /* Slightly compress on scroll */
+}
+
+#navbar.scrolled .flex.justify-between {
+  height: 4.5rem;
 }
 
 /* =============================================================================
@@ -224,6 +248,31 @@ body::after {
   transform: translateY(-1px);
 }
 
+/* Shimmering Hero Badge */
+@keyframes border-shimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+.hero-badge {
+  background: linear-gradient(#0a0a0b, #0a0a0b) padding-box,
+    linear-gradient(90deg, rgba(20, 184, 166, 0.3), rgba(249, 115, 22, 0.3), rgba(20, 184, 166, 0.3)) border-box;
+  border: 1px solid transparent;
+  background-size: 100% 100%, 200% 100%;
+  animation: border-shimmer 6s linear infinite;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.5);
+  transition: all 0.3s ease;
+}
+
+.hero-badge:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 30px -4px rgba(20, 184, 166, 0.2);
+}
+
 /* =============================================================================
    Feature Cards - Enhanced with gradient borders and glow
    ============================================================================= */
@@ -235,6 +284,7 @@ body::after {
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
 }
 
 /* Gradient border effect using pseudo-element */
@@ -421,19 +471,21 @@ body::after {
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 1rem;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   position: relative;
   overflow: visible;
 }
 
 .download-card-expanded:hover {
   background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.12);
+  transform: translateY(-4px);
+  box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.5);
 }
 
 .download-card-expanded.highlighted {
-  border-color: #14b8a6;
-  background: rgba(20, 184, 166, 0.05);
+  border-color: rgba(20, 184, 166, 0.4);
+  background: rgba(20, 184, 166, 0.03);
 }
 
 .download-card-expanded.highlighted::before {
@@ -651,20 +703,22 @@ body::after {
    ============================================================================= */
 
 .faq-item {
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.01);
+  border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: 1rem;
   overflow: hidden;
-  transition: all 0.3s;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .faq-item:hover {
   border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .faq-item.active {
-  border-color: rgba(20, 184, 166, 0.3);
-  background: rgba(20, 184, 166, 0.02);
+  border-color: rgba(20, 184, 166, 0.25);
+  background: rgba(20, 184, 166, 0.03);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.3);
 }
 
 .faq-question {
