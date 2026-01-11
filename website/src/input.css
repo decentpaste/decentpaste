@@ -261,6 +261,8 @@ body::after {
 .feature-card {
   padding: 1.5rem;
   background: rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   border-radius: 1rem;
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
@@ -335,7 +337,7 @@ body::after {
 }
 
 .feature-card:hover .feature-icon {
-  transform: scale(1.1);
+  transform: scale(1.1) rotate(3deg);
 }
 
 /* Alternate cards get orange glow */
@@ -378,6 +380,7 @@ body::after {
   justify-content: center;
   color: rgba(255, 255, 255, 0.6);
   flex-shrink: 0;
+  transition: all 0.3s ease;
 }
 
 .download-btn {
@@ -451,6 +454,8 @@ body::after {
   gap: 1rem;
   padding: 1.5rem;
   background: rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 1rem;
   transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
@@ -463,6 +468,11 @@ body::after {
   border-color: rgba(255, 255, 255, 0.12);
   transform: translateY(-4px);
   box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.5);
+}
+
+.download-card-expanded:hover .download-icon {
+  color: #14b8a6;
+  transform: scale(1.1) rotate(-3deg);
 }
 
 .download-card-expanded.highlighted {
@@ -686,6 +696,8 @@ body::after {
 
 .faq-item {
   background: rgba(255, 255, 255, 0.01);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: 1rem;
   overflow: hidden;
