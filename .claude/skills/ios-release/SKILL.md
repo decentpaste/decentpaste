@@ -54,7 +54,27 @@ If missing, run:
 cd decentpaste-app && ./tauri-plugin-decentshare/scripts/setup-ios-share-extension.sh
 ```
 
-## 4. Build & Open Xcode
+## 4. Fix Share Extension Version Mismatch
+
+After version bumps, the Share Extension's `MARKETING_VERSION` in the Xcode project may be out of sync with the main app. Check for this warning during build:
+
+```
+warning: The CFBundleShortVersionString of an app extension ('X.X.X') must match that of its containing parent app ('Y.Y.Y').
+```
+
+**To fix**, update the Share Extension's version in the Xcode project file:
+
+```bash
+# Replace OLD_VERSION with the outdated version, NEW_VERSION with current app version
+sed -i '' 's/MARKETING_VERSION = OLD_VERSION;/MARKETING_VERSION = NEW_VERSION;/g' \
+  decentpaste-app/src-tauri/gen/apple/decentpaste-app.xcodeproj/project.pbxproj
+```
+
+Example: `sed -i '' 's/MARKETING_VERSION = 0.4.2;/MARKETING_VERSION = 0.5.0;/g' ...`
+
+**Why this happens**: The `/bump-version` workflow updates `tauri.conf.json`, but the Share Extension's version lives in `gen/apple/` which doesn't get auto-updated.
+
+## 5. Build & Open Xcode
 
 Ask user to run this in a **separate terminal** (long-running):
 
@@ -66,9 +86,11 @@ This command:
 1. Builds the **frontend in production mode** (bundles assets)
 2. Opens Xcode project when frontend build completes
 
+**IMPORTANT**: Wait for `yarn tauri ios build` to complete before archiving in Xcode. The build compiles the frontend assets that get bundled into the iOS app. If you archive before it finishes, you may get an incomplete or broken build.
+
 The actual iOS compilation and archiving happens in Xcode (next step).
 
-## 5. Archive & Upload in Xcode
+## 6. Archive & Upload in Xcode
 
 User performs in Xcode:
 1. Select scheme: `decentpaste-app_iOS`
@@ -91,7 +113,7 @@ IPA location: `src-tauri/gen/apple/build/arm64/DecentPaste.ipa`
 
 Upload via Transporter app (free from Mac App Store) or `xcrun altool` with API keys.
 
-## 6. Verify Production Build
+## 7. Verify Production Build
 
 To confirm the archive is a production build (not dev):
 
@@ -106,7 +128,7 @@ strings "$ARCHIVE/Products/Applications/DecentPaste.app/DecentPaste" | grep -E "
 
 Note: `localhost:1420` appearing in strings is normal (embedded config) - check for hashed assets.
 
-## 7. TestFlight Configuration
+## 8. TestFlight Configuration
 
 After upload completes (~5-15 min processing):
 
@@ -116,7 +138,7 @@ After upload completes (~5-15 min processing):
 4. Answer **Export Compliance** (DecentPaste uses encryption → Yes, but exempt)
 5. For external testers: Wait for Beta App Review (~24-48h)
 
-## 8. Report
+## 9. Report
 
 Report: version updated, build number, build verified as production, upload status.
 
@@ -131,11 +153,12 @@ Report: version updated, build number, build verified as production, upload stat
 
 ## Troubleshooting
 
-| Issue                       | Solution                                                              |
-|-----------------------------|-----------------------------------------------------------------------|
-| `--release` flag error      | Don't use it - `tauri ios build` is release by default                |
-| Blank screen on device      | You archived a dev build - rebuild with `yarn tauri ios build --open` |
-| Code signing errors         | In Xcode, verify Team selected for BOTH targets                       |
-| Share Extension missing     | Run `setup-ios-share-extension.sh`                                    |
-| "Build number already used" | Bump `bundle.iOS.bundleVersion` in tauri.conf.json                    |
-| Upload fails                | Check Xcode → Settings → Accounts for valid credentials               |
+| Issue                            | Solution                                                              |
+|----------------------------------|-----------------------------------------------------------------------|
+| `--release` flag error           | Don't use it - `tauri ios build` is release by default                |
+| Blank screen on device           | You archived a dev build - rebuild with `yarn tauri ios build --open` |
+| Code signing errors              | In Xcode, verify Team selected for BOTH targets                       |
+| Share Extension missing          | Run `setup-ios-share-extension.sh`                                    |
+| Share Extension version mismatch | See step 4 - update MARKETING_VERSION in project.pbxproj              |
+| "Build number already used"      | Bump `bundle.iOS.bundleVersion` in tauri.conf.json                    |
+| Upload fails                     | Check Xcode → Settings → Accounts for valid credentials               |
