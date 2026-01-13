@@ -455,6 +455,8 @@ pub async fn start_network_services(
                     }
 
                     // Encrypt and broadcast to EACH paired peer with their specific shared secret
+                    // ALSO buffer for each peer - this handles the case where a peer goes offline
+                    // mid-transmission (race condition). Sync will deliver the message later.
                     let mut broadcast_count = 0;
                     for peer in paired_peers.iter() {
                         match security::encrypt_content(
@@ -471,14 +473,22 @@ pub async fn start_network_services(
                                     origin_device_name: identity.device_name.clone(),
                                 };
 
+                                // 1. Send via gossipsub (fire-and-forget)
                                 if let Err(e) = network_cmd_tx_clipboard
-                                    .send(NetworkCommand::BroadcastClipboard { message: msg })
+                                    .send(NetworkCommand::BroadcastClipboard {
+                                        message: msg.clone(),
+                                    })
                                     .await
                                 {
                                     error!("Failed to send clipboard to network: {}", e);
                                 } else {
                                     broadcast_count += 1;
                                 }
+
+                                // 2. ALWAYS buffer for this peer (even if they appear online).
+                                // This handles the race condition where peer goes offline
+                                // mid-transmission. Sync ensures eventual delivery.
+                                state.store_buffered_message(&peer.peer_id, msg).await;
                             }
                             Err(e) => {
                                 error!(
@@ -508,10 +518,13 @@ pub async fn start_network_services(
 
     // Handle network events
     let app_handle_network = app_handle.clone();
+    let network_cmd_tx_events = network_cmd_tx.clone();
     tokio::spawn(async move {
         let state = app_handle_network.state::<AppState>();
         // Clipboard monitor for echo prevention (set_last_hash after receiving)
         let clipboard_monitor = clipboard_monitor_network;
+        // Network command sender for sync operations
+        let network_cmd_tx = network_cmd_tx_events;
 
         while let Some(event) = network_event_rx.recv().await {
             match event {
@@ -702,6 +715,21 @@ pub async fn start_network_services(
                             "status": "connected"
                         }),
                     );
+
+                    // When a peer becomes ready, we request sync from them.
+                    // This is bi-directional: both peers request sync from each other.
+                    // This ensures both sides receive any missed messages.
+                    if state.is_peer_paired(peer_id).await {
+                        debug!("Peer {} is paired and ready, requesting sync", peer_id);
+                        if let Err(e) = network_cmd_tx
+                            .send(NetworkCommand::RequestSync {
+                                peer_id: peer_id.clone(),
+                            })
+                            .await
+                        {
+                            warn!("Failed to send sync request to {}: {}", peer_id, e);
+                        }
+                    }
 
                     debug!("Peer {} now ready (gossipsub subscribed)", peer_id);
                 }
@@ -1072,6 +1100,235 @@ pub async fn start_network_services(
 
                 NetworkEvent::Error(error) => {
                     let _ = app_handle_network.emit("network-error", error);
+                }
+
+                // Sync Protocol Events - For offline message delivery
+                NetworkEvent::SyncRequestReceived { peer_id } => {
+                    // A peer requested sync from us - respond with our buffered hashes.
+
+                    // Security: verify peer is paired
+                    if !state.is_peer_paired(&peer_id).await {
+                        warn!("Ignoring SyncRequest from unpaired peer: {}", peer_id);
+                        continue;
+                    }
+
+                    // Get buffered messages for this peer (filtered by TTL)
+                    let buffer = state.get_buffer_for_peer(&peer_id).await;
+
+                    // Build hash list
+                    let hashes: Vec<network::protocol::MessageHash> = buffer
+                        .iter()
+                        .map(|msg| network::protocol::MessageHash {
+                            hash: msg.content_hash.clone(),
+                            timestamp: msg.timestamp,
+                        })
+                        .collect();
+
+                    debug!(
+                        "Responding to SyncRequest from {} with {} hashes",
+                        peer_id,
+                        hashes.len()
+                    );
+
+                    // Send hash list response
+                    if let Err(e) = network_cmd_tx
+                        .send(NetworkCommand::SendHashListResponse {
+                            peer_id: peer_id.clone(),
+                            hashes,
+                        })
+                        .await
+                    {
+                        error!("Failed to send HashListResponse to {}: {}", peer_id, e);
+                    }
+                }
+
+                NetworkEvent::SyncContentRequestReceived { peer_id, hash } => {
+                    // A peer requested specific content by hash - respond with the message.
+
+                    // Security: verify peer is paired
+                    if !state.is_peer_paired(&peer_id).await {
+                        warn!("Ignoring ContentRequest from unpaired peer: {}", peer_id);
+                        continue;
+                    }
+
+                    // Find the message in this peer's buffer
+                    if let Some(message) =
+                        state.find_message_for_peer_by_hash(&peer_id, &hash).await
+                    {
+                        debug!(
+                            "Responding to ContentRequest from {} for hash {}",
+                            peer_id,
+                            &hash[..8.min(hash.len())]
+                        );
+
+                        // Send content response
+                        if let Err(e) = network_cmd_tx
+                            .send(NetworkCommand::SendContentResponse {
+                                peer_id: peer_id.clone(),
+                                message,
+                            })
+                            .await
+                        {
+                            error!("Failed to send ContentResponse to {}: {}", peer_id, e);
+                        } else {
+                            // Remove from buffer after successful send
+                            state
+                                .remove_buffered_message_for_peer(&peer_id, &hash)
+                                .await;
+                        }
+                    } else {
+                        warn!(
+                            "ContentRequest from {} for unknown hash {} (not in buffer)",
+                            peer_id,
+                            &hash[..8.min(hash.len())]
+                        );
+                    }
+                }
+
+                NetworkEvent::SyncHashListReceived { peer_id, hashes } => {
+                    // We received a list of hashes available from a peer.
+                    // Compare against our clipboard history and request missing content.
+
+                    // Security: verify peer is paired
+                    if !state.is_peer_paired(&peer_id).await {
+                        warn!(
+                            "Ignoring SyncHashListReceived from unpaired peer: {}",
+                            peer_id
+                        );
+                        continue;
+                    }
+
+                    if hashes.is_empty() {
+                        debug!("No sync messages available from peer {}", peer_id);
+                        continue;
+                    }
+
+                    // Find hashes we don't have in our history
+                    let needed_hashes: Vec<String> = {
+                        let history = state.clipboard_history.read().await;
+                        let our_hashes: std::collections::HashSet<&str> = history
+                            .iter()
+                            .map(|entry| entry.content_hash.as_str())
+                            .collect();
+
+                        hashes
+                            .into_iter()
+                            .filter(|h| !our_hashes.contains(h.hash.as_str()))
+                            .map(|h| h.hash)
+                            .collect()
+                    };
+
+                    if !needed_hashes.is_empty() {
+                        info!(
+                            "Requesting {} missing messages from peer {}",
+                            needed_hashes.len(),
+                            peer_id
+                        );
+
+                        // Request content for each missing hash
+                        for hash in needed_hashes {
+                            if let Err(e) = network_cmd_tx
+                                .send(NetworkCommand::RequestContent {
+                                    peer_id: peer_id.clone(),
+                                    hash,
+                                })
+                                .await
+                            {
+                                error!("Failed to send ContentRequest: {}", e);
+                            }
+                        }
+                    } else {
+                        debug!(
+                            "No missing messages from peer {} (already have all)",
+                            peer_id
+                        );
+                    }
+                }
+
+                NetworkEvent::SyncContentReceived { peer_id, message } => {
+                    // We received full content for a hash we requested.
+                    // Decrypt, verify, and add to clipboard history.
+
+                    // Security: verify peer is paired
+                    if !state.is_peer_paired(&peer_id).await {
+                        warn!(
+                            "Ignoring SyncContentReceived from unpaired peer: {}",
+                            peer_id
+                        );
+                        continue;
+                    }
+
+                    // Try to decrypt with paired peer's shared secret
+                    let paired_peers = state.paired_peers.read().await;
+
+                    // Find the peer and decrypt
+                    if let Some(peer) = paired_peers.iter().find(|p| p.peer_id == peer_id) {
+                        match security::decrypt_content(
+                            &message.encrypted_content,
+                            &peer.shared_secret,
+                        ) {
+                            Ok(decrypted) => {
+                                if let Ok(content) = String::from_utf8(decrypted) {
+                                    // Verify hash
+                                    let hash = security::hash_content(&content);
+                                    if hash == message.content_hash {
+                                        // Check deduplication - don't apply if already in history
+                                        let already_has = {
+                                            let history = state.clipboard_history.read().await;
+                                            history.iter().any(|entry| entry.content_hash == hash)
+                                        };
+
+                                        if !already_has {
+                                            // Set clipboard
+                                            if let Err(e) =
+                                                clipboard::monitor::set_clipboard_content(
+                                                    &app_handle_network,
+                                                    &content,
+                                                )
+                                            {
+                                                error!("Failed to set synced clipboard: {}", e);
+                                            }
+
+                                            // Prevent echo
+                                            clipboard_monitor.set_last_hash(hash.clone()).await;
+
+                                            // Add to history with correct timestamp
+                                            let entry = ClipboardEntry::new_remote(
+                                                content,
+                                                message.content_hash.clone(),
+                                                message.timestamp,
+                                                &message.origin_device_id,
+                                                &message.origin_device_name,
+                                            );
+                                            // Use add_clipboard_entry which handles chronological insertion
+                                            state.add_clipboard_entry(entry.clone()).await;
+
+                                            // Emit to frontend (use same event as regular clipboard-received)
+                                            let _ = app_handle_network
+                                                .emit("clipboard-received", entry);
+
+                                            info!(
+                                                "Synced clipboard from {} (hash: {})",
+                                                message.origin_device_name,
+                                                &hash[..8.min(hash.len())]
+                                            );
+                                        } else {
+                                            debug!(
+                                                "Synced message already in history (deduplicated)"
+                                            );
+                                        }
+                                    } else {
+                                        warn!("Hash mismatch in synced message from {}", peer_id);
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                error!("Failed to decrypt synced content from {}: {}", peer_id, e);
+                            }
+                        }
+                    } else {
+                        warn!("Received sync content from unknown peer: {}", peer_id);
+                    }
                 }
             }
         }

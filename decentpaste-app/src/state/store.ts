@@ -223,11 +223,21 @@ class Store {
   addClipboardEntry(entry: ClipboardEntry): void {
     this.update('clipboardHistory', (history) => {
       // Remove existing entry with same content hash (if any)
-      // This allows "re-sharing" same content to move it to front with fresh metadata
+      // This allows "re-sharing" same content to be reinserted at correct position
       const filtered = history.filter((e) => e.content_hash !== entry.content_hash);
-      // Add to front, limit to settings limit
+
+      // Insert at correct chronological position by timestamp (newest first).
+      // This is important for sync: synced messages may have older timestamps
+      // and should appear in the correct position in history.
+      const entryTime = new Date(entry.timestamp).getTime();
+      const insertIndex = filtered.findIndex((e) => new Date(e.timestamp).getTime() < entryTime);
+      const position = insertIndex === -1 ? filtered.length : insertIndex;
+
+      const result = [...filtered.slice(0, position), entry, ...filtered.slice(position)];
+
+      // Limit to settings limit
       const limit = this.state.settings.clipboard_history_limit;
-      return [entry, ...filtered].slice(0, limit);
+      return result.slice(0, limit);
     });
   }
 
