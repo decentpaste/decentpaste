@@ -2,21 +2,27 @@ use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicUsize};
 use std::sync::Arc;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use serde::Serialize;
 use tokio::sync::{mpsc, Notify, RwLock};
 use tracing::{debug, warn};
 
 use crate::clipboard::ClipboardEntry;
 use crate::error::Result;
+use crate::network::protocol::ClipboardMessage;
 use crate::network::{DiscoveredPeer, NetworkCommand, NetworkStatus};
 use crate::security::PairingSession;
 use crate::storage::{AppSettings, DeviceIdentity, PairedPeer};
 use crate::vault::{VaultManager, VaultStatus};
 
-// =============================================================================
-// Connection State Types
-// =============================================================================
+/// Maximum number of messages to buffer per peer.
+/// Set to 1 for "latest only" behavior - sync only delivers the most recent message.
+pub const SYNC_MAX_BUFFER_SIZE: usize = 1;
+
+/// Time-to-live for buffered messages in seconds.
+/// Messages older than this are filtered out during sync.
+/// 5 minutes is sufficient for typical offline durations (app restart, mobile background).
+pub const SYNC_TTL_SECONDS: i64 = 60 * 5;
 
 /// Connection status for a paired peer.
 /// Used for per-device tracking and UI status indicators.
@@ -87,6 +93,16 @@ pub struct AppState {
     /// Notified when all pending dials complete.
     /// Used by ensure_connected() to await completion.
     pub dials_complete_notify: Arc<Notify>,
+
+    /// Per-recipient buffering: we store messages WE sent that THEY missed.
+    /// Key = peer_id of the recipient (who missed the message)
+    /// Value = messages we sent that they should receive on reconnection
+    ///
+    /// ALWAYS buffer for all paired peers, regardless of online status.
+    /// This handles the race condition where a peer goes offline mid-transmission.
+    /// Message buffers for offline peers.
+    /// Maps peer_id -> buffered messages (messages WE sent that THEY missed).
+    pub message_buffers: Arc<RwLock<HashMap<String, Vec<ClipboardMessage>>>>,
 }
 
 impl AppState {
@@ -111,6 +127,9 @@ impl AppState {
             reconnect_in_progress: AtomicBool::new(false),
             pending_dials: AtomicUsize::new(0),
             dials_complete_notify: Arc::new(Notify::new()),
+
+            // Sync message buffers (per-recipient)
+            message_buffers: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -118,22 +137,29 @@ impl AppState {
         let modified = {
             let mut history = self.clipboard_history.write().await;
 
-            // Check for existing entry with same content hash
+            // Check for existing entry with the same content hash (deduplication)
             if let Some(idx) = history
                 .iter()
                 .position(|e| e.content_hash == entry.content_hash)
             {
-                // Update existing entry with new metadata and move to front
-                // This keeps history clean while allowing re-sharing same content
+                // Remove existing entry - it will be reinserted at the correct position
                 history.remove(idx);
                 debug!(
-                    "Updated existing clipboard entry (moved to front): {}",
+                    "Updated existing clipboard entry (will reinsert): {}",
                     &entry.content_hash[..8]
                 );
             }
 
-            // Add to front (either new entry or updated existing)
-            history.insert(0, entry);
+            // Insert at the correct chronological position by timestamp.
+            // History is sorted newest-first, so find the first entry older than this one.
+            // This is important for sync: synced messages may have older timestamps
+            // and should appear in the correct position in history.
+            let insert_pos = history
+                .iter()
+                .position(|e| e.timestamp < entry.timestamp)
+                .unwrap_or(history.len());
+
+            history.insert(insert_pos, entry);
 
             // Trim to max size from settings
             let max_size = self.settings.read().await.clipboard_history_limit;
@@ -154,14 +180,75 @@ impl AppState {
         peers.iter().any(|p| p.peer_id == peer_id)
     }
 
-    // =========================================================================
-    // Vault Flush Helpers - Flush-on-Write Pattern
-    // =========================================================================
-    //
-    // These methods implement the flush-on-write pattern for data persistence.
-    // Each method updates the vault and immediately flushes to disk, ensuring
-    // data is never lost even on unexpected termination (crashes, force quit,
-    // macOS Cmd+Q, etc.).
+    /// Store a clipboard message in buffer for a specific peer.
+    /// ALWAYS buffers, regardless of peer's online status (handles race conditions).
+    /// Buffer is per-recipient: messages WE sent that THEY missed.
+    pub async fn store_buffered_message(&self, peer_id: &str, message: ClipboardMessage) {
+        let mut buffers = self.message_buffers.write().await;
+        let buffer = buffers.entry(peer_id.to_string()).or_default();
+        buffer.push(message);
+
+        // Truncate to max size (keep the latest messages only)
+        if buffer.len() > SYNC_MAX_BUFFER_SIZE {
+            buffer.drain(0..buffer.len() - SYNC_MAX_BUFFER_SIZE);
+        }
+
+        debug!(
+            "Buffered message for peer {} (buffer size: {})",
+            peer_id,
+            buffer.len()
+        );
+    }
+
+    /// Get buffered messages for a specific peer (read-only, does NOT remove).
+    /// Filters out expired messages (older than SYNC_TTL_SECONDS).
+    /// Used when building HashListResponse for sync.
+    pub async fn get_buffer_for_peer(&self, peer_id: &str) -> Vec<ClipboardMessage> {
+        let buffers = self.message_buffers.read().await;
+        let now = Utc::now();
+        let ttl = Duration::seconds(SYNC_TTL_SECONDS);
+
+        buffers
+            .get(peer_id)
+            .map(|msgs| {
+                msgs.iter()
+                    .filter(|msg| now.signed_duration_since(msg.timestamp) < ttl)
+                    .cloned()
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Find a message by content_hash in a SPECIFIC peer's buffer.
+    /// Used when peer requests specific content via ContentRequest.
+    /// Only searches the requesting peer's buffer to ensure correct encryption.
+    pub async fn find_message_for_peer_by_hash(
+        &self,
+        peer_id: &str,
+        hash: &str,
+    ) -> Option<ClipboardMessage> {
+        let buffers = self.message_buffers.read().await;
+        buffers
+            .get(peer_id)
+            .and_then(|buffer| buffer.iter().find(|msg| msg.content_hash == hash).cloned())
+    }
+
+    /// Remove a specific message from a specific peer's buffer by content_hash.
+    /// Called after peer successfully receives content via ContentResponse.
+    pub async fn remove_buffered_message_for_peer(&self, peer_id: &str, hash: &str) {
+        let mut buffers = self.message_buffers.write().await;
+        if let Some(buffer) = buffers.get_mut(peer_id) {
+            let before_len = buffer.len();
+            buffer.retain(|msg| msg.content_hash != hash);
+            if buffer.len() < before_len {
+                debug!(
+                    "Removed buffered message {} for peer {} (was delivered)",
+                    &hash[..8.min(hash.len())],
+                    peer_id
+                );
+            }
+        }
+    }
 
     /// Flush paired peers to vault immediately.
     ///

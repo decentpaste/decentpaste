@@ -73,6 +73,34 @@ pub enum NetworkCommand {
     AnnounceDeviceName {
         device_name: String,
     },
+
+    /// Request sync from a specific peer (hash-first protocol).
+    /// Sent when we reconnect after being offline to get missed messages.
+    /// Peer will respond with HashListResponse containing available message hashes.
+    RequestSync {
+        peer_id: String,
+    },
+
+    /// Request full content for a specific hash (after receiving HashListResponse).
+    /// Peer will respond with ContentResponse containing the full ClipboardMessage.
+    RequestContent {
+        peer_id: String,
+        hash: String,
+    },
+
+    /// Send hash list response to a peer who requested sync.
+    /// Contains hashes of messages we have buffered for them.
+    SendHashListResponse {
+        peer_id: String,
+        hashes: Vec<super::protocol::MessageHash>,
+    },
+
+    /// Send content response to a peer who requested a specific message.
+    /// Contains the full ClipboardMessage (already encrypted for the requesting peer).
+    SendContentResponse {
+        peer_id: String,
+        message: super::protocol::ClipboardMessage,
+    },
 }
 
 pub struct NetworkManager {
@@ -472,54 +500,152 @@ impl NetworkManager {
                                                     .await;
                                             }
                                         }
+                                        // Sync protocol handlers
+                                        ProtocolMessage::Sync(sync_msg) => {
+                                            match sync_msg {
+                                                super::protocol::SyncMessage::Request {
+                                                    peer_id: _claimed_peer_id,
+                                                } => {
+                                                    // NOTE: Security check (is_peer_paired) is done in lib.rs
+                                                    debug!("Received SyncRequest from {}", peer);
+
+                                                    // Store channel for response
+                                                    self.pending_responses.remove(&peer);
+                                                    self.pending_responses.insert(peer, channel);
+
+                                                    // Emit dedicated sync request event
+                                                    let _ = self
+                                                        .event_tx
+                                                        .send(NetworkEvent::SyncRequestReceived {
+                                                            peer_id: peer.to_string(),
+                                                        })
+                                                        .await;
+                                                }
+                                                super::protocol::SyncMessage::ContentRequest {
+                                                    hash,
+                                                } => {
+                                                    debug!(
+                                                        "Received ContentRequest from {} for hash {}",
+                                                        peer,
+                                                        &hash[..8.min(hash.len())]
+                                                    );
+
+                                                    // Store channel for response
+                                                    self.pending_responses.remove(&peer);
+                                                    self.pending_responses.insert(peer, channel);
+
+                                                    // Emit dedicated content request event
+                                                    let _ = self
+                                                        .event_tx
+                                                        .send(NetworkEvent::SyncContentRequestReceived {
+                                                            peer_id: peer.to_string(),
+                                                            hash,
+                                                        })
+                                                        .await;
+                                                }
+                                                _ => {
+                                                    debug!("Received unexpected sync message type as request: {:?}", sync_msg);
+                                                }
+                                            }
+                                        }
                                         _ => {
-                                            debug!("Received unexpected pairing message type as request");
+                                            debug!("Received unexpected protocol message type as request");
                                         }
                                     }
                                 }
                             }
                             request_response::Message::Response { response, .. } => {
-                                debug!("Received pairing response from {}", peer);
-                                // Handle pairing response
-                                if let Ok(ProtocolMessage::Pairing(pairing_msg)) =
+                                debug!("Received response from {}", peer);
+
+                                // Parse the protocol message
+                                if let Ok(protocol_msg) =
                                     ProtocolMessage::from_bytes(&response.message)
                                 {
-                                    // Process pairing message
-                                    match pairing_msg {
-                                        PairingMessage::Challenge(challenge) => {
-                                            let _ = self
-                                                .event_tx
-                                                .send(NetworkEvent::PairingPinReady {
-                                                    session_id: challenge.session_id,
-                                                    pin: challenge.pin,
-                                                    peer_device_name: challenge.device_name,
-                                                    peer_public_key: challenge.public_key,
-                                                })
-                                                .await;
-                                        }
-                                        PairingMessage::Confirm(confirm) => {
-                                            if confirm.success {
-                                                let _ = self
-                                                    .event_tx
-                                                    .send(NetworkEvent::PairingComplete {
-                                                        session_id: confirm.session_id,
-                                                        peer_id: peer.to_string(),
-                                                        device_name: "Unknown".to_string(),
-                                                    })
-                                                    .await;
-                                            } else {
-                                                let _ = self
-                                                    .event_tx
-                                                    .send(NetworkEvent::PairingFailed {
-                                                        session_id: confirm.session_id,
-                                                        error: confirm.error.unwrap_or_else(|| {
-                                                            "Unknown error".to_string()
-                                                        }),
-                                                    })
-                                                    .await;
+                                    match protocol_msg {
+                                        // Handle pairing responses
+                                        ProtocolMessage::Pairing(pairing_msg) => {
+                                            match pairing_msg {
+                                                PairingMessage::Challenge(challenge) => {
+                                                    let _ = self
+                                                        .event_tx
+                                                        .send(NetworkEvent::PairingPinReady {
+                                                            session_id: challenge.session_id,
+                                                            pin: challenge.pin,
+                                                            peer_device_name: challenge.device_name,
+                                                            peer_public_key: challenge.public_key,
+                                                        })
+                                                        .await;
+                                                }
+                                                PairingMessage::Confirm(confirm) => {
+                                                    if confirm.success {
+                                                        let _ = self
+                                                            .event_tx
+                                                            .send(NetworkEvent::PairingComplete {
+                                                                session_id: confirm.session_id,
+                                                                peer_id: peer.to_string(),
+                                                                device_name: "Unknown".to_string(),
+                                                            })
+                                                            .await;
+                                                    } else {
+                                                        let _ = self
+                                                            .event_tx
+                                                            .send(NetworkEvent::PairingFailed {
+                                                                session_id: confirm.session_id,
+                                                                error: confirm
+                                                                    .error
+                                                                    .unwrap_or_else(|| {
+                                                                        "Unknown error".to_string()
+                                                                    }),
+                                                            })
+                                                            .await;
+                                                    }
+                                                }
+                                                _ => {}
                                             }
                                         }
-                                        _ => {}
+
+                                        // Handle sync responses
+                                        ProtocolMessage::Sync(sync_msg) => {
+                                            match sync_msg {
+                                                super::protocol::SyncMessage::HashListResponse { hashes } => {
+                                                    // We received the list of hashes from a peer
+                                                    debug!(
+                                                        "Received HashListResponse from {} with {} hashes",
+                                                        peer,
+                                                        hashes.len()
+                                                    );
+                                                    let _ = self
+                                                        .event_tx
+                                                        .send(NetworkEvent::SyncHashListReceived {
+                                                            peer_id: peer.to_string(),
+                                                            hashes,
+                                                        })
+                                                        .await;
+                                                }
+                                                super::protocol::SyncMessage::ContentResponse { message } => {
+                                                    // We received the full content for a hash we requested
+                                                    debug!(
+                                                        "Received ContentResponse from {} for hash {}",
+                                                        peer,
+                                                        &message.content_hash[..8.min(message.content_hash.len())]
+                                                    );
+                                                    let _ = self
+                                                        .event_tx
+                                                        .send(NetworkEvent::SyncContentReceived {
+                                                            peer_id: peer.to_string(),
+                                                            message,
+                                                        })
+                                                        .await;
+                                                }
+                                                _ => {
+                                                    debug!("Received unexpected sync message type as response: {:?}", sync_msg);
+                                                }
+                                            }
+                                        }
+
+                                        _ => {
+                                            debug!("Received unexpected protocol message type as response");
+                                        }
                                     }
                                 }
                             }
@@ -929,6 +1055,106 @@ impl NetworkManager {
                     }
                     Err(e) => {
                         warn!("Failed to broadcast device name announcement: {}", e);
+                    }
+                }
+            }
+
+            NetworkCommand::RequestSync { peer_id } => {
+                // Send a SyncRequest to a peer to get hashes of messages we missed
+                if let Ok(peer) = peer_id.parse::<PeerId>() {
+                    let local_peer_id = self.swarm.local_peer_id().to_string();
+                    let sync_request = super::protocol::SyncMessage::Request {
+                        peer_id: local_peer_id,
+                    };
+                    let protocol_msg = ProtocolMessage::Sync(sync_request);
+                    if let Ok(message) = protocol_msg.to_bytes() {
+                        let request = ReqPairingRequest { message };
+                        self.swarm
+                            .behaviour_mut()
+                            .request_response
+                            .send_request(&peer, request);
+                        debug!("Sent SyncRequest to {}", peer_id);
+                    }
+                }
+            }
+
+            NetworkCommand::RequestContent { peer_id, hash } => {
+                // Request full content for a specific hash from a peer
+                if let Ok(peer) = peer_id.parse::<PeerId>() {
+                    let content_request =
+                        super::protocol::SyncMessage::ContentRequest { hash: hash.clone() };
+                    let protocol_msg = ProtocolMessage::Sync(content_request);
+                    if let Ok(message) = protocol_msg.to_bytes() {
+                        let request = ReqPairingRequest { message };
+                        self.swarm
+                            .behaviour_mut()
+                            .request_response
+                            .send_request(&peer, request);
+                        debug!(
+                            "Sent ContentRequest to {} for hash {}",
+                            peer_id,
+                            &hash[..8.min(hash.len())]
+                        );
+                    }
+                }
+            }
+
+            NetworkCommand::SendHashListResponse { peer_id, hashes } => {
+                // Send a hash list response to a peer who requested sync
+                if let Ok(peer) = peer_id.parse::<PeerId>() {
+                    if let Some(channel) = self.pending_responses.remove(&peer) {
+                        let hash_response =
+                            super::protocol::SyncMessage::HashListResponse { hashes };
+                        let protocol_msg = ProtocolMessage::Sync(hash_response);
+                        if let Ok(message) = protocol_msg.to_bytes() {
+                            let response = ReqPairingResponse { message };
+                            if self
+                                .swarm
+                                .behaviour_mut()
+                                .request_response
+                                .send_response(channel, response)
+                                .is_ok()
+                            {
+                                debug!("Sent HashListResponse to {}", peer_id);
+                            } else {
+                                warn!("Failed to send HashListResponse to {}", peer_id);
+                            }
+                        }
+                    } else {
+                        warn!(
+                            "No pending response channel for peer {} (HashListResponse)",
+                            peer_id
+                        );
+                    }
+                }
+            }
+
+            NetworkCommand::SendContentResponse { peer_id, message } => {
+                // Send content response to a peer who requested a specific message
+                if let Ok(peer) = peer_id.parse::<PeerId>() {
+                    if let Some(channel) = self.pending_responses.remove(&peer) {
+                        let content_response =
+                            super::protocol::SyncMessage::ContentResponse { message };
+                        let protocol_msg = ProtocolMessage::Sync(content_response);
+                        if let Ok(msg_bytes) = protocol_msg.to_bytes() {
+                            let response = ReqPairingResponse { message: msg_bytes };
+                            if self
+                                .swarm
+                                .behaviour_mut()
+                                .request_response
+                                .send_response(channel, response)
+                                .is_ok()
+                            {
+                                debug!("Sent ContentResponse to {}", peer_id);
+                            } else {
+                                warn!("Failed to send ContentResponse to {}", peer_id);
+                            }
+                        }
+                    } else {
+                        warn!(
+                            "No pending response channel for peer {} (ContentResponse)",
+                            peer_id
+                        );
                     }
                 }
             }

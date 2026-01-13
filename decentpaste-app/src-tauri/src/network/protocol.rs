@@ -9,6 +9,39 @@ pub enum ProtocolMessage {
     /// Announces device name to all peers on the network.
     /// Used when device name is changed in settings.
     DeviceAnnounce(DeviceAnnounceMessage),
+    /// Sync protocol messages for clipboard history synchronization.
+    /// Used to deliver missed clipboard messages to peers who were offline.
+    Sync(SyncMessage),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SyncMessage {
+    /// Request sync from a peer - sent when we reconnect after being offline.
+    /// The responding peer will reply with HashListResponse containing hashes
+    /// of messages we might have missed.
+    Request {
+        /// Our peer_id (so responder knows who's asking)
+        peer_id: String,
+    },
+    /// Response containing list of message hashes available for sync.
+    /// Requester will compare against their history and request missing content.
+    HashListResponse { hashes: Vec<MessageHash> },
+    /// Request full content for a specific hash.
+    /// Sent after receiving HashListResponse for hashes we don't have.
+    ContentRequest { hash: String },
+    /// Response containing full clipboard message content.
+    /// The message is already encrypted for the requesting peer.
+    ContentResponse { message: ClipboardMessage },
+}
+
+/// Represents a hash of a buffered message with its timestamp.
+/// Used in HashListResponse so requester can decide which messages to fetch.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MessageHash {
+    /// content_hash from ClipboardMessage
+    pub hash: String,
+    /// Original message timestamp for chronological sorting
+    pub timestamp: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
