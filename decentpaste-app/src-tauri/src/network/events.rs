@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use super::protocol::{ClipboardMessage, PairingRequest};
+use super::protocol::{ClipboardMessage, MessageHash, PairingRequest};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum NetworkStatus {
@@ -86,4 +86,27 @@ pub enum NetworkEvent {
     StatusChanged(NetworkStatus),
     #[allow(dead_code)]
     Error(String),
+
+    // Sync events (for offline message delivery)
+    /// A peer requested sync from us - we should send them our buffered hashes.
+    SyncRequestReceived {
+        peer_id: String,
+    },
+    /// A peer requested specific content by hash.
+    SyncContentRequestReceived {
+        peer_id: String,
+        hash: String,
+    },
+    /// Received a list of message hashes available from a peer.
+    /// Used to determine which messages we need to request.
+    SyncHashListReceived {
+        peer_id: String,
+        hashes: Vec<MessageHash>,
+    },
+    /// Received full message content after requesting via ContentRequest.
+    /// Contains the clipboard message to be decrypted and added to history.
+    SyncContentReceived {
+        peer_id: String,
+        message: ClipboardMessage,
+    },
 }
