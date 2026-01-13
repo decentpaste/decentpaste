@@ -54,7 +54,7 @@ Download the latest release for your platform:
 - [Rust](https://rustup.rs/) (1.70+)
 - [Node.js](https://nodejs.org/) (18+)
 - [Yarn](https://yarnpkg.com/)
-- Platform-specific requirements for [Tauri](https://tauri.app/v2/guides/getting-started/prerequisites)
+- Platform-specific requirements for [Tauri](https://tauri.app/start/prerequisites/)
 
 ```bash
 # Clone the repository
