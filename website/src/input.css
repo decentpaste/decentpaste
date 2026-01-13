@@ -869,13 +869,12 @@ body::after {
 }
 
 /* Enhanced navigation links with animated underline */
-nav a[href^='#'],
-nav a[href*='github'] {
+/* Applies to: anchor links (#), github, /blog/, and home (/) */
+.nav-link {
   position: relative;
 }
 
-nav a[href^='#']::after,
-nav a[href*='github']::after {
+.nav-link::after {
   content: '';
   position: absolute;
   bottom: -2px;
@@ -887,9 +886,26 @@ nav a[href*='github']::after {
   transform: translateX(-50%);
 }
 
-nav a[href^='#']:hover::after,
-nav a[href*='github']:hover::after {
+.nav-link:hover::after {
   width: 100%;
+}
+
+/* Active nav link - no underline animation, just solid color */
+.nav-link-active {
+  position: relative;
+  color: #14b8a6;
+}
+
+.nav-link-active::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 50%;
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(90deg, #14b8a6, #2dd4bf);
+  transform: translateX(-50%);
+  opacity: 0.5;
 }
 
 /* =============================================================================
@@ -1726,6 +1742,426 @@ button:focus-visible {
 
 .device-showcase:hover::after {
   opacity: 1;
+}
+
+/* =============================================================================
+   Blog - Prose Typography for Article Content
+   ============================================================================= */
+
+.prose {
+  color: rgba(255, 255, 255, 0.85);
+  max-width: 65ch;
+  line-height: 1.75;
+}
+
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4 {
+  font-family: var(--font-display);
+  color: #ffffff;
+  letter-spacing: var(--tracking-tight);
+  line-height: 1.2;
+}
+
+.prose h1 {
+  font-size: 2.25rem;
+  font-weight: 800;
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+}
+
+.prose h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-top: 2.5rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.prose h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-top: 2rem;
+  margin-bottom: 0.75rem;
+}
+
+.prose h4 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.prose p {
+  margin-bottom: 1.25rem;
+}
+
+.prose a {
+  color: #14b8a6;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color 0.2s ease;
+}
+
+.prose a:hover {
+  color: #2dd4bf;
+}
+
+.prose strong {
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.prose em {
+  font-style: italic;
+}
+
+/* Lists */
+.prose ul,
+.prose ol {
+  margin-bottom: 1.25rem;
+  padding-left: 1.5rem;
+}
+
+.prose li {
+  margin-bottom: 0.5rem;
+}
+
+.prose ul li {
+  list-style-type: disc;
+}
+
+.prose ul li::marker {
+  color: #14b8a6;
+}
+
+.prose ol li {
+  list-style-type: decimal;
+}
+
+.prose ol li::marker {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.prose li > ul,
+.prose li > ol {
+  margin-top: 0.5rem;
+  margin-bottom: 0;
+}
+
+/* Code */
+.prose code {
+  font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, 'DejaVu Sans Mono', monospace;
+  font-size: 0.875em;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 0.2em 0.4em;
+  border-radius: 0.375rem;
+  color: #f472b6;
+}
+
+.prose pre {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.75rem;
+  padding: 1rem 1.25rem;
+  overflow-x: auto;
+  margin-bottom: 1.5rem;
+}
+
+.prose pre code {
+  background: transparent;
+  padding: 0;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.875rem;
+  line-height: 1.7;
+}
+
+/* Blockquotes */
+.prose blockquote {
+  border-left: 3px solid #14b8a6;
+  padding-left: 1.25rem;
+  margin: 1.5rem 0;
+  font-style: italic;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.prose blockquote p {
+  margin-bottom: 0;
+}
+
+/* Horizontal rule */
+.prose hr {
+  border: none;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  margin: 2.5rem 0;
+}
+
+/* Images */
+.prose img {
+  border-radius: 0.75rem;
+  margin: 1.5rem 0;
+  max-width: 100%;
+  height: auto;
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.3);
+}
+
+/* Tables */
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5rem 0;
+  font-size: 0.9375rem;
+}
+
+.prose th,
+.prose td {
+  padding: 0.75rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  text-align: left;
+}
+
+.prose th {
+  background: rgba(255, 255, 255, 0.05);
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.prose tr:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* =============================================================================
+   Blog - Card Styling for Post Listings
+   ============================================================================= */
+
+.blog-card {
+  display: block;
+  padding: 1.5rem;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 1rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  text-decoration: none;
+}
+
+.blog-card:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(20, 184, 166, 0.3);
+  transform: translateY(-4px);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.3);
+}
+
+.blog-card:hover .blog-card-title {
+  color: #14b8a6;
+}
+
+.blog-card-date {
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.blog-card-title {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin-top: 0.5rem;
+  margin-bottom: 0.75rem;
+  transition: color 0.2s ease;
+  letter-spacing: var(--tracking-tight);
+}
+
+.blog-card-description {
+  font-size: 0.9375rem;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.6;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Blog Empty State */
+.blog-empty-state {
+  text-align: center;
+  padding: 3rem 1.5rem;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+  border-radius: 1rem;
+}
+
+.blog-empty-state p {
+  color: rgba(255, 255, 255, 0.5);
+  margin: 0;
+}
+
+/* =============================================================================
+   Blog - Mobile Responsive Styles
+   ============================================================================= */
+
+@media (max-width: 768px) {
+  /* Smaller headings on mobile */
+  .prose h1 {
+    font-size: 1.75rem;
+  }
+
+  .prose h2 {
+    font-size: 1.25rem;
+    margin-top: 2rem;
+  }
+
+  .prose h3 {
+    font-size: 1.125rem;
+  }
+
+  /* Code blocks - ensure horizontal scroll works */
+  .prose pre {
+    padding: 0.875rem 1rem;
+    font-size: 0.8125rem;
+    border-radius: 0.5rem;
+    /* Allow horizontal scroll on mobile */
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Tables - make scrollable on mobile */
+  .prose table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    font-size: 0.875rem;
+  }
+
+  .prose th,
+  .prose td {
+    padding: 0.5rem 0.75rem;
+    white-space: nowrap;
+  }
+
+  /* Blockquotes - smaller padding */
+  .prose blockquote {
+    padding-left: 1rem;
+    margin: 1rem 0;
+  }
+
+  /* Blog cards - adjust padding */
+  .blog-card {
+    padding: 1.25rem;
+  }
+
+  .blog-card-title {
+    font-size: 1.125rem;
+  }
+
+  .blog-card-description {
+    font-size: 0.875rem;
+    -webkit-line-clamp: 3;
+  }
+}
+
+@media (max-width: 480px) {
+  .prose h1 {
+    font-size: 1.5rem;
+  }
+
+  .prose h2 {
+    font-size: 1.125rem;
+  }
+
+  /* Even smaller code on very small screens */
+  .prose pre {
+    font-size: 0.75rem;
+    padding: 0.75rem;
+    margin-left: -0.5rem;
+    margin-right: -0.5rem;
+    border-radius: 0;
+  }
+
+  .blog-card {
+    padding: 1rem;
+  }
+}
+
+/* =============================================================================
+   Blog - Syntax Highlighting (highlight.js dark theme)
+   ============================================================================= */
+
+/* Base code block styling is already in .prose pre code */
+
+.hljs {
+  background: transparent;
+}
+
+/* Comments */
+.hljs-comment,
+.hljs-quote {
+  color: rgba(255, 255, 255, 0.4);
+  font-style: italic;
+}
+
+/* Keywords, tags */
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-tag {
+  color: #c792ea;
+}
+
+/* Strings */
+.hljs-string,
+.hljs-addition {
+  color: #c3e88d;
+}
+
+/* Numbers, constants */
+.hljs-number,
+.hljs-literal,
+.hljs-variable,
+.hljs-template-variable {
+  color: #f78c6c;
+}
+
+/* Functions, methods */
+.hljs-title,
+.hljs-section,
+.hljs-name {
+  color: #82aaff;
+}
+
+/* Types, classes */
+.hljs-type,
+.hljs-built_in,
+.hljs-class .hljs-title {
+  color: #ffcb6b;
+}
+
+/* Attributes */
+.hljs-attr,
+.hljs-attribute {
+  color: #14b8a6;
+}
+
+/* Symbols, regex */
+.hljs-symbol,
+.hljs-regexp,
+.hljs-link {
+  color: #89ddff;
+}
+
+/* Meta, preprocessor */
+.hljs-meta,
+.hljs-deletion {
+  color: #ff5370;
+}
+
+/* Emphasis */
+.hljs-emphasis {
+  font-style: italic;
+}
+
+.hljs-strong {
+  font-weight: bold;
 }
 
 /* Touch hint for mobile */

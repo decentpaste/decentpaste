@@ -1,17 +1,17 @@
 # DecentPaste - robots.txt
-# https://decentpaste.app
+# https://decentpaste.com
 
 User-agent: *
 Allow: /
 
 # Sitemap location
-Sitemap: https://decentpaste.app/sitemap.xml
+Sitemap: https://decentpaste.com/sitemap.xml
 
 # Crawl-delay (optional, be gentle with the server)
 Crawl-delay: 1
 
-# Block common bot traps and unnecessary paths
-Disallow: /*.json$
+# Block JSON data files (not meant for indexing)
+Disallow: /downloads.json
 
 # Allow all major search engines
 User-agent: Googlebot

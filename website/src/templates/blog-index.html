@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en" class="scroll-smooth">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Blog - DecentPaste</title>
+    <meta
+      name="description"
+      content="Updates, tutorials, and announcements from the DecentPaste team. Learn about privacy-first clipboard sharing."
+    />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
+    <meta name="theme-color" content="#0a0a0b" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="DecentPaste" />
+    <meta name="mobile-web-app-capable" content="yes" />
+
+    <!-- Canonical URL -->
+    <link rel="canonical" href="https://decentpaste.com/blog/" />
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Blog - DecentPaste" />
+    <meta
+      property="og:description"
+      content="Updates, tutorials, and announcements from the DecentPaste team."
+    />
+    <meta property="og:url" content="https://decentpaste.com/blog/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="DecentPaste" />
+    <meta property="og:image" content="https://decentpaste.com/assets/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://decentpaste.com/assets/og-image.png" />
+    <meta name="twitter:title" content="Blog - DecentPaste" />
+    <meta
+      name="twitter:description"
+      content="Updates, tutorials, and announcements from the DecentPaste team."
+    />
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/assets/logo_dark.svg" />
+    <link rel="icon" type="image/x-icon" href="/assets/favicon.ico" />
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+
+    <!-- RSS Feed -->
+    <link rel="alternate" type="application/rss+xml" title="DecentPaste Blog" href="/blog/feed.xml" />
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@700;800&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@700;800&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+      media="print"
+      onload="this.media = 'all'"
+    />
+    <noscript>
+      <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@700;800&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap"
+        rel="stylesheet"
+      />
+    </noscript>
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="/output.css" />
+  </head>
+  <body class="font-sans antialiased bg-[#0a0a0b] text-white overflow-x-hidden">
+    <!-- Gradient Background Orbs -->
+    <div class="fixed inset-0 -z-10 overflow-hidden">
+      <div
+        class="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-teal-500/15 rounded-full blur-[120px]"
+      ></div>
+      <div
+        class="absolute top-[50%] right-[-15%] w-[400px] h-[400px] bg-orange-500/10 rounded-full blur-[100px]"
+      ></div>
+    </div>
+
+    <!-- Navigation -->
+    <nav id="navbar" class="fixed top-0 w-full z-50 bg-[#0a0a0b]/80 backdrop-blur-xl border-b border-white/10">
+      <div class="max-w-6xl mx-auto px-6 lg:px-8">
+        <div class="flex justify-between h-20 items-center">
+          <!-- Logo -->
+          <a href="/" class="flex items-center gap-3 group" aria-label="DecentPaste home">
+            <img
+              src="/assets/logo_dark.svg"
+              alt="DecentPaste logo"
+              class="h-12 w-12 transition-transform duration-300 group-hover:scale-110"
+              width="48"
+              height="48"
+              fetchpriority="high"
+              decoding="async"
+            />
+            <span class="font-bold text-xl tracking-tight">DecentPaste</span>
+          </a>
+
+          <!-- Navigation Links -->
+          <div class="hidden md:flex items-center gap-8">
+            <a
+              href="/"
+              class="nav-link text-white/60 hover:text-white transition-colors duration-300 text-sm font-medium"
+            >
+              Home
+            </a>
+            <a
+              href="/blog/"
+              class="nav-link-active text-sm font-medium"
+            >
+              Blog
+            </a>
+            <a
+              href="https://github.com/decentpaste/decentpaste"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="nav-link text-white/60 hover:text-white transition-colors duration-300 text-sm font-medium flex items-center gap-1.5"
+            >
+              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                <path
+                  d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"
+                />
+              </svg>
+              GitHub
+            </a>
+          </div>
+
+          <!-- Mobile Menu Button -->
+          <button
+            id="mobile-menu-btn"
+            class="md:hidden p-2 rounded-xl hover:bg-white/10 transition-colors"
+            aria-label="Toggle navigation menu"
+          >
+            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Mobile Menu -->
+      <div id="mobile-menu" class="hidden md:hidden bg-[#0a0a0b]/95 backdrop-blur-xl border-t border-white/10">
+        <div class="px-6 py-6 space-y-4">
+          <a href="/" class="block py-2 text-white/60 hover:text-white transition-colors font-medium">Home</a>
+          <a href="/blog/" class="block py-2 text-teal-400 font-medium">Blog</a>
+          <a
+            href="https://github.com/decentpaste/decentpaste"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="block py-2 text-white/60 hover:text-white transition-colors font-medium"
+          >GitHub</a>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="pt-32 pb-20" role="main">
+      <div class="max-w-3xl mx-auto px-6 lg:px-8">
+        <!-- Header -->
+        <header class="mb-16">
+          <h1 class="text-4xl md:text-5xl font-bold tracking-tighter mb-4">Blog</h1>
+          <p class="text-white/60 text-lg">Updates, tutorials, and announcements from the DecentPaste team.</p>
+        </header>
+
+        <!-- Posts List -->
+        <div class="space-y-6">
+          {{posts}}
+        </div>
+
+        <!-- Empty State (shown when no posts) -->
+        {{emptyState}}
+      </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="py-12 border-t border-white/10" role="contentinfo">
+      <div class="max-w-6xl mx-auto px-6 lg:px-8">
+        <div class="flex flex-col items-center gap-6">
+          <!-- Logo -->
+          <a href="/" class="flex items-center gap-3 hover:opacity-80 transition-opacity">
+            <img
+              src="/assets/logo_dark.svg"
+              alt="DecentPaste logo"
+              class="h-10 w-10"
+              width="40"
+              height="40"
+              loading="lazy"
+              decoding="async"
+            />
+            <span class="font-semibold">DecentPaste</span>
+          </a>
+
+          <!-- Links -->
+          <div class="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-white/60">
+            <a href="/blog/" class="text-teal-400">Blog</a>
+            <a
+              href="https://github.com/decentpaste/decentpaste"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="hover:text-white transition-colors"
+              >GitHub</a
+            >
+            <a href="/privacy.html" class="hover:text-white transition-colors">Privacy</a>
+            <a
+              href="https://github.com/decentpaste/decentpaste/blob/main/LICENSE"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="hover:text-white transition-colors"
+              >License</a
+            >
+          </div>
+
+          <!-- Made with -->
+          <p class="text-sm text-white/50">Made with <span class="text-red-400">&#10084;</span> for privacy</p>
+        </div>
+      </div>
+    </footer>
+
+    <!-- Mobile Menu Toggle Script -->
+    <script>
+      document.getElementById('mobile-menu-btn')?.addEventListener('click', function() {
+        const menu = document.getElementById('mobile-menu');
+        menu?.classList.toggle('hidden');
+      });
+    </script>
+  </body>
+</html>
