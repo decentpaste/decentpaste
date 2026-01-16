@@ -1,7 +1,6 @@
 import { store, type Toast, type View } from './state/store';
 import { eventManager } from './api/events';
 import * as commands from './api/commands';
-import { readText } from '@tauri-apps/plugin-clipboard-manager';
 import { getVersion } from '@tauri-apps/api/app';
 import { icon, type IconName } from './components/icons';
 import { $, escapeHtml, formatTime, truncate } from './utils/dom';
@@ -281,22 +280,6 @@ class App {
       // Clear history confirmation - cancel button
       if (target.closest('#btn-cancel-clear-history')) {
         store.set('showClearHistoryConfirm', false);
-        return;
-      }
-
-      // Share clipboard button
-      if (target.closest('#btn-share-clipboard')) {
-        try {
-          const content = await readText();
-          if (!content || content.trim() === '') {
-            store.addToast('Clipboard is empty', 'error');
-            return;
-          }
-          await commands.shareClipboardContent(content);
-          store.addToast('Clipboard shared with peers', 'success');
-        } catch (error) {
-          store.addToast(`Failed to share: ${getErrorMessage(error)}`, 'error');
-        }
         return;
       }
 
@@ -1337,10 +1320,6 @@ class App {
               </div>
             </button>
           </div>
-          <button id="btn-share-clipboard" class="btn-primary w-full mb-6">
-            ${icon('share', 18)}
-            <span>Share Now</span>
-          </button>
 
           <!-- Clipboard History Header -->
           <div class="flex items-center justify-between mb-3">

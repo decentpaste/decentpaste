@@ -460,7 +460,6 @@ Tauri commands exposed to frontend:
 | `cancel_pairing`                   | Cancel an active pairing session                                                |
 | `get_clipboard_history`            | Get clipboard history                                                           |
 | `set_clipboard`                    | Set clipboard content                                                           |
-| `share_clipboard_content`          | Manually share clipboard with peers (for mobile)                                |
 | `clear_clipboard_history`          | Clear all clipboard history                                                     |
 | `reconnect_peers`                  | Trigger reconnection to disconnected peers (for mobile background resume)       |
 | `refresh_connections`              | Awaitable reconnection, returns `ConnectionSummary` with connected/failed count |
@@ -528,7 +527,7 @@ Single-file application with authentication and main views:
 - **Lock Screen**: PIN input for returning users, "Forgot PIN?" reset option
 
 **Main Views (after unlock):**
-1. **Dashboard**: Auto Sync toggle, paired devices shortcut, Share Now action, and clipboard history
+1. **Dashboard**: Auto Sync toggle, paired devices shortcut, and clipboard history
 2. **Peers**: Discovered and paired devices, pairing UI
 3. **Settings**: Device name, notifications, history settings, security (auto-lock), lock button
 
@@ -816,9 +815,7 @@ yarn build
 
 1. **Text-only clipboard**: Currently only supports text. Images/files could be added.
 2. **Local network only**: Uses mDNS, so devices must be on same network. Internet relay could be added.
-3. **Mobile clipboard (outgoing)**: On Android/iOS, automatic clipboard monitoring is not supported. Users can either:
-   - Use the in-app "Share Now" button to send current clipboard
-   - Use system share sheet from any app to share directly (via `tauri-plugin-decentshare` - works on both Android and iOS)
+3. **Mobile clipboard (outgoing)**: On Android/iOS, automatic clipboard monitoring is not supported. Users must use the system share sheet from any app to share directly (via `tauri-plugin-decentshare` - works on both Android and iOS)
 4. **Mobile clipboard (incoming)**: Clipboard only syncs when the app is in foreground. Network connections drop when
    the app is backgrounded (same behavior on both Android and iOS).
 5. **Device name in identify**: The identify protocol includes device name in `agent_version` field, which is

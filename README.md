@@ -91,12 +91,10 @@ yarn tauri build
 
 ### Mobile Usage
 
-On Android, clipboard access is restricted for privacy. Two ways to share:
+On Android/iOS, clipboard access is restricted for privacy. To share content:
 
-1. **Direct share** (easiest): Select text in any app → Share → Choose **DecentPaste**
+**Direct share**: Select text in any app → Share → Choose **DecentPaste**
    Sent directly to paired devices — no clipboard involved.
-
-2. **Via clipboard**: Select text → Share → "Copy to clipboard" → Open DecentPaste → Tap **"Share Now"**
 
 **Note**: Keep the app open on both devices during pairing (background connections are not supported).
 
