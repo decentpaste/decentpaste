@@ -273,6 +273,7 @@ function generateSitemap(posts) {
   const staticPages = [
     { loc: '/', priority: '1.0', changefreq: 'weekly' },
     { loc: '/privacy.html', priority: '0.5', changefreq: 'monthly' },
+    { loc: '/support.html', priority: '0.6', changefreq: 'monthly' },
     { loc: '/blog/', priority: '0.9', changefreq: 'weekly' },
   ];
 
@@ -372,7 +373,7 @@ async function build() {
   // 3. Minify HTML files
   console.log('📄 Minifying HTML...');
 
-  const htmlFiles = ['index.html', 'privacy.html'];
+  const htmlFiles = ['index.html', 'privacy.html', 'support.html'];
   for (const file of htmlFiles) {
     try {
       let html = readFileSync(join(ROOT, file), 'utf-8');

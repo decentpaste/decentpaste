@@ -10,7 +10,7 @@ import {
 } from './api/commands';
 import { store } from './state/store';
 import { checkForUpdates } from './api/updater';
-import { isDesktop, isMobile } from './utils/platform';
+import { initPlatform, isDesktop, isMobile } from './utils/platform';
 import { getPendingShare } from 'tauri-plugin-decentshare-api';
 
 // Track if the app has fully initialized (Tauri IPC is ready)
@@ -120,6 +120,10 @@ async function checkForPendingShare(): Promise<void> {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+  // Initialize platform detection first - this must happen before any platform checks
+  // Uses Tauri's @tauri-apps/plugin-os for accurate detection (iPad reports as Mac in UA)
+  await initPlatform();
+
   const root = document.getElementById('app');
   if (root) {
     await initApp(root);
