@@ -285,10 +285,11 @@
                 </p>
               </div>
               <div class="p-4 rounded-xl bg-white/5 border border-white/10">
-                <h4 class="font-semibold text-white/80 mb-2">Encrypted Local Storage (IOTA Stronghold)</h4>
+                <h4 class="font-semibold text-white/80 mb-2">Platform-Native Secure Storage</h4>
                 <p class="text-sm">
-                  All sensitive data (keys, paired devices, clipboard history) is stored in an encrypted vault protected
-                  by your PIN. The vault uses Argon2id key derivation to protect against brute-force attacks.
+                  Your encryption keys and paired devices are protected using platform-native security: Face ID / Touch ID
+                  on mobile devices, and the OS keychain (Keychain on macOS, Credential Manager on Windows, Secret Service on Linux)
+                  on desktop. A PIN fallback is available when biometrics aren't supported.
                 </p>
               </div>
               <div class="p-4 rounded-xl bg-white/5 border border-white/10">
