@@ -378,8 +378,8 @@ async function build() {
     try {
       let html = readFileSync(join(ROOT, file), 'utf-8');
 
-      // Update CSS path for production (dist/output.css -> output.css)
       html = html.replace('href="dist/output.css"', 'href="output.css"');
+      html = html.replace('src="dist/script.js"', 'src="script.js"');
 
       const minifiedHTML = await minifyHTML(html, htmlMinifyOptions);
       writeFileSync(join(DIST, file), minifiedHTML);
