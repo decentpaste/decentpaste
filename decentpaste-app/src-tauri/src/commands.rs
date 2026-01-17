@@ -10,7 +10,7 @@ use crate::clipboard::ClipboardEntry;
 use crate::error::{DecentPasteError, Result};
 use crate::network::{DiscoveredPeer, NetworkCommand, NetworkStatus};
 use crate::security::{generate_pin, PairingSession, PairingState};
-use crate::state::{AppState, ConnectionStatus, PeerConnectionState};
+use crate::state::AppState;
 use crate::storage::{save_settings, AppSettings, PairedPeer};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1052,12 +1052,10 @@ pub async fn flush_vault(state: State<'_, AppState>) -> Result<()> {
 pub struct ShareResult {
     /// Total number of paired peers
     pub total_peers: usize,
-    /// Number of peers that were online and received the content
-    pub peers_reached: usize,
-    /// Number of peers that were offline
-    pub peers_offline: usize,
     /// Whether the content was added to clipboard history
     pub added_to_history: bool,
+    /// Whether the share operation succeeded
+    pub success: bool,
 }
 
 /// Summary of connection status after ensure_connected() completes.
@@ -1065,10 +1063,8 @@ pub struct ShareResult {
 pub struct ConnectionSummary {
     /// Total number of paired peers
     pub total_peers: usize,
-    /// Number of peers currently connected
-    pub connected: usize,
-    /// Number of peers that failed to connect
-    pub failed: usize,
+    /// Whether the reconnection operation succeeded
+    pub success: bool,
 }
 
 // =============================================================================
@@ -1079,9 +1075,9 @@ pub struct ConnectionSummary {
 ///
 /// This function:
 /// 1. Guards against concurrent reconnection attempts
-/// 2. Only dials peers that are currently disconnected
+/// 2. Dials all paired peers that aren't in ready_peers
 /// 3. Waits for all dials to complete or timeout
-/// 4. Returns a summary of connection status
+/// 4. Returns a simple success/total summary
 ///
 /// The function is awaitable - it returns when all dial attempts complete,
 /// not fire-and-forget like the old reconnect_peers command.
@@ -1100,26 +1096,20 @@ pub async fn ensure_connected(state: &AppState, timeout: Duration) -> Connection
         state.reconnect_in_progress.store(false, Ordering::SeqCst);
         return ConnectionSummary {
             total_peers: 0,
-            connected: 0,
-            failed: 0,
+            success: true,
         };
     }
 
-    // Find disconnected peers (status != Connected)
+    // Find peers not in ready_peers (need to dial)
     let to_dial: Vec<_> = {
-        let conns = state.peer_connections.read().await;
+        let ready = state.ready_peers.read().await;
         paired
             .iter()
-            .filter(|p| {
-                conns
-                    .get(&p.peer_id)
-                    .map(|c| c.status != ConnectionStatus::Connected)
-                    .unwrap_or(true) // Not in map = disconnected
-            })
+            .filter(|p| !ready.contains(&p.peer_id))
             .cloned()
             .collect()
     };
-    drop(paired); // Release read lock before write
+    drop(paired); // Release read lock
 
     if to_dial.is_empty() {
         // All peers already connected
@@ -1127,21 +1117,7 @@ pub async fn ensure_connected(state: &AppState, timeout: Duration) -> Connection
         return get_connection_summary(state).await;
     }
 
-    // Mark as Connecting and count pending dials
-    {
-        let mut conns = state.peer_connections.write().await;
-        for peer in &to_dial {
-            // Get last_connected value before mutable borrow
-            let last_connected = conns.get(&peer.peer_id).and_then(|c| c.last_connected);
-            conns.insert(
-                peer.peer_id.clone(),
-                PeerConnectionState {
-                    status: ConnectionStatus::Connecting,
-                    last_connected,
-                },
-            );
-        }
-    }
+    // Count pending dials
     state.pending_dials.store(to_dial.len(), Ordering::SeqCst);
 
     debug!(
@@ -1169,16 +1145,6 @@ pub async fn ensure_connected(state: &AppState, timeout: Duration) -> Connection
     // Wait for all dials to complete OR timeout
     let _ = tokio::time::timeout(timeout, state.dials_complete_notify.notified()).await;
 
-    // Mark any still-connecting peers as disconnected (timeout)
-    {
-        let mut conns = state.peer_connections.write().await;
-        for (_, conn) in conns.iter_mut() {
-            if conn.status == ConnectionStatus::Connecting {
-                conn.status = ConnectionStatus::Disconnected;
-            }
-        }
-    }
-
     // Reset pending count and guard
     state.pending_dials.store(0, Ordering::SeqCst);
     state.reconnect_in_progress.store(false, Ordering::SeqCst);
@@ -1189,22 +1155,14 @@ pub async fn ensure_connected(state: &AppState, timeout: Duration) -> Connection
 /// Get a summary of current connection status for paired peers.
 async fn get_connection_summary(state: &AppState) -> ConnectionSummary {
     let paired = state.paired_peers.read().await;
-    let conns = state.peer_connections.read().await;
+    let ready = state.ready_peers.read().await;
 
-    let connected = paired
-        .iter()
-        .filter(|p| {
-            conns
-                .get(&p.peer_id)
-                .map(|c| c.status == ConnectionStatus::Connected)
-                .unwrap_or(false)
-        })
-        .count();
+    // Success if at least one peer is ready, or if there are no paired peers
+    let has_ready_peers = paired.iter().any(|p| ready.contains(&p.peer_id));
 
     ConnectionSummary {
         total_peers: paired.len(),
-        connected,
-        failed: paired.len() - connected,
+        success: has_ready_peers || paired.is_empty(),
     }
 }
 
@@ -1253,8 +1211,8 @@ pub async fn handle_shared_content(
     let summary = ensure_connected(&state, Duration::from_secs(3)).await;
 
     info!(
-        "Connection summary: {}/{} connected",
-        summary.connected, summary.total_peers
+        "Connection summary: {} peers, success={}",
+        summary.total_peers, summary.success
     );
 
     // 4. Share the content using existing share_clipboard_content logic
@@ -1264,9 +1222,8 @@ pub async fn handle_shared_content(
     // 5. Return DTO - UI decides how to present this to user
     Ok(ShareResult {
         total_peers: summary.total_peers,
-        peers_reached: summary.connected,
-        peers_offline: summary.failed,
         added_to_history: true,
+        success: summary.success,
     })
 }
 

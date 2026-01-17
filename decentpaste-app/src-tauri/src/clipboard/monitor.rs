@@ -58,7 +58,6 @@ impl ClipboardMonitor {
 
                 // Try to read clipboard using Tauri plugin
                 // Note: On Android/iOS, the Rust clipboard API may not work for reading.
-                // In that case, clipboard monitoring is disabled and users share manually.
                 #[cfg(not(any(target_os = "android", target_os = "ios")))]
                 {
                     const MAX_CLIPBOARD_SIZE: usize = 1024 * 1024; // 1MB limit

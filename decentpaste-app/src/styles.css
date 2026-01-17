@@ -536,37 +536,6 @@ h3,
 }
 
 /* =============================================================================
-   Status Indicators
-   ============================================================================= */
-
-.status-dot {
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.status-connected {
-  background: #4ade80;
-  box-shadow: 0 0 8px rgba(74, 222, 128, 0.6);
-}
-
-.status-connecting {
-  background: #fbbf24;
-  box-shadow: 0 0 8px rgba(251, 191, 36, 0.6);
-  animation: pulse-glow 2s ease-in-out infinite;
-}
-
-.status-disconnected {
-  background: rgba(255, 255, 255, 0.3);
-}
-
-.status-error {
-  background: #f87171;
-  box-shadow: 0 0 8px rgba(248, 113, 113, 0.6);
-}
-
-/* =============================================================================
    PIN Display (matching website style)
    ============================================================================= */
 

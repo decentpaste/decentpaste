@@ -2,8 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicUsize};
 use std::sync::Arc;
 
-use chrono::{DateTime, Duration, Utc};
-use serde::Serialize;
+use chrono::{Duration, Utc};
 use tokio::sync::{mpsc, Notify, RwLock};
 use tracing::{debug, warn};
 
@@ -23,26 +22,6 @@ pub const SYNC_MAX_BUFFER_SIZE: usize = 1;
 /// Messages older than this are filtered out during sync.
 /// 5 minutes is sufficient for typical offline durations (app restart, mobile background).
 pub const SYNC_TTL_SECONDS: i64 = 60 * 5;
-
-/// Connection status for a paired peer.
-/// Used for per-device tracking and UI status indicators.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum ConnectionStatus {
-    /// Peer is connected (libp2p connection + gossipsub subscribed)
-    Connected,
-    /// Dial attempt in progress
-    Connecting,
-    /// Not connected
-    Disconnected,
-}
-
-/// Connection state for a single peer.
-#[derive(Debug, Clone)]
-pub struct PeerConnectionState {
-    pub status: ConnectionStatus,
-    pub last_connected: Option<DateTime<Utc>>,
-}
 
 /// Clipboard content received while app was in background (Android)
 #[derive(Debug, Clone)]
@@ -77,11 +56,6 @@ pub struct AppState {
     // =========================================================================
     // Connection Management State
     // =========================================================================
-    /// Per-peer connection state for paired peers.
-    /// Maps peer_id -> connection state (status + last_connected time).
-    /// Used for UI status indicators and smart reconnection.
-    pub peer_connections: Arc<RwLock<HashMap<String, PeerConnectionState>>>,
-
     /// Guard against concurrent reconnection attempts.
     /// Only one ensure_connected() operation runs at a time.
     pub reconnect_in_progress: AtomicBool,
@@ -123,7 +97,6 @@ impl AppState {
             vault_manager: Arc::new(RwLock::new(None)), // No vault manager until unlocked
 
             // Connection management
-            peer_connections: Arc::new(RwLock::new(HashMap::new())),
             reconnect_in_progress: AtomicBool::new(false),
             pending_dials: AtomicUsize::new(0),
             dials_complete_notify: Arc::new(Notify::new()),

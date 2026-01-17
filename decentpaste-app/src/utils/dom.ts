@@ -58,22 +58,6 @@ export function truncate(str: string, maxLength: number): string {
 }
 
 /**
- * Returns the CSS class for the network status indicator dot.
- */
-export function getStatusColor(status: string): string {
-  switch (status) {
-    case 'Connected':
-      return 'status-connected';
-    case 'Connecting':
-      return 'status-connecting';
-    case 'Disconnected':
-      return 'status-disconnected';
-    default:
-      return 'status-error';
-  }
-}
-
-/**
  * Converts a NetworkStatus value to a human-readable string.
  * Handles both simple string statuses and object-based error states.
  */

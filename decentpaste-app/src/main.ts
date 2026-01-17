@@ -47,7 +47,7 @@ async function handleShareIntent(content: string): Promise<void> {
     const message = formatShareResultMessage(result);
 
     // Determine toast type based on result
-    const toastType = result.peersReached > 0 ? 'success' : 'info';
+    const toastType = result.success ? 'success' : 'info';
     store.addToast(message, toastType);
   } catch (error) {
     console.error('Failed to handle shared content:', error);
@@ -88,7 +88,7 @@ async function handleShareIntent(content: string): Promise<void> {
  *    - Triggers peer reconnection (ensure_connected)
  *    - Waits for connections with proper async primitives (not polling)
  *    - Broadcasts via gossipsub
- *    - Returns honest status: "Sent to 2/3. 1 offline."
+ *    - Returns success/total summary for toast display
  */
 async function checkForPendingShare(): Promise<void> {
   if (!isMobile()) {

@@ -232,20 +232,15 @@ class App {
       // Refresh peers button - triggers reconnection to paired devices
       if (target.closest('#btn-refresh-peers')) {
         try {
-          // Show connecting state for all paired peers
-          store.setAllPeersConnecting();
-
           // Awaitable refresh - returns when all dials complete or timeout
           const summary = await commands.refreshConnections();
 
-          if (summary.connected === summary.total_peers) {
-            store.addToast(`Connected to all ${summary.connected} device(s)`, 'success');
-          } else if (summary.connected > 0) {
-            store.addToast(`Connected to ${summary.connected}/${summary.total_peers} devices`, 'info');
-          } else if (summary.total_peers > 0) {
-            store.addToast(`No devices online (${summary.total_peers} paired)`, 'info');
-          } else {
+          if (summary.total_peers === 0) {
             store.addToast('No paired devices', 'info');
+          } else if (summary.success) {
+            store.addToast(`Refreshed connections (${summary.total_peers} device(s))`, 'success');
+          } else {
+            store.addToast(`Reconnecting to ${summary.total_peers} device(s)...`, 'info');
           }
         } catch (error) {
           store.addToast(`Refresh failed: ${getErrorMessage(error)}`, 'error');
@@ -826,11 +821,6 @@ class App {
       store.updatePeerName(payload.peerId, payload.deviceName);
     });
 
-    // Connection status updates for UI indicators
-    eventManager.on('peerConnectionStatus', (payload) => {
-      store.updatePeerConnection(payload.peer_id, payload.status);
-    });
-
     eventManager.on('clipboardReceived', (entry) => {
       store.addClipboardEntry(entry);
 
@@ -982,7 +972,7 @@ class App {
 
       // Format message from DTO and determine toast type
       const message = commands.formatShareResultMessage(result);
-      const toastType = result.peersReached > 0 ? 'success' : 'info';
+      const toastType = result.success ? 'success' : 'info';
       store.addToast(message, toastType);
     } catch (error) {
       console.error('Failed to process pending share:', error);
@@ -1033,7 +1023,6 @@ class App {
     store.subscribe('currentView', () => this.render());
     store.subscribe('discoveredPeers', () => this.renderPeersList());
     store.subscribe('pairedPeers', () => this.renderPeersList());
-    store.subscribe('peerConnections', () => this.renderPeersList());
     store.subscribe('clipboardHistory', () => this.renderClipboardHistory());
     store.subscribe('toasts', () => this.renderToasts());
     store.subscribe('showPairingModal', () => this.renderPairingModal());
@@ -2054,27 +2043,16 @@ class App {
 
   private renderPairedPeer(peer: PairedPeer): string {
     const safeName = escapeHtml(peer.device_name);
-    const connections = store.get('peerConnections');
-    const status = connections.get(peer.peer_id) || 'disconnected';
-
-    const statusClass = {
-      connected: 'status-connected',
-      connecting: 'status-connecting',
-      disconnected: 'status-disconnected',
-    }[status];
-
-    const statusText = status === 'connected' ? 'Online' : status === 'connecting' ? 'Connecting...' : 'Offline';
 
     return `
       <div class="card p-3 flex items-center justify-between">
         <div class="flex items-center gap-3">
-          <div class="icon-container-green relative">
+          <div class="icon-container-green">
             ${icon('monitor', 18)}
-            <span class="status-dot ${statusClass} absolute -bottom-0.5 -right-0.5"></span>
           </div>
           <div>
             <p class="text-sm font-medium text-white">${safeName}</p>
-            <p class="text-xs text-white/40">${statusText}</p>
+            <p class="text-xs text-white/40">Paired device</p>
           </div>
         </div>
         <button

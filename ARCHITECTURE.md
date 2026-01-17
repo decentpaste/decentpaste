@@ -203,9 +203,8 @@ Manages the libp2p swarm lifecycle:
 - Accepts a persisted keypair for consistent PeerId across restarts
 - Handles incoming network events (peer discovery, messages)
 - Processes commands from the main app (send clipboard, initiate pairing)
-- Maintains peer connection state (Connected/Connecting/Disconnected per peer)
+- Maintains `ready_peers` set for message routing (peers subscribed to gossipsub)
 - Filters out already-paired peers from discovery events
-- **Connection tracking**: Per-peer status emitted to frontend via `peer-connection-status` events
 - **Gossipsub optimization**: Adds peers to explicit peer list on connection for immediate mesh inclusion
 - **Mobile support**: Handles `ReconnectPeers` command for app resume from background
 - **Device name tracking**: Stores current device name and announces it on new connections
@@ -481,9 +480,8 @@ Tauri commands exposed to frontend:
 |--------------------------|-----------------------------------|-------------------------------------------------------------------|
 | `network-status`         | `NetworkStatus`                   | Network state changed                                             |
 | `peer-discovered`        | `DiscoveredPeer`                  | New peer found                                                    |
-| `peer-lost`              | `string` (peer_id)                | Peer went offline                                                 |
+| `peer-lost`              | `string` (peer_id)                | Peer no longer discovered via mDNS                                |
 | `peer-name-updated`      | `{peerId, deviceName}`            | Peer's device name changed (via DeviceAnnounce)                   |
-| `peer-connection-status` | `{peer_id, status}`               | Peer connection state changed (connected/connecting/disconnected) |
 | `clipboard-received`     | `ClipboardEntry`                  | Clipboard from peer                                               |
 | `pairing-request`        | `{sessionId, peerId, deviceName}` | Incoming pairing request                                          |
 | `pairing-pin`            | `{sessionId, pin}`                | PIN ready to display                                              |
@@ -694,10 +692,10 @@ If the vault is locked when content is shared:
 
 The Rust `handle_shared_content` command uses `ensure_connected()`:
 1. Guards against concurrent reconnection attempts (only one at a time)
-2. Identifies disconnected peers and marks them as "Connecting"
-3. Dials disconnected peers, waits via `tokio::sync::Notify` (no polling)
+2. Identifies peers not in `ready_peers` and dials them
+3. Waits via `tokio::sync::Notify` (no polling) for connections
 4. Returns when all dials complete or 3s timeout
-5. Provides honest feedback: "Sent to 2/3. 1 offline." (gossipsub doesn't queue for offline peers)
+5. Returns success/total summary for simplified feedback
 
 ### Auto-Updates
 

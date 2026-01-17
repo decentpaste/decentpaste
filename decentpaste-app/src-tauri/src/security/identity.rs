@@ -27,9 +27,6 @@ pub fn generate_device_identity(device_name: &str) -> DeviceIdentity {
     }
 }
 
-// NOTE: get_or_create_identity() was removed as it used legacy plaintext storage.
-// Device identity is now created during vault setup and stored in the encrypted vault.
-
 /// Derive a shared secret using X25519 ECDH
 /// Takes our private key and the peer's public key, returns a 32-byte shared secret
 pub fn derive_shared_secret(our_private_key: &[u8], their_public_key: &[u8]) -> Result<Vec<u8>> {

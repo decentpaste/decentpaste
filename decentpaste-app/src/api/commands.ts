@@ -36,8 +36,7 @@ export async function reconnectPeers(): Promise<void> {
 /** Summary of connection status after refresh */
 export interface ConnectionSummary {
   total_peers: number;
-  connected: number;
-  failed: number;
+  success: boolean;
 }
 
 /**
@@ -250,12 +249,10 @@ export async function flushVault(): Promise<void> {
 export interface ShareResult {
   /** Total number of paired peers */
   totalPeers: number;
-  /** Number of peers that were online and received the content */
-  peersReached: number;
-  /** Number of peers that were offline */
-  peersOffline: number;
   /** Whether the content was added to clipboard history */
   addedToHistory: boolean;
+  /** Whether the share operation succeeded */
+  success: boolean;
 }
 
 /**
@@ -263,15 +260,10 @@ export interface ShareResult {
  * Centralizes the message logic so UI can present it consistently.
  */
 export function formatShareResultMessage(result: ShareResult): string {
-  if (result.peersReached === result.totalPeers) {
-    // All peers received the content
+  if (result.success) {
     return `Sent to ${result.totalPeers} device(s)`;
-  } else if (result.peersReached > 0) {
-    // Some peers received, some offline
-    return `Sent to ${result.peersReached}/${result.totalPeers}. ${result.peersOffline} offline.`;
   } else {
-    // No peers reachable - saved to history for later sync
-    return `Saved to history. ${result.totalPeers} device(s) offline.`;
+    return `Saved to history (${result.totalPeers} device(s))`;
   }
 }
 

@@ -23,12 +23,6 @@ export interface SettingsChangedPayload {
   auto_sync_enabled?: boolean;
 }
 
-/** Payload for peer connection status change */
-export interface PeerConnectionStatusPayload {
-  peer_id: string;
-  status: 'connected' | 'connecting' | 'disconnected';
-}
-
 export type EventHandler<T> = (payload: T) => void;
 
 interface EventListeners {
@@ -36,7 +30,6 @@ interface EventListeners {
   peerDiscovered: EventHandler<DiscoveredPeer>[];
   peerLost: EventHandler<string>[];
   peerNameUpdated: EventHandler<PeerNameUpdatedPayload>[];
-  peerConnectionStatus: EventHandler<PeerConnectionStatusPayload>[];
   pairingRequest: EventHandler<PairingRequestPayload>[];
   pairingPin: EventHandler<PairingPinPayload>[];
   pairingComplete: EventHandler<PairingCompletePayload>[];
@@ -57,7 +50,6 @@ class EventManager {
     peerDiscovered: [],
     peerLost: [],
     peerNameUpdated: [],
-    peerConnectionStatus: [],
     pairingRequest: [],
     pairingPin: [],
     pairingComplete: [],
@@ -87,9 +79,6 @@ class EventManager {
       }),
       listen<PeerNameUpdatedPayload>('peer-name-updated', (e) => {
         this.listeners.peerNameUpdated.forEach((fn) => fn(e.payload));
-      }),
-      listen<PeerConnectionStatusPayload>('peer-connection-status', (e) => {
-        this.listeners.peerConnectionStatus.forEach((fn) => fn(e.payload));
       }),
       listen<PairingRequestPayload>('pairing-request', (e) => {
         this.listeners.pairingRequest.forEach((fn) => fn(e.payload));

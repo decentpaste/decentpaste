@@ -239,7 +239,7 @@ impl VaultManager {
         app_handle
             .decentsecret()
             .delete_secret()
-            .map_err(|e| Self::map_plugin_error(e))?;
+            .map_err(Self::map_plugin_error)?;
         info!("Deleted key from secure storage");
         Ok(())
     }
@@ -320,7 +320,7 @@ impl VaultManager {
         app_handle
             .decentsecret()
             .store_secret(keychain_bytes)
-            .map_err(|e| Self::map_plugin_error(e))?;
+            .map_err(Self::map_plugin_error)?;
 
         // 5. Create vault with the original (unencrypted) vault key
         let vault_key = VaultKey::from_slice(&vault_key_bytes);
@@ -370,7 +370,7 @@ impl VaultManager {
         let keychain_bytes = app_handle
             .decentsecret()
             .retrieve_secret()
-            .map_err(|e| Self::map_plugin_error(e))?;
+            .map_err(Self::map_plugin_error)?;
 
         let encrypted_data = EncryptedVaultKeyData::from_bytes(&keychain_bytes)?;
 
