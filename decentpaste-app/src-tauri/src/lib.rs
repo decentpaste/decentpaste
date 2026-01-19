@@ -55,11 +55,6 @@ pub fn run() {
             .set_focus();
     }));
 
-    // Notification plugin is desktop-only (mobile can't receive notifications
-    // when backgrounded because network connections are terminated)
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    let builder = builder.plugin(tauri_plugin_notification::init());
-
     // Secure secret storage plugin (biometric on mobile, keyring on desktop)
     let builder = builder.plugin(tauri_plugin_decentsecret::init());
 

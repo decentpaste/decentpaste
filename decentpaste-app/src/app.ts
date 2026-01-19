@@ -5,7 +5,6 @@ import { getVersion } from '@tauri-apps/api/app';
 import { icon, type IconName } from './components/icons';
 import { $, escapeHtml, formatTime, truncate } from './utils/dom';
 import { getErrorMessage } from './utils/error';
-import { notifyClipboardReceived, notifyMinimizedToTray } from './utils/notifications';
 import { isDesktop } from './utils/platform';
 import { checkForUpdates, downloadAndInstallUpdate, formatBytes, getDownloadPercentage } from './api/updater';
 import type { ClipboardEntry, DiscoveredPeer, PairedPeer, SecretStorageMethod } from './api/types';
@@ -725,20 +724,6 @@ class App {
         return;
       }
 
-      // Notifications toggle
-      if (target.id === 'notifications-toggle') {
-        const checked = (target as HTMLInputElement).checked;
-        const settings = { ...store.get('settings'), show_notifications: checked };
-        try {
-          await commands.updateSettings(settings);
-          store.set('settings', settings);
-        } catch (error) {
-          store.addToast(`Failed to update settings: ${getErrorMessage(error)}`, 'error');
-          (target as HTMLInputElement).checked = !checked;
-        }
-        return;
-      }
-
       // History limit select
       if (target.id === 'history-limit-select') {
         const value = parseInt((target as HTMLSelectElement).value, 10);
@@ -823,17 +808,7 @@ class App {
 
     eventManager.on('clipboardReceived', (entry) => {
       store.addClipboardEntry(entry);
-
-      // Only show notifications if enabled in settings
-      if (store.get('settings').show_notifications) {
-        // Use native notification ONLY when minimized to system tray
-        // Otherwise use in-app toast (or skip if window just not focused)
-        if (store.get('isMinimizedToTray')) {
-          notifyClipboardReceived(entry.origin_device_name);
-        } else {
-          store.addToast(`Clipboard received from ${entry.origin_device_name}`, 'success');
-        }
-      }
+      store.addToast(`Clipboard received from ${entry.origin_device_name}`, 'success');
     });
 
     eventManager.on('clipboardSent', (entry) => {
@@ -892,12 +867,6 @@ class App {
     eventManager.on('appMinimizedToTray', () => {
       store.set('isWindowVisible', false);
       store.set('isMinimizedToTray', true);
-
-      // Show first-time native OS notification
-      if (!localStorage.getItem('hasShownTrayNotification')) {
-        notifyMinimizedToTray();
-        localStorage.setItem('hasShownTrayNotification', 'true');
-      }
     });
 
     // Handle clipboard synced from background (Android only)
@@ -1408,27 +1377,6 @@ class App {
                 <p class="text-xs text-white/30 mt-1 font-mono tracking-wider">${deviceInfo?.device_id?.slice(0, 16) || 'Unknown'}...</p>
               </div>
             </div>
-          </div>
-        </div>
-
-        <!-- Sync Settings -->
-        <div class="mb-6">
-          <div class="flex items-center gap-2 mb-3">
-            <div class="icon-container-green" style="width: 1.5rem; height: 1.5rem; border-radius: 0.5rem;">
-              ${icon('refreshCw', 12)}
-            </div>
-            <h2 class="text-sm font-semibold text-white/80 tracking-tight font-display">Sync</h2>
-          </div>
-          <div class="card overflow-hidden">
-            <label class="flex items-center justify-between p-4 cursor-pointer hover:bg-white/[0.02] transition-colors">
-              <span class="text-sm text-white/70">Show notifications</span>
-              <input
-                type="checkbox"
-                id="notifications-toggle"
-                ${settings.show_notifications ? 'checked' : ''}
-                class="checkbox"
-              />
-            </label>
           </div>
         </div>
 

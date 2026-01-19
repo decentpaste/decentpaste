@@ -18,7 +18,6 @@ pub struct AppSettings {
     /// When true, history is saved to the encrypted vault.
     /// When false, history is cleared on exit.
     pub keep_history: bool,
-    pub show_notifications: bool,
     pub clipboard_poll_interval_ms: u64,
     /// Preferred authentication method for vault access.
     /// Currently only "pin" is supported. None means not yet configured (onboarding).
@@ -37,7 +36,6 @@ impl Default for AppSettings {
             auto_sync_enabled: true,
             clipboard_history_limit: 50,
             keep_history: true,
-            show_notifications: true,
             clipboard_poll_interval_ms: 500,
             auth_method: None,
             hide_clipboard_content: false,

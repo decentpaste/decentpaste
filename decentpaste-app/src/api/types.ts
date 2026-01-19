@@ -76,7 +76,6 @@ export interface AppSettings {
   clipboard_history_limit: number;
   /** Whether to persist clipboard history across app restarts */
   keep_history: boolean;
-  show_notifications: boolean;
   clipboard_poll_interval_ms: number;
   /** Authentication method for vault access ('pin', 'secure_storage', or 'secure_storage_with_pin') */
   auth_method: AuthMethod | null;

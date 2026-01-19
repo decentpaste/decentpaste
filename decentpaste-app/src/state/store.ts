@@ -107,7 +107,6 @@ class Store {
         auto_sync_enabled: true,
         clipboard_history_limit: 50,
         keep_history: true,
-        show_notifications: true,
         clipboard_poll_interval_ms: 500,
         auth_method: null,
         hide_clipboard_content: false,
