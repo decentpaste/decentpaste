@@ -3,7 +3,7 @@
   "bundle": {
     "iOS": {
       "frameworks": ["SystemConfiguration.framework"],
-      "bundleVersion": "5"
+      "bundleVersion": "1"
     }
   }
 }
