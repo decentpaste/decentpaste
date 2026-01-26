@@ -66,6 +66,10 @@ pub fn run() {
             // Setup system tray and window close interception (desktop only)
             #[cfg(not(any(target_os = "android", target_os = "ios")))]
             {
+                // macOS: Hide from Dock, show only in menu bar (system tray)
+                #[cfg(target_os = "macos")]
+                app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+
                 if let Err(e) = tray::setup_tray(&app_handle) {
                     error!("Failed to setup system tray: {}", e);
                 }
