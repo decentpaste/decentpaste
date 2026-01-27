@@ -32,7 +32,8 @@ serde_json = "1"
 tokio = { version = "1", features = ["full", "sync"] }
 
 # libp2p networking
-libp2p = { version = "0.56", features = [
+# Using 0.54.1 for stable relay/dcutr/autonat support
+libp2p = { version = "0.54", features = [
     "tokio",
     "tcp",
     "noise",
@@ -42,16 +43,25 @@ libp2p = { version = "0.56", features = [
     "request-response",
     "identify",
     "macros",
+    # Internet connectivity features
+    "relay",     # Circuit relay v2 client for NAT traversal
+    "dcutr",     # Direct Connection Upgrade Through Relay (hole punching)
+    "autonat",   # Automatic NAT detection
+    "quic",      # QUIC transport (better NAT traversal than TCP)
 ] }
+
+# Base32 encoding for pairing codes
+data-encoding = "2"
 
 # Cryptography
 aes-gcm = "0.10"
 argon2 = "0.5"
 rand = "0.9"
 sha2 = "0.10"
-hex = "0.4"
+hex = { version = "0.4", features = ["serde"] }  # For hex encoding/decoding with serde support
 x25519-dalek = { version = "2", features = ["static_secrets"] }
 zeroize = { version = "1.7", features = ["derive"] }
+subtle = "2"  # For constant-time comparisons in pairing code validation
 
 # Storage & utilities
 hostname = "0.4"

@@ -17,6 +17,7 @@ class App {
   private pairingInProgress: boolean = false; // Guard against duplicate pairing operations
   private modalRenderPending: boolean = false; // Debounce modal renders
   private autoLockTimer: ReturnType<typeof setTimeout> | null = null; // Auto-lock timer
+  private pairingCodeCountdownInterval: ReturnType<typeof setInterval> | null = null; // Countdown timer for pairing code
 
   constructor(rootElement: HTMLElement) {
     this.root = rootElement;
@@ -298,6 +299,86 @@ class App {
 
       if (target.closest('#btn-download-update')) {
         downloadAndInstallUpdate();
+        return;
+      }
+
+      // Internet pairing - generate code
+      if (target.closest('#btn-generate-pairing-code')) {
+        try {
+          const response = await commands.generateInternetPairingCode();
+          store.set('internetPairingCode', {
+            displayCode: response.displayCode,
+            uri: response.uri,
+            expiresAt: response.expiresAt,
+          });
+          this.startPairingCodeCountdown();
+          store.addToast('Pairing code generated', 'success');
+        } catch (error) {
+          store.addToast(`Failed to generate code: ${getErrorMessage(error)}`, 'error');
+        }
+        return;
+      }
+
+      // Internet pairing - copy code
+      if (target.closest('#btn-copy-pairing-code')) {
+        const code = store.get('internetPairingCode');
+        if (code) {
+          try {
+            await navigator.clipboard.writeText(code.uri);
+            store.addToast('Pairing code copied', 'success');
+          } catch (error) {
+            // Fallback: copy display code
+            try {
+              await navigator.clipboard.writeText(code.displayCode);
+              store.addToast('Display code copied', 'success');
+            } catch {
+              store.addToast('Failed to copy code', 'error');
+            }
+          }
+        }
+        return;
+      }
+
+      // Internet pairing - cancel code
+      if (target.closest('#btn-cancel-pairing-code')) {
+        const code = store.get('internetPairingCode');
+        if (code) {
+          try {
+            await commands.cancelInternetPairingCode(code.displayCode);
+          } catch (error) {
+            console.error('Failed to cancel pairing code:', error);
+          }
+        }
+        this.stopPairingCodeCountdown();
+        store.set('internetPairingCode', null);
+        return;
+      }
+
+      // Internet pairing - enter code (show modal)
+      if (target.closest('#btn-enter-pairing-code')) {
+        store.set('showEnterPairingCodeModal', true);
+        return;
+      }
+
+      // Internet pairing - cancel enter code modal
+      if (target.closest('#btn-cancel-enter-code')) {
+        store.set('showEnterPairingCodeModal', false);
+        return;
+      }
+
+      // Internet pairing - submit entered code
+      if (target.closest('#btn-submit-pairing-code')) {
+        const input = $('#enter-pairing-code-input') as HTMLInputElement;
+        const code = input?.value?.trim();
+        if (code) {
+          try {
+            await commands.connectWithPairingCode(code);
+            store.set('showEnterPairingCodeModal', false);
+            store.addToast('Connecting to device...', 'info');
+          } catch (error) {
+            store.addToast(`Invalid code: ${getErrorMessage(error)}`, 'error');
+          }
+        }
         return;
       }
 
@@ -753,6 +834,21 @@ class App {
         return;
       }
 
+      // Internet sync toggle
+      if (target.id === 'internet-sync-toggle') {
+        const checked = (target as HTMLInputElement).checked;
+        const settings = { ...store.get('settings'), internet_sync_enabled: checked };
+        try {
+          await commands.updateSettings(settings);
+          store.set('settings', settings);
+          store.addToast(checked ? 'Internet sync enabled' : 'Internet sync disabled', 'success');
+        } catch (error) {
+          store.addToast(`Failed to update settings: ${getErrorMessage(error)}`, 'error');
+          (target as HTMLInputElement).checked = !checked;
+        }
+        return;
+      }
+
       // Autostart toggle (desktop only - launch at login)
       if (target.id === 'autostart-toggle') {
         const checked = (target as HTMLInputElement).checked;
@@ -998,6 +1094,8 @@ class App {
     store.subscribe('pairingModalMode', () => this.renderPairingModal());
     store.subscribe('activePairingSession', () => this.renderPairingModal());
     store.subscribe('showClearHistoryConfirm', () => this.updateClearHistoryModal());
+    store.subscribe('showEnterPairingCodeModal', () => this.updateEnterPairingCodeModal());
+    store.subscribe('internetPairingCode', () => this.updateInternetPairingSection());
     store.subscribe('isLoading', () => this.render());
     store.subscribe('vaultStatus', () => this.render());
     store.subscribe('onboardingStep', () => this.render());
@@ -1196,6 +1294,11 @@ class App {
         <div id="clear-history-modal" class="${state.showClearHistoryConfirm ? '' : 'hidden'}">
           ${this.renderClearHistoryConfirmModal()}
         </div>
+
+        <!-- Enter Pairing Code Modal -->
+        <div id="enter-pairing-code-modal" class="${state.showEnterPairingCodeModal ? '' : 'hidden'}">
+          ${this.renderEnterPairingCodeModal()}
+        </div>
       </div>
     `;
   }
@@ -1309,6 +1412,8 @@ class App {
     const state = store.getState();
     const pairedPeers = state.pairedPeers;
     const discoveredPeers = state.discoveredPeers.filter((d) => !pairedPeers.some((p) => p.peer_id === d.peer_id));
+    const internetPairingCode = store.get('internetPairingCode');
+    const internetSyncEnabled = state.settings.internet_sync_enabled ?? false;
 
     return `
       <div class="p-4 h-full overflow-y-auto">
@@ -1326,22 +1431,131 @@ class App {
           </div>
         </div>
 
-        <!-- Discovered Devices -->
+        <!-- Internet Pairing Section -->
+        <div class="mb-6">
+          <div class="flex items-center gap-2 mb-3">
+            <div class="icon-container-purple" style="width: 1.5rem; height: 1.5rem; border-radius: 0.5rem;">
+              ${icon('globe', 12)}
+            </div>
+            <h2 class="text-sm font-semibold text-white/80 tracking-tight font-display">Pair via Internet</h2>
+            <span class="text-xs text-white/30 ml-auto">${internetSyncEnabled ? 'Enabled' : 'Disabled'}</span>
+          </div>
+          ${internetSyncEnabled ? this.renderInternetPairingSection(internetPairingCode) : this.renderInternetPairingDisabled()}
+        </div>
+
+        <!-- Discovered Devices (Local Network) -->
         <div>
           <div class="flex items-center gap-2 mb-3">
             <div class="icon-container-orange" style="width: 1.5rem; height: 1.5rem; border-radius: 0.5rem;">
               ${icon('wifi', 12)}
             </div>
-            <h2 class="text-sm font-semibold text-white/80 tracking-tight font-display">Discovered Devices</h2>
+            <h2 class="text-sm font-semibold text-white/80 tracking-tight font-display">Local Network</h2>
             <span class="text-xs text-white/30 ml-auto mr-2">${discoveredPeers.length}</span>
             <button id="btn-refresh-peers" class="p-1.5 rounded-lg text-white/40 hover:text-teal-400 hover:bg-teal-500/10 transition-all" title="Refresh">
               ${icon('refreshCw', 14)}
             </button>
           </div>
-          ${discoveredPeers.length > 0 ? `<p class="text-xs text-white/40 mb-2">Keep the app open on both devices to pair</p>` : ''}
+          ${discoveredPeers.length > 0 ? `<p class="text-xs text-white/40 mb-2">Devices on the same network</p>` : ''}
           <div id="discovered-peers" class="space-y-2">
             ${discoveredPeers.length > 0 ? discoveredPeers.map((peer) => this.renderDiscoveredPeer(peer)).join('') : this.renderEmptyState('No devices found', 'Searching on local network...')}
           </div>
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Render the internet pairing section when enabled.
+   */
+  private renderInternetPairingSection(pairingCode: { displayCode: string; expiresAt: string } | null): string {
+    if (pairingCode) {
+      // Show active pairing code
+      const expiresAt = new Date(pairingCode.expiresAt);
+      const now = new Date();
+      const remainingSeconds = Math.max(0, Math.floor((expiresAt.getTime() - now.getTime()) / 1000));
+      const minutes = Math.floor(remainingSeconds / 60);
+      const seconds = remainingSeconds % 60;
+
+      return `
+        <div class="card p-4">
+          <div class="text-center mb-4">
+            <p class="text-xs text-white/50 mb-2">Share this code with another device</p>
+            <div class="text-2xl font-mono font-bold text-teal-400 tracking-widest mb-2">
+              ${pairingCode.displayCode}
+            </div>
+            <p class="text-xs text-white/40">
+              ${icon('clock', 12, 'inline-block mr-1')}
+              Expires in <span id="pairing-code-countdown">${minutes}:${seconds.toString().padStart(2, '0')}</span>
+            </p>
+          </div>
+          <div class="flex gap-2">
+            <button id="btn-copy-pairing-code" class="btn-secondary flex-1 text-xs">
+              ${icon('copy', 14)}
+              <span>Copy</span>
+            </button>
+            <button id="btn-cancel-pairing-code" class="btn-ghost flex-1 text-xs text-red-400/80 hover:text-red-400">
+              ${icon('x', 14)}
+              <span>Cancel</span>
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    // Show pairing options
+    return `
+      <div class="card overflow-hidden">
+        <button id="btn-generate-pairing-code" class="flex items-center justify-between p-4 w-full hover:bg-white/[0.02] transition-colors">
+          <div class="flex items-center gap-3">
+            <div class="icon-container-teal">
+              ${icon('share', 18)}
+            </div>
+            <div class="text-left">
+              <p class="text-sm text-white/80">Generate pairing code</p>
+              <p class="text-xs text-white/40">Share code with another device</p>
+            </div>
+          </div>
+          <div class="text-white/30">
+            ${icon('chevronRight', 16)}
+          </div>
+        </button>
+        <div class="divider"></div>
+        <button id="btn-enter-pairing-code" class="flex items-center justify-between p-4 w-full hover:bg-white/[0.02] transition-colors">
+          <div class="flex items-center gap-3">
+            <div class="icon-container-purple">
+              ${icon('link', 18)}
+            </div>
+            <div class="text-left">
+              <p class="text-sm text-white/80">Enter pairing code</p>
+              <p class="text-xs text-white/40">Connect to another device</p>
+            </div>
+          </div>
+          <div class="text-white/30">
+            ${icon('chevronRight', 16)}
+          </div>
+        </button>
+      </div>
+    `;
+  }
+
+  /**
+   * Render the internet pairing section when disabled.
+   */
+  private renderInternetPairingDisabled(): string {
+    return `
+      <div class="card p-4">
+        <div class="flex items-center gap-3">
+          <div class="icon-container-orange">
+            ${icon('globe', 18)}
+          </div>
+          <div class="flex-1">
+            <p class="text-sm text-white/70">Internet sync is disabled</p>
+            <p class="text-xs text-white/40">Enable in Settings to pair across networks</p>
+          </div>
+          <button data-nav="settings" class="btn-secondary text-xs">
+            ${icon('settings', 14)}
+            <span>Settings</span>
+          </button>
         </div>
       </div>
     `;
@@ -1439,12 +1653,42 @@ class App {
           </div>
         </div>
 
+        <!-- Internet Sync -->
+        <div class="mb-6">
+          <div class="flex items-center gap-2 mb-3">
+            <div class="icon-container-purple" style="width: 1.5rem; height: 1.5rem; border-radius: 0.5rem;">
+              ${icon('globe', 12)}
+            </div>
+            <h2 class="text-sm font-semibold text-white/80 tracking-tight font-display">Internet Sync</h2>
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-400 ml-1">Beta</span>
+          </div>
+          <div class="card overflow-hidden">
+            <label class="flex items-center justify-between p-4 cursor-pointer hover:bg-white/[0.02] transition-colors">
+              <div>
+                <span class="text-sm text-white/70 block">Enable internet sync</span>
+                <span class="text-xs text-white/40">Pair and sync across different networks</span>
+              </div>
+              <input
+                type="checkbox"
+                id="internet-sync-toggle"
+                ${settings.internet_sync_enabled ? 'checked' : ''}
+                class="checkbox"
+              />
+            </label>
+            <div class="divider"></div>
+            <div class="p-4 text-xs text-white/40">
+              <p class="mb-1">${icon('shield', 12, 'inline-block mr-1 text-teal-400')} End-to-end encrypted</p>
+              <p>${icon('globe', 12, 'inline-block mr-1 text-purple-400')} Uses relay servers for NAT traversal</p>
+            </div>
+          </div>
+        </div>
+
         ${
           isDesktop()
             ? `<!-- System (desktop only) -->
         <div class="mb-6">
           <div class="flex items-center gap-2 mb-3">
-            <div class="icon-container-purple" style="width: 1.5rem; height: 1.5rem; border-radius: 0.5rem;">
+            <div class="icon-container-blue" style="width: 1.5rem; height: 1.5rem; border-radius: 0.5rem;">
               ${icon('settings', 12)}
             </div>
             <h2 class="text-sm font-semibold text-white/80 tracking-tight font-display">System</h2>
@@ -1959,6 +2203,55 @@ class App {
     `;
   }
 
+  /**
+   * Renders the modal for entering a pairing code from another device.
+   */
+  private renderEnterPairingCodeModal(): string {
+    return `
+      <div class="fixed inset-0 modal-overlay flex items-center justify-center z-50 p-4">
+        <div class="modal-content p-5 max-w-sm w-full">
+          <div class="text-center">
+            <!-- Link Icon -->
+            <div class="w-12 h-12 rounded-xl mx-auto mb-3 flex items-center justify-center bg-purple-500/15 border border-purple-500/25">
+              ${icon('link', 22, 'text-purple-400')}
+            </div>
+
+            <h2 class="text-lg font-semibold text-white mb-1 font-display">Enter Pairing Code</h2>
+            <p class="text-white/50 text-sm mb-4">
+              Enter the code from the other device to connect via internet
+            </p>
+
+            <!-- Input Field -->
+            <input
+              id="enter-pairing-code-input"
+              type="text"
+              class="input w-full text-center font-mono mb-2"
+              placeholder="dp://... or XXXX-XXXX"
+              autocomplete="off"
+              autocorrect="off"
+              autocapitalize="off"
+              spellcheck="false"
+            />
+
+            <p class="text-white/30 text-xs mb-5">
+              Paste the full code (dp://...) shared by the other device
+            </p>
+
+            <!-- Buttons -->
+            <div class="flex gap-3">
+              <button id="btn-cancel-enter-code" class="btn-secondary flex-1 py-2.5">
+                Cancel
+              </button>
+              <button id="btn-submit-pairing-code" class="btn-primary flex-1 py-2.5">
+                Connect
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   private renderClipboardItem(item: ClipboardEntry, hideContent = false): string {
     const isLocal = item.is_local;
     // Escape HTML to prevent XSS attacks from malicious clipboard content
@@ -2192,6 +2485,21 @@ class App {
       modal.className = show ? '' : 'hidden';
       modal.innerHTML = this.renderClearHistoryConfirmModal();
     }
+  }
+
+  private updateEnterPairingCodeModal(): void {
+    const modal = $('#enter-pairing-code-modal');
+    if (modal) {
+      const show = store.get('showEnterPairingCodeModal');
+      modal.className = show ? '' : 'hidden';
+      modal.innerHTML = this.renderEnterPairingCodeModal();
+    }
+  }
+
+  private updateInternetPairingSection(): void {
+    // Re-render the peers view when internet pairing code changes
+    // This handles both code generation and cancellation
+    this.renderPeersList();
   }
 
   private renderPeersList(): void {
@@ -2438,6 +2746,52 @@ class App {
     // Also reset timer when vault is unlocked or settings change
     store.subscribe('vaultStatus', () => this.resetAutoLockTimer());
     store.subscribe('settings', () => this.resetAutoLockTimer());
+  }
+
+  /**
+   * Start the countdown timer for the internet pairing code.
+   * Updates every second and auto-clears when expired.
+   */
+  private startPairingCodeCountdown(): void {
+    this.stopPairingCodeCountdown(); // Clear any existing interval
+
+    this.pairingCodeCountdownInterval = setInterval(() => {
+      const code = store.get('internetPairingCode');
+      if (!code) {
+        this.stopPairingCodeCountdown();
+        return;
+      }
+
+      const expiresAt = new Date(code.expiresAt);
+      const now = new Date();
+      const remainingSeconds = Math.floor((expiresAt.getTime() - now.getTime()) / 1000);
+
+      if (remainingSeconds <= 0) {
+        // Code expired - clear it
+        this.stopPairingCodeCountdown();
+        store.set('internetPairingCode', null);
+        store.addToast('Pairing code expired', 'info');
+        return;
+      }
+
+      // Update the countdown display
+      const countdownEl = document.querySelector('#pairing-code-countdown');
+      if (countdownEl) {
+        const minutes = Math.floor(remainingSeconds / 60);
+        const seconds = remainingSeconds % 60;
+        countdownEl.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+      }
+    }, 1000);
+  }
+
+  /**
+   * Stop the pairing code countdown timer.
+   */
+  private stopPairingCodeCountdown(): void {
+    if (this.pairingCodeCountdownInterval) {
+      clearInterval(this.pairingCodeCountdownInterval);
+      this.pairingCodeCountdownInterval = null;
+    }
   }
 }
 

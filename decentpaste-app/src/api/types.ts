@@ -83,7 +83,17 @@ export interface AppSettings {
   hide_clipboard_content: boolean;
   /** Auto-lock timeout in minutes. 0 means never auto-lock */
   auto_lock_minutes: number;
+  // Internet connectivity settings
+  /** Whether internet sync is enabled (connect via relay servers) */
+  internet_sync_enabled: boolean;
+  /** Custom relay servers (Multiaddr format) */
+  relay_servers: string[];
+  /** Whether to use default relay servers in addition to custom ones */
+  use_default_relays: boolean;
 }
+
+// Connection type for peers
+export type ConnectionType = 'Local' | 'Direct' | 'Relay';
 
 // Device info
 export interface DeviceInfo {

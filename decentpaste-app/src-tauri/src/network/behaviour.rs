@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use futures::prelude::*;
 use libp2p::{
-    gossipsub, identify, mdns,
+    autonat, dcutr, gossipsub, identify, mdns, relay,
     request_response::{self, Codec, ProtocolSupport},
     swarm::NetworkBehaviour,
     StreamProtocol,
@@ -101,13 +101,24 @@ pub struct DecentPasteBehaviour {
     pub gossipsub: gossipsub::Behaviour,
     pub request_response: request_response::Behaviour<DecentPasteCodec>,
     pub identify: identify::Behaviour,
+    /// Circuit relay client for connecting through relay servers (NAT traversal)
+    pub relay_client: relay::client::Behaviour,
+    /// Direct Connection Upgrade Through Relay - upgrades relay connections to direct P2P
+    pub dcutr: dcutr::Behaviour,
+    /// Automatic NAT detection - determines if we're behind NAT
+    pub autonat: autonat::Behaviour,
 }
 
 impl DecentPasteBehaviour {
+    /// Create a new DecentPasteBehaviour.
+    ///
+    /// The `relay_client_transport` is the relay client transport returned by
+    /// `relay::client::new()`. It must be combined with the base transport in the swarm builder.
     pub fn new(
         local_peer_id: libp2p::PeerId,
         keypair: &libp2p::identity::Keypair,
         device_name: &str,
+        relay_client: relay::client::Behaviour,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         // mDNS for local discovery
         let mdns = mdns::tokio::Behaviour::new(mdns::Config::default(), local_peer_id)?;
@@ -156,11 +167,22 @@ impl DecentPasteBehaviour {
             ),
         );
 
+        // DCUtR (Direct Connection Upgrade Through Relay) for hole punching
+        // This attempts to upgrade relay connections to direct P2P after initial connection
+        let dcutr = dcutr::Behaviour::new(local_peer_id);
+
+        // AutoNAT for automatic NAT detection
+        // This helps determine if we need to use relay servers
+        let autonat = autonat::Behaviour::new(local_peer_id, autonat::Config::default());
+
         Ok(Self {
             mdns,
             gossipsub,
             request_response,
             identify,
+            relay_client,
+            dcutr,
+            autonat,
         })
     }
 

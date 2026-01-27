@@ -23,6 +23,41 @@ export interface SettingsChangedPayload {
   auto_sync_enabled?: boolean;
 }
 
+// ============================================================================
+// Internet Connectivity Events
+// ============================================================================
+
+/** Connection type for a peer */
+export type ConnectionType = 'local' | 'direct' | 'relay';
+
+/** Payload for connection type changed event */
+export interface ConnectionTypeChangedPayload {
+  peerId: string;
+  connectionType: ConnectionType;
+}
+
+/** Payload for relay connected event */
+export interface RelayConnectedPayload {
+  relayPeerId: string;
+  relayAddress: string;
+}
+
+/** Payload for relay disconnected event */
+export interface RelayDisconnectedPayload {
+  relayPeerId: string;
+}
+
+/** Payload for NAT status detected event */
+export interface NatStatusPayload {
+  isPublic: boolean;
+}
+
+/** Payload for hole punch result event */
+export interface HolePunchResultPayload {
+  peerId: string;
+  success: boolean;
+}
+
 export type EventHandler<T> = (payload: T) => void;
 
 interface EventListeners {
@@ -42,6 +77,12 @@ interface EventListeners {
   appMinimizedToTray: EventHandler<void>[];
   vaultStatus: EventHandler<VaultStatus>[];
   settingsChanged: EventHandler<SettingsChangedPayload>[];
+  // Internet connectivity events
+  connectionTypeChanged: EventHandler<ConnectionTypeChangedPayload>[];
+  relayConnected: EventHandler<RelayConnectedPayload>[];
+  relayDisconnected: EventHandler<RelayDisconnectedPayload>[];
+  natStatus: EventHandler<NatStatusPayload>[];
+  holePunchResult: EventHandler<HolePunchResultPayload>[];
 }
 
 class EventManager {
@@ -62,6 +103,12 @@ class EventManager {
     appMinimizedToTray: [],
     vaultStatus: [],
     settingsChanged: [],
+    // Internet connectivity events
+    connectionTypeChanged: [],
+    relayConnected: [],
+    relayDisconnected: [],
+    natStatus: [],
+    holePunchResult: [],
   };
 
   private unlistenFns: UnlistenFn[] = [];
@@ -115,6 +162,22 @@ class EventManager {
       }),
       listen<SettingsChangedPayload>('settings-changed', (e) => {
         this.listeners.settingsChanged.forEach((fn) => fn(e.payload));
+      }),
+      // Internet connectivity events
+      listen<ConnectionTypeChangedPayload>('connection-type-changed', (e) => {
+        this.listeners.connectionTypeChanged.forEach((fn) => fn(e.payload));
+      }),
+      listen<RelayConnectedPayload>('relay-connected', (e) => {
+        this.listeners.relayConnected.forEach((fn) => fn(e.payload));
+      }),
+      listen<RelayDisconnectedPayload>('relay-disconnected', (e) => {
+        this.listeners.relayDisconnected.forEach((fn) => fn(e.payload));
+      }),
+      listen<NatStatusPayload>('nat-status', (e) => {
+        this.listeners.natStatus.forEach((fn) => fn(e.payload));
+      }),
+      listen<HolePunchResultPayload>('hole-punch-result', (e) => {
+        this.listeners.holePunchResult.forEach((fn) => fn(e.payload));
       }),
     ]);
   }

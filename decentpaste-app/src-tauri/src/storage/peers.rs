@@ -32,6 +32,17 @@ pub struct PairedPeer {
     /// Stored as strings (Multiaddr format) for serialization compatibility.
     #[serde(default)]
     pub last_known_addresses: Vec<String>,
+
+    // Internet connectivity fields
+    /// Relay addresses through which this peer can be reached.
+    /// Used when direct connection fails (peer behind NAT).
+    /// Format: Full relay circuit address (e.g., "/ip4/.../p2p/RELAY/p2p-circuit/p2p/PEER")
+    #[serde(default)]
+    pub relay_addresses: Vec<String>,
+    /// Whether this peer was originally paired via internet (vs local mDNS).
+    /// Used to determine reconnection strategy.
+    #[serde(default)]
+    pub paired_via_internet: bool,
 }
 
 /// Initialize the data directory using Tauri's path resolver.

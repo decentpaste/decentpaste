@@ -1,0 +1,42 @@
+[package]
+name = "decentpaste-relay"
+version = "0.1.0"
+edition = "2021"
+description = "Relay server for DecentPaste internet connectivity"
+license = "MIT"
+
+# Keep this package out of the main workspace
+[workspace]
+resolver = "2"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+futures = "0.3"
+
+# libp2p with relay server support
+libp2p = { version = "0.54", features = [
+    "tokio",
+    "tcp",
+    "noise",
+    "yamux",
+    "relay",
+    "identify",
+    "macros",
+    "quic",
+] }
+
+# Configuration
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# HTTP health check
+axum = "0.8"
+
+# Misc
+anyhow = "1"

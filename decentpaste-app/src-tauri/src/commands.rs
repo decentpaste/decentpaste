@@ -1311,3 +1311,429 @@ async fn share_clipboard_content(
 
     Ok(())
 }
+
+// ============================================================================
+// Internet Pairing Commands
+// ============================================================================
+
+use crate::network::{PairingCode, PairingCodeInfo};
+
+/// Response from generate_internet_pairing_code
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PairingCodeResponse {
+    /// The full URI for sharing (dp://relay/peer/token)
+    pub uri: String,
+    /// Human-friendly display code (XXXX-XXXX)
+    pub display_code: String,
+    /// When the code expires (ISO 8601)
+    pub expires_at: String,
+}
+
+/// Generate an internet pairing code for sharing with another device.
+///
+/// The code includes:
+/// - Relay server address
+/// - Our peer ID
+/// - Cryptographic token
+///
+/// Returns both the full URI and a short display code.
+#[tauri::command]
+pub async fn generate_internet_pairing_code(
+    state: State<'_, AppState>,
+) -> Result<PairingCodeResponse> {
+    info!("Generating internet pairing code");
+
+    // Get settings for relay servers
+    let settings = state.settings.read().await;
+    if !settings.internet_sync_enabled {
+        return Err(DecentPasteError::InvalidInput(
+            "Internet sync is not enabled".into(),
+        ));
+    }
+
+    // Get relay address (prefer custom, fallback to default)
+    let relay_address = if !settings.relay_servers.is_empty() {
+        settings.relay_servers[0].clone()
+    } else if settings.use_default_relays && !crate::storage::DEFAULT_RELAY_SERVERS.is_empty() {
+        crate::storage::DEFAULT_RELAY_SERVERS[0].to_string()
+    } else {
+        return Err(DecentPasteError::InvalidInput(
+            "No relay servers configured".into(),
+        ));
+    };
+    drop(settings);
+
+    // Get our peer ID from vault manager
+    let peer_id = {
+        let vault_manager = state.vault_manager.read().await;
+        let manager = vault_manager
+            .as_ref()
+            .ok_or(DecentPasteError::VaultLocked)?;
+        let keypair = manager
+            .get_libp2p_keypair()?
+            .ok_or(DecentPasteError::NotInitialized)?;
+        let pid = libp2p::PeerId::from(keypair.public()).to_string();
+        info!("Pairing code will use peer ID: {}", pid);
+        pid
+    };
+
+    // Extract relay peer ID from the address for waiting
+    // Format: /ip4/x.x.x.x/tcp/4001/p2p/12D3KooW...
+    let relay_peer_id = relay_address
+        .split("/p2p/")
+        .last()
+        .ok_or_else(|| DecentPasteError::InvalidInput("Invalid relay address format".into()))?
+        .to_string();
+
+    // Subscribe to peer connection events BEFORE initiating connection
+    let mut peer_rx = state.peer_connected_tx.subscribe();
+
+    // Step 1: Connect to the relay first
+    {
+        let tx = state.network_command_tx.read().await;
+        let tx = tx
+            .as_ref()
+            .ok_or(DecentPasteError::NotInitialized)?;
+
+        tx.send(NetworkCommand::ConnectToRelay {
+            relay_address: relay_address.clone(),
+        })
+        .await
+        .map_err(|_| DecentPasteError::ChannelSend)?;
+    }
+
+    // Step 2: Wait for TCP connection to relay with timeout
+    info!("Waiting for relay connection to {}...", relay_peer_id);
+    let relay_connected = tokio::time::timeout(
+        Duration::from_secs(RELAY_CONNECT_TIMEOUT_SECS),
+        async {
+            loop {
+                match peer_rx.recv().await {
+                    Ok(connected_peer_id) => {
+                        if connected_peer_id == relay_peer_id {
+                            return true;
+                        }
+                        // Different peer, keep waiting
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => return false,
+                }
+            }
+        },
+    )
+    .await;
+
+    if relay_connected != Ok(true) {
+        return Err(DecentPasteError::Network(
+            "Failed to connect to relay server. Check your internet connection.".into(),
+        ));
+    }
+    info!("Connected to relay, requesting reservation...");
+
+    // Step 3: Now listen via relay (connection is established)
+    {
+        let tx = state.network_command_tx.read().await;
+        if let Some(tx) = tx.as_ref() {
+            let _ = tx
+                .send(NetworkCommand::ListenViaRelay {
+                    relay_address: relay_address.clone(),
+                })
+                .await;
+        }
+    }
+
+    // Generate pairing code
+    let code = PairingCode::new(relay_address, peer_id);
+    let response = PairingCodeResponse {
+        uri: code.to_uri(),
+        display_code: code.to_display_code(),
+        expires_at: code.expires_at.to_rfc3339(),
+    };
+
+    // Register the code
+    {
+        let mut registry = state.pairing_code_registry.write().await;
+        registry.cleanup_expired(); // Clean up old codes first
+        registry.register(code);
+    }
+
+    info!("Generated internet pairing code: {}", response.display_code);
+    Ok(response)
+}
+
+/// Timeout for relay connection (10 seconds)
+const RELAY_CONNECT_TIMEOUT_SECS: u64 = 10;
+
+/// Connect to a peer using their internet pairing code.
+///
+/// This function:
+/// 1. Connects to the relay server
+/// 2. Waits for relay connection to establish
+/// 3. Dials the peer via the relay circuit
+/// 4. Waits briefly for circuit to establish
+/// 5. Automatically initiates the pairing protocol
+///
+/// # Arguments
+/// * `code` - Either the full URI (dp://...) or display code (XXXX-XXXX)
+///
+/// Returns the session ID for tracking the pairing process.
+#[tauri::command]
+pub async fn connect_with_pairing_code(
+    state: State<'_, AppState>,
+    code: String,
+) -> Result<String> {
+    info!("Connecting with pairing code: {}", code);
+
+    // Parse the code
+    let code_info = if code.starts_with("dp://") {
+        // Full URI
+        let parsed = PairingCode::from_uri(&code)?;
+        PairingCodeInfo::from(&parsed)
+    } else {
+        // Display code - need to look it up from relay
+        // For now, we only support full URIs
+        // TODO: Implement relay lookup service for display codes
+        return Err(DecentPasteError::InvalidInput(
+            "Short display codes require relay lookup (not yet implemented). Use full URI.".into(),
+        ));
+    };
+
+    let target_peer_id = code_info.peer_id.clone();
+
+    // Extract relay peer ID from the address for connection detection
+    // Format: /ip4/x.x.x.x/tcp/4001/p2p/12D3KooW...
+    let relay_peer_id = code_info
+        .relay_address
+        .split("/p2p/")
+        .last()
+        .ok_or_else(|| DecentPasteError::InvalidInput("Invalid relay address format".into()))?
+        .to_string();
+
+    // Subscribe to peer connection events BEFORE initiating connection
+    // Note: We use peer_connected_tx (not relay_connected_tx) because we just need
+    // the TCP connection to the relay, not a reservation. Only the code generator
+    // needs a reservation to be reachable.
+    let mut peer_rx = state.peer_connected_tx.subscribe();
+
+    // Step 1: Connect to the relay
+    {
+        let tx = state.network_command_tx.read().await;
+        let tx = tx
+            .as_ref()
+            .ok_or(DecentPasteError::NotInitialized)?;
+
+        tx.send(NetworkCommand::ConnectToRelay {
+            relay_address: code_info.relay_address.clone(),
+        })
+        .await
+        .map_err(|_| DecentPasteError::ChannelSend)?;
+    }
+
+    // Step 2: Wait for TCP connection to relay with timeout
+    info!("Waiting for relay connection to {}...", relay_peer_id);
+    let relay_connected = tokio::time::timeout(
+        Duration::from_secs(RELAY_CONNECT_TIMEOUT_SECS),
+        async {
+            loop {
+                match peer_rx.recv().await {
+                    Ok(connected_peer_id) => {
+                        if connected_peer_id == relay_peer_id {
+                            return true;
+                        }
+                        // Different peer, keep waiting
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
+                        continue;
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                        return false;
+                    }
+                }
+            }
+        },
+    )
+    .await;
+
+    if relay_connected != Ok(true) {
+        return Err(DecentPasteError::Network(
+            "Failed to connect to relay server (timeout). Check your internet connection.".into(),
+        ));
+    }
+    info!("Relay connected, dialing peer...");
+
+    // Step 3: Dial the peer via relay
+    {
+        let tx = state.network_command_tx.read().await;
+        let tx = tx
+            .as_ref()
+            .ok_or(DecentPasteError::NotInitialized)?;
+
+        tx.send(NetworkCommand::DialViaRelay {
+            relay_address: code_info.relay_address.clone(),
+            peer_id: target_peer_id.clone(),
+        })
+        .await
+        .map_err(|_| DecentPasteError::ChannelSend)?;
+    }
+
+    // Step 4: Wait for the TARGET peer to connect (not just any peer)
+    // CRITICAL: We must send the pairing request BEFORE DCUtR has time to upgrade the connection.
+    // If we wait too long, DCUtR will hole-punch and the relay connection will be superseded.
+    info!("Waiting for peer {} to connect via relay...", target_peer_id);
+    let peer_connected = tokio::time::timeout(
+        Duration::from_secs(30), // 30 second timeout for peer connection
+        async {
+            loop {
+                match peer_rx.recv().await {
+                    Ok(connected_peer_id) => {
+                        if connected_peer_id == target_peer_id {
+                            return true;
+                        }
+                        debug!("Different peer connected ({}), waiting for {}", connected_peer_id, target_peer_id);
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => return false,
+                }
+            }
+        },
+    )
+    .await;
+
+    if peer_connected != Ok(true) {
+        return Err(DecentPasteError::Network(
+            "Failed to connect to peer via relay (timeout). The peer may be offline or the pairing code expired.".into(),
+        ));
+    }
+    info!("Peer connected via relay, initiating pairing immediately...");
+
+    // Step 5: Check if already paired
+    if state.is_peer_paired(&target_peer_id).await {
+        return Err(DecentPasteError::AlreadyPaired(target_peer_id));
+    }
+    info!("Peer not already paired, creating session...");
+
+    // Step 6: Create pairing session and initiate pairing
+    // Note: For relay-connected peers we don't have mDNS addresses, but that's fine
+    // The peer_addresses are used for fallback reconnection which isn't needed for relay peers
+    let session_id = uuid::Uuid::new_v4().to_string();
+    let session = PairingSession::new(session_id.clone(), target_peer_id.clone(), true);
+
+    {
+        let mut sessions = state.pairing_sessions.write().await;
+        sessions.push(session);
+    }
+    info!("Pairing session created: {}", session_id);
+
+    // Send pairing request through network
+    let device_identity = state.device_identity.read().await;
+    if let Some(ref identity) = *device_identity {
+        info!("Device identity found, sending pairing request...");
+        let tx = state.network_command_tx.read().await;
+        if let Some(tx) = tx.as_ref() {
+            let request = crate::network::PairingRequest {
+                session_id: session_id.clone(),
+                device_name: identity.device_name.clone(),
+                device_id: identity.device_id.clone(),
+                public_key: identity.public_key.clone(),
+            };
+
+            let message = crate::network::ProtocolMessage::Pairing(
+                crate::network::protocol::PairingMessage::Request(request),
+            );
+
+            tx.send(NetworkCommand::SendPairingRequest {
+                peer_id: target_peer_id.clone(),
+                message: message.to_bytes().unwrap_or_default(),
+            })
+            .await
+            .map_err(|_| DecentPasteError::ChannelSend)?;
+            info!("Pairing request sent to {}", target_peer_id);
+        } else {
+            warn!("Network command channel not available!");
+            return Err(DecentPasteError::NotInitialized);
+        }
+    } else {
+        return Err(DecentPasteError::NotInitialized);
+    }
+
+    info!(
+        "Internet pairing initiated: session={}, peer={}",
+        session_id, target_peer_id
+    );
+    Ok(session_id)
+}
+
+/// Get the connection type for a specific peer.
+///
+/// Returns "local", "direct", or "relay" depending on how we're connected.
+#[tauri::command]
+pub async fn get_peer_connection_type(
+    state: State<'_, AppState>,
+    peer_id: String,
+) -> Result<String> {
+    // Request connection type from network manager
+    let tx = state.network_command_tx.read().await;
+    if let Some(tx) = tx.as_ref() {
+        let _ = tx
+            .send(NetworkCommand::GetConnectionType { peer_id })
+            .await;
+    }
+
+    // The result will come back via NetworkEvent::ConnectionTypeChanged
+    // For now, return "unknown" - the UI should listen for the event
+    Ok("unknown".to_string())
+}
+
+/// Cancel an active internet pairing code (makes it invalid).
+#[tauri::command]
+pub async fn cancel_internet_pairing_code(
+    state: State<'_, AppState>,
+    display_code: String,
+) -> Result<()> {
+    let mut registry = state.pairing_code_registry.write().await;
+    registry.remove(&display_code);
+    info!("Cancelled internet pairing code: {}", display_code);
+    Ok(())
+}
+
+/// Get the current internet connectivity settings.
+#[tauri::command]
+pub async fn get_internet_settings(
+    state: State<'_, AppState>,
+) -> Result<InternetSettings> {
+    let settings = state.settings.read().await;
+    Ok(InternetSettings {
+        internet_sync_enabled: settings.internet_sync_enabled,
+        relay_servers: settings.relay_servers.clone(),
+        use_default_relays: settings.use_default_relays,
+    })
+}
+
+/// Internet connectivity settings DTO
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InternetSettings {
+    pub internet_sync_enabled: bool,
+    pub relay_servers: Vec<String>,
+    pub use_default_relays: bool,
+}
+
+/// Update internet connectivity settings.
+#[tauri::command]
+pub async fn update_internet_settings(
+    state: State<'_, AppState>,
+    settings: InternetSettings,
+) -> Result<()> {
+    let mut current = state.settings.write().await;
+    current.internet_sync_enabled = settings.internet_sync_enabled;
+    current.relay_servers = settings.relay_servers;
+    current.use_default_relays = settings.use_default_relays;
+    crate::storage::save_settings(&current)?;
+
+    info!(
+        "Updated internet settings: enabled={}, relays={:?}",
+        current.internet_sync_enabled, current.relay_servers
+    );
+    Ok(())
+}

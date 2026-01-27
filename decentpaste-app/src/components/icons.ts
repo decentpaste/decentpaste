@@ -32,6 +32,8 @@ import {
   ChevronRight,
   Eye,
   EyeOff,
+  Globe,
+  Clock,
   createElement,
   type IconNode,
 } from 'lucide';
@@ -68,6 +70,8 @@ const iconMap: Record<string, IconNode> = {
   chevronRight: ChevronRight,
   eye: Eye,
   eyeOff: EyeOff,
+  globe: Globe,
+  clock: Clock,
 };
 
 export type IconName = keyof typeof iconMap;

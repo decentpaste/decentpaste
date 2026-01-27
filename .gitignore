@@ -5,3 +5,4 @@ website/dist
 .spec-workflow
 .playwright-mcp
 audit.log
+decentpaste-relay/target

@@ -3,13 +3,13 @@ use std::sync::atomic::{AtomicBool, AtomicUsize};
 use std::sync::Arc;
 
 use chrono::{Duration, Utc};
-use tokio::sync::{mpsc, Notify, RwLock};
+use tokio::sync::{broadcast, mpsc, Notify, RwLock};
 use tracing::{debug, warn};
 
 use crate::clipboard::ClipboardEntry;
 use crate::error::Result;
 use crate::network::protocol::ClipboardMessage;
-use crate::network::{DiscoveredPeer, NetworkCommand, NetworkStatus};
+use crate::network::{DiscoveredPeer, NetworkCommand, NetworkStatus, PairingCodeRegistry};
 use crate::security::PairingSession;
 use crate::storage::{AppSettings, DeviceIdentity, PairedPeer};
 use crate::vault::{VaultManager, VaultStatus};
@@ -77,10 +77,34 @@ pub struct AppState {
     /// Message buffers for offline peers.
     /// Maps peer_id -> buffered messages (messages WE sent that THEY missed).
     pub message_buffers: Arc<RwLock<HashMap<String, Vec<ClipboardMessage>>>>,
+
+    // =========================================================================
+    // Internet Pairing State
+    // =========================================================================
+    /// Registry of active internet pairing codes we've generated.
+    /// Used to track codes we've shared and validate incoming connections.
+    pub pairing_code_registry: Arc<RwLock<PairingCodeRegistry>>,
+
+    /// Broadcast channel for peer connection events.
+    /// Used by connect_with_pairing_code() to wait for a specific peer to connect
+    /// instead of using a fixed sleep. The NetworkManager publishes to this when
+    /// PeerConnected events fire.
+    pub peer_connected_tx: broadcast::Sender<String>,
+
+    /// Broadcast channel for relay connection events.
+    /// Used by connect_with_pairing_code() to wait for relay connection before
+    /// attempting to dial the peer. Payload is the relay peer ID.
+    pub relay_connected_tx: broadcast::Sender<String>,
 }
 
 impl AppState {
     pub fn new() -> Self {
+        // Create broadcast channels with capacity for 16 pending events.
+        // This is enough for concurrent internet pairing attempts while avoiding
+        // unbounded memory growth.
+        let (peer_connected_tx, _) = broadcast::channel(16);
+        let (relay_connected_tx, _) = broadcast::channel(16);
+
         Self {
             device_identity: Arc::new(RwLock::new(None)),
             settings: Arc::new(RwLock::new(AppSettings::default())),
@@ -103,6 +127,11 @@ impl AppState {
 
             // Sync message buffers (per-recipient)
             message_buffers: Arc::new(RwLock::new(HashMap::new())),
+
+            // Internet pairing
+            pairing_code_registry: Arc::new(RwLock::new(PairingCodeRegistry::new())),
+            peer_connected_tx,
+            relay_connected_tx,
         }
     }
 

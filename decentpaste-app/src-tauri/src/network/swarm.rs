@@ -1,7 +1,7 @@
 use chrono::Utc;
 use futures::StreamExt;
 use libp2p::{
-    gossipsub, identify, mdns, noise,
+    autonat, gossipsub, identify, mdns, noise, relay,
     request_response::{self, ResponseChannel},
     swarm::SwarmEvent,
     tcp, yamux, Multiaddr, PeerId, Swarm,
@@ -15,7 +15,7 @@ use super::behaviour::{
     DecentPasteBehaviour, PairingRequest as ReqPairingRequest,
     PairingResponse as ReqPairingResponse,
 };
-use super::events::{ConnectedPeer, DiscoveredPeer, NetworkEvent, NetworkStatus};
+use super::events::{ConnectedPeer, ConnectionType, DiscoveredPeer, NetworkEvent, NetworkStatus};
 use super::protocol::{ClipboardMessage, DeviceAnnounceMessage, PairingMessage, ProtocolMessage};
 
 #[derive(Debug)]
@@ -101,6 +101,25 @@ pub enum NetworkCommand {
         peer_id: String,
         message: super::protocol::ClipboardMessage,
     },
+
+    // Internet connectivity commands
+    /// Connect to a relay server for NAT traversal
+    ConnectToRelay {
+        relay_address: String,
+    },
+    /// Dial a peer via relay using their pairing code info
+    DialViaRelay {
+        relay_address: String,
+        peer_id: String,
+    },
+    /// Listen via relay (make ourselves reachable through relay)
+    ListenViaRelay {
+        relay_address: String,
+    },
+    /// Get the current connection type for a peer
+    GetConnectionType {
+        peer_id: String,
+    },
 }
 
 pub struct NetworkManager {
@@ -115,6 +134,20 @@ pub struct NetworkManager {
     ready_peers: HashMap<PeerId, Instant>,
     /// Current device name (updated when settings change)
     device_name: String,
+    /// Track connection type per peer (Local/Direct/Relay)
+    connection_types: HashMap<PeerId, ConnectionType>,
+    /// Our detected NAT status (from AutoNAT)
+    nat_status: NatStatus,
+    /// Whether we're connected to any relay server
+    relay_connected: bool,
+}
+
+/// NAT detection status from AutoNAT
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NatStatus {
+    Unknown,
+    Public,    // We have a public IP, no NAT traversal needed
+    Private,   // We're behind NAT, need relay/hole punching
 }
 
 impl NetworkManager {
@@ -127,7 +160,8 @@ impl NetworkManager {
         let local_peer_id = PeerId::from(local_key.public());
         info!("Local peer ID: {}", local_peer_id);
 
-        // Create swarm
+        // Create swarm with relay client transport
+        // The relay client's transport wraps our base transport to enable circuit relay
         let swarm = libp2p::SwarmBuilder::with_existing_identity(local_key.clone())
             .with_tokio()
             .with_tcp(
@@ -135,11 +169,14 @@ impl NetworkManager {
                 noise::Config::new,
                 yamux::Config::default,
             )?
-            .with_behaviour(|_key| {
-                DecentPasteBehaviour::new(local_peer_id, &local_key, &device_name)
+            .with_relay_client(noise::Config::new, yamux::Config::default)?
+            .with_behaviour(|key, relay_client| {
+                DecentPasteBehaviour::new(local_peer_id, key, &device_name, relay_client)
                     .expect("Failed to create behaviour")
             })?
-            .with_swarm_config(|cfg| cfg.with_idle_connection_timeout(Duration::from_secs(60)))
+            // 5 minutes idle timeout - long enough for internet pairing flow
+            // where user needs time to share code and other device needs time to connect
+            .with_swarm_config(|cfg| cfg.with_idle_connection_timeout(Duration::from_secs(300)))
             .build();
 
         Ok(Self {
@@ -151,6 +188,9 @@ impl NetworkManager {
             pending_responses: HashMap::new(),
             ready_peers: HashMap::new(),
             device_name,
+            connection_types: HashMap::new(),
+            nat_status: NatStatus::Unknown,
+            relay_connected: false,
         })
     }
 
@@ -210,6 +250,28 @@ impl NetworkManager {
                     .event_tx
                     .send(NetworkEvent::StatusChanged(NetworkStatus::Connected))
                     .await;
+            }
+
+            SwarmEvent::ListenerClosed {
+                listener_id,
+                addresses,
+                reason,
+            } => {
+                warn!(
+                    "Listener {:?} closed for addresses {:?}: {:?}",
+                    listener_id, addresses, reason
+                );
+            }
+
+            SwarmEvent::ListenerError { listener_id, error } => {
+                error!("Listener {:?} error: {}", listener_id, error);
+            }
+
+            SwarmEvent::ExpiredListenAddr {
+                listener_id,
+                address,
+            } => {
+                warn!("Listener {:?} address expired: {}", listener_id, address);
             }
 
             SwarmEvent::Behaviour(super::behaviour::DecentPasteBehaviourEvent::Mdns(event)) => {
@@ -387,20 +449,13 @@ impl NetworkManager {
                 gossipsub::Event::GossipsubNotSupported { peer_id } => {
                     warn!("Peer {} does not support gossipsub", peer_id);
                 }
-                gossipsub::Event::SlowPeer { peer_id, .. } => {
-                    warn!("Peer {} is slow", peer_id);
-                }
             },
 
             SwarmEvent::Behaviour(
                 super::behaviour::DecentPasteBehaviourEvent::RequestResponse(event),
             ) => {
                 match event {
-                    request_response::Event::Message {
-                        peer,
-                        connection_id: _connection_id,
-                        message,
-                    } => {
+                    request_response::Event::Message { peer, message } => {
                         match message {
                             request_response::Message::Request {
                                 request, channel, ..
@@ -555,7 +610,7 @@ impl NetworkManager {
                                 }
                             }
                             request_response::Message::Response { response, .. } => {
-                                debug!("Received response from {}", peer);
+                                info!("Received response from {} ({} bytes)", peer, response.message.len());
 
                                 // Parse the protocol message
                                 if let Ok(protocol_msg) =
@@ -566,6 +621,7 @@ impl NetworkManager {
                                         ProtocolMessage::Pairing(pairing_msg) => {
                                             match pairing_msg {
                                                 PairingMessage::Challenge(challenge) => {
+                                                    info!("Received PairingChallenge from {}, session={}", peer, challenge.session_id);
                                                     let _ = self
                                                         .event_tx
                                                         .send(NetworkEvent::PairingPinReady {
@@ -702,7 +758,9 @@ impl NetworkManager {
                 }
             }
 
-            SwarmEvent::ConnectionEstablished { peer_id, .. } => {
+            SwarmEvent::ConnectionEstablished {
+                peer_id, endpoint, ..
+            } => {
                 debug!("Connection established with {}", peer_id);
 
                 // Add peer to gossipsub mesh explicitly to ensure immediate message delivery
@@ -712,6 +770,24 @@ impl NetworkManager {
                     .gossipsub
                     .add_explicit_peer(&peer_id);
                 debug!("Added {} to gossipsub explicit peers", peer_id);
+
+                // Determine connection type based on address
+                // If the address contains "/p2p-circuit/", it's a relay connection
+                // If the peer is in discovered_peers (from mDNS), it's local
+                // Otherwise, it's a direct internet connection
+                let connection_type = {
+                    let addr_str = endpoint.get_remote_address().to_string();
+                    if addr_str.contains("/p2p-circuit/") {
+                        ConnectionType::Relay
+                    } else if self.discovered_peers.contains_key(&peer_id) {
+                        ConnectionType::Local
+                    } else {
+                        ConnectionType::Direct
+                    }
+                };
+
+                // Track the connection type
+                self.connection_types.insert(peer_id, connection_type);
 
                 let connected = ConnectedPeer {
                     peer_id: peer_id.to_string(),
@@ -726,6 +802,15 @@ impl NetworkManager {
                 let _ = self
                     .event_tx
                     .send(NetworkEvent::PeerConnected(connected))
+                    .await;
+
+                // Emit connection type
+                let _ = self
+                    .event_tx
+                    .send(NetworkEvent::ConnectionTypeChanged {
+                        peer_id: peer_id.to_string(),
+                        connection_type,
+                    })
                     .await;
 
                 // Device name announcement is now done in gossipsub::Event::Subscribed
@@ -757,6 +842,9 @@ impl NetworkManager {
                     );
                 }
 
+                // Clean up connection type tracking
+                self.connection_types.remove(&peer_id);
+
                 self.connected_peers.remove(&peer_id);
                 let _ = self
                     .event_tx
@@ -775,6 +863,131 @@ impl NetworkManager {
 
             SwarmEvent::Dialing { peer_id, .. } => {
                 info!("Dialing peer: {:?}", peer_id);
+            }
+
+            // Relay client events
+            SwarmEvent::Behaviour(super::behaviour::DecentPasteBehaviourEvent::RelayClient(
+                event,
+            )) => {
+                match event {
+                    relay::client::Event::ReservationReqAccepted {
+                        relay_peer_id,
+                        renewal,
+                        ..
+                    } => {
+                        info!(
+                            "Relay reservation accepted by {} (renewal: {})",
+                            relay_peer_id, renewal
+                        );
+                        self.relay_connected = true;
+                        let relay_addr = self
+                            .swarm
+                            .external_addresses()
+                            .find(|addr| addr.to_string().contains(&relay_peer_id.to_string()))
+                            .map(|addr| addr.to_string())
+                            .unwrap_or_default();
+                        let _ = self
+                            .event_tx
+                            .send(NetworkEvent::RelayConnected {
+                                relay_peer_id: relay_peer_id.to_string(),
+                                relay_address: relay_addr,
+                            })
+                            .await;
+                    }
+                    relay::client::Event::OutboundCircuitEstablished {
+                        relay_peer_id,
+                        ..
+                    } => {
+                        debug!("Outbound circuit established via relay {}", relay_peer_id);
+                    }
+                    relay::client::Event::InboundCircuitEstablished { src_peer_id, .. } => {
+                        debug!("Inbound circuit established from {}", src_peer_id);
+                        // Mark this connection as Relay type
+                        self.connection_types.insert(src_peer_id, ConnectionType::Relay);
+                        let _ = self
+                            .event_tx
+                            .send(NetworkEvent::ConnectionTypeChanged {
+                                peer_id: src_peer_id.to_string(),
+                                connection_type: ConnectionType::Relay,
+                            })
+                            .await;
+                    }
+                }
+            }
+
+            // DCUtR (hole punching) events
+            SwarmEvent::Behaviour(super::behaviour::DecentPasteBehaviourEvent::Dcutr(event)) => {
+                // In libp2p 0.54, dcutr::Event is a struct with remote_peer_id and result fields
+                let remote_peer_id = event.remote_peer_id;
+                match event.result {
+                    Ok(_connection_id) => {
+                        info!(
+                            "DCUtR hole punch succeeded! Direct connection to {}",
+                            remote_peer_id
+                        );
+                        // Update connection type from Relay to Direct
+                        self.connection_types.insert(remote_peer_id, ConnectionType::Direct);
+                        let _ = self
+                            .event_tx
+                            .send(NetworkEvent::ConnectionTypeChanged {
+                                peer_id: remote_peer_id.to_string(),
+                                connection_type: ConnectionType::Direct,
+                            })
+                            .await;
+                        let _ = self
+                            .event_tx
+                            .send(NetworkEvent::HolePunchResult {
+                                peer_id: remote_peer_id.to_string(),
+                                success: true,
+                            })
+                            .await;
+                    }
+                    Err(error) => {
+                        debug!(
+                            "DCUtR hole punch failed for {}: {:?}",
+                            remote_peer_id, error
+                        );
+                        // Connection stays as Relay
+                        let _ = self
+                            .event_tx
+                            .send(NetworkEvent::HolePunchResult {
+                                peer_id: remote_peer_id.to_string(),
+                                success: false,
+                            })
+                            .await;
+                    }
+                }
+            }
+
+            // AutoNAT events
+            SwarmEvent::Behaviour(super::behaviour::DecentPasteBehaviourEvent::Autonat(event)) => {
+                match event {
+                    autonat::Event::StatusChanged { old, new } => {
+                        info!("NAT status changed: {:?} -> {:?}", old, new);
+                        match new {
+                            autonat::NatStatus::Public(_) => {
+                                self.nat_status = NatStatus::Public;
+                                let _ = self
+                                    .event_tx
+                                    .send(NetworkEvent::NatStatusDetected { is_public: true })
+                                    .await;
+                            }
+                            autonat::NatStatus::Private => {
+                                self.nat_status = NatStatus::Private;
+                                let _ = self
+                                    .event_tx
+                                    .send(NetworkEvent::NatStatusDetected { is_public: false })
+                                    .await;
+                            }
+                            autonat::NatStatus::Unknown => {
+                                self.nat_status = NatStatus::Unknown;
+                            }
+                        }
+                    }
+                    autonat::Event::InboundProbe(_) | autonat::Event::OutboundProbe(_) => {
+                        // Probes are routine, don't log unless debugging
+                    }
+                }
             }
 
             _ => {}
@@ -809,7 +1022,9 @@ impl NetworkManager {
                         .behaviour_mut()
                         .request_response
                         .send_request(&peer, request);
-                    debug!("Sent pairing request to {}", peer_id);
+                    info!("Sent pairing request to {} via request-response protocol", peer_id);
+                } else {
+                    warn!("Failed to parse peer_id for pairing request: {}", peer_id);
                 }
             }
 
@@ -820,8 +1035,10 @@ impl NetworkManager {
                 device_name,
                 public_key,
             } => {
+                info!("SendPairingChallenge command for peer {}, session {}", peer_id, session_id);
                 if let Ok(peer) = peer_id.parse::<PeerId>() {
                     if let Some(channel) = self.pending_responses.remove(&peer) {
+                        info!("Found pending response channel for {}", peer_id);
                         let challenge = super::protocol::PairingChallenge {
                             session_id: session_id.clone(),
                             pin,
@@ -839,14 +1056,18 @@ impl NetworkManager {
                                 .send_response(channel, response)
                                 .is_ok()
                             {
-                                debug!("Sent pairing challenge to {}", peer_id);
+                                info!("Sent pairing challenge to {} successfully", peer_id);
                             } else {
-                                warn!("Failed to send pairing challenge to {}", peer_id);
+                                warn!("Failed to send pairing challenge response to {} - channel may have closed", peer_id);
                             }
+                        } else {
+                            warn!("Failed to serialize pairing challenge for {}", peer_id);
                         }
                     } else {
-                        warn!("No pending response channel for peer {}", peer_id);
+                        warn!("No pending response channel for peer {} - maybe request timed out?", peer_id);
                     }
+                } else {
+                    warn!("Failed to parse peer_id: {}", peer_id);
                 }
             }
 
@@ -1155,6 +1376,103 @@ impl NetworkManager {
                             "No pending response channel for peer {} (ContentResponse)",
                             peer_id
                         );
+                    }
+                }
+            }
+
+            // Internet connectivity commands
+            NetworkCommand::ConnectToRelay { relay_address } => {
+                // Connect to a relay server for NAT traversal
+                info!("Connecting to relay: {}", relay_address);
+                if let Ok(addr) = relay_address.parse::<Multiaddr>() {
+                    // Add the relay address to our address book and dial it
+                    if let Err(e) = self.swarm.dial(addr.clone()) {
+                        warn!("Failed to dial relay {}: {}", relay_address, e);
+                    } else {
+                        info!("Dialing relay at {}", relay_address);
+                    }
+                } else {
+                    warn!("Invalid relay address format: {}", relay_address);
+                }
+            }
+
+            NetworkCommand::DialViaRelay {
+                relay_address,
+                peer_id,
+            } => {
+                // Dial a peer via relay using circuit relay
+                info!(
+                    "Dialing peer {} via relay {}",
+                    peer_id, relay_address
+                );
+                if let Ok(target_peer) = peer_id.parse::<PeerId>() {
+                    if let Ok(relay_addr) = relay_address.parse::<Multiaddr>() {
+                        // Construct the circuit relay address:
+                        // /ip4/x.x.x.x/tcp/xxx/p2p/RELAY_PEER_ID/p2p-circuit/p2p/TARGET_PEER_ID
+                        let circuit_addr = relay_addr
+                            .with(libp2p::multiaddr::Protocol::P2pCircuit)
+                            .with(libp2p::multiaddr::Protocol::P2p(target_peer));
+
+                        if let Err(e) = self.swarm.dial(circuit_addr.clone()) {
+                            warn!(
+                                "Failed to dial {} via relay: {}",
+                                peer_id, e
+                            );
+                        } else {
+                            info!(
+                                "Dialing {} via circuit relay: {}",
+                                peer_id, circuit_addr
+                            );
+                        }
+                    } else {
+                        warn!("Invalid relay address format: {}", relay_address);
+                    }
+                } else {
+                    warn!("Invalid peer ID format: {}", peer_id);
+                }
+            }
+
+            NetworkCommand::ListenViaRelay { relay_address } => {
+                // Listen via relay to make ourselves reachable
+                info!("Requesting relay reservation from: {}", relay_address);
+                if let Ok(addr) = relay_address.parse::<Multiaddr>() {
+                    // First, ensure we're connected to the relay
+                    info!("Dialing relay for reservation: {}", addr);
+                    match self.swarm.dial(addr.clone()) {
+                        Ok(_) => info!("Dial initiated to relay"),
+                        Err(e) => warn!("Failed to dial relay for listening: {}", e),
+                    }
+
+                    // Create the circuit relay listen address
+                    let listen_addr = addr
+                        .clone()
+                        .with(libp2p::multiaddr::Protocol::P2pCircuit);
+
+                    info!("Calling listen_on with: {}", listen_addr);
+                    match self.swarm.listen_on(listen_addr.clone()) {
+                        Ok(listener_id) => {
+                            info!("Successfully started listening via relay: {} (listener_id: {:?})", listen_addr, listener_id);
+                        }
+                        Err(e) => {
+                            error!("Failed to listen via relay {}: {}", relay_address, e);
+                        }
+                    }
+                } else {
+                    warn!("Invalid relay address format: {}", relay_address);
+                }
+            }
+
+            NetworkCommand::GetConnectionType { peer_id } => {
+                // Report the current connection type for a peer
+                if let Ok(pid) = peer_id.parse::<PeerId>() {
+                    if let Some(conn_type) = self.connection_types.get(&pid) {
+                        let _ = self
+                            .event_tx
+                            .send(NetworkEvent::ConnectionTypeChanged {
+                                peer_id,
+                                connection_type: *conn_type,
+                            })
+                            .await;
                     }
                 }
             }

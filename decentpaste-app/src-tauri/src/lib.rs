@@ -137,6 +137,13 @@ pub fn run() {
             commands::handle_shared_content,
             // Connection management
             commands::refresh_connections,
+            // Internet pairing commands
+            commands::generate_internet_pairing_code,
+            commands::connect_with_pairing_code,
+            commands::get_peer_connection_type,
+            commands::cancel_internet_pairing_code,
+            commands::get_internet_settings,
+            commands::update_internet_settings,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
@@ -636,6 +643,9 @@ pub async fn start_network_services(
                 NetworkEvent::PeerConnected(peer) => {
                     let _ = app_handle_network.emit("peer-connected", &peer);
 
+                    // Notify any waiters that this peer connected (used by connect_with_pairing_code)
+                    let _ = state.peer_connected_tx.send(peer.peer_id.clone());
+
                     // Note: We don't mark as Connected here - wait for PeerReady
                     // which indicates gossipsub subscription is complete
                     debug!(
@@ -874,6 +884,9 @@ pub async fn start_network_services(
                         paired_at: Utc::now(),
                         last_seen: Some(Utc::now()),
                         last_known_addresses,
+                        // Internet connectivity fields - default for local pairing
+                        relay_addresses: Vec::new(),
+                        paired_via_internet: false, // TODO: Set based on pairing session
                     };
 
                     // Add to paired peers (release lock before flushing to avoid deadlock)
@@ -1267,6 +1280,80 @@ pub async fn start_network_services(
                     } else {
                         warn!("Received sync content from unknown peer: {}", peer_id);
                     }
+                }
+
+                // Internet connectivity events - emit to frontend
+                NetworkEvent::ConnectionTypeChanged {
+                    peer_id,
+                    connection_type,
+                } => {
+                    debug!(
+                        "Peer {} connection type: {:?}",
+                        peer_id, connection_type
+                    );
+                    let _ = app_handle_network.emit(
+                        "connection-type-changed",
+                        serde_json::json!({
+                            "peerId": peer_id,
+                            "connectionType": format!("{:?}", connection_type).to_lowercase(),
+                        }),
+                    );
+                }
+
+                NetworkEvent::RelayConnected {
+                    relay_peer_id,
+                    relay_address,
+                } => {
+                    info!(
+                        "Connected to relay {} at {}",
+                        relay_peer_id, relay_address
+                    );
+
+                    // Notify any waiters that we connected to a relay (used by connect_with_pairing_code)
+                    let _ = state.relay_connected_tx.send(relay_peer_id.clone());
+
+                    let _ = app_handle_network.emit(
+                        "relay-connected",
+                        serde_json::json!({
+                            "relayPeerId": relay_peer_id,
+                            "relayAddress": relay_address,
+                        }),
+                    );
+                }
+
+                NetworkEvent::RelayDisconnected { relay_peer_id } => {
+                    info!("Disconnected from relay {}", relay_peer_id);
+                    let _ = app_handle_network.emit(
+                        "relay-disconnected",
+                        serde_json::json!({
+                            "relayPeerId": relay_peer_id,
+                        }),
+                    );
+                }
+
+                NetworkEvent::NatStatusDetected { is_public } => {
+                    info!("NAT status detected: public={}", is_public);
+                    let _ = app_handle_network.emit(
+                        "nat-status",
+                        serde_json::json!({
+                            "isPublic": is_public,
+                        }),
+                    );
+                }
+
+                NetworkEvent::HolePunchResult { peer_id, success } => {
+                    info!(
+                        "Hole punch result for {}: {}",
+                        peer_id,
+                        if success { "success" } else { "failed" }
+                    );
+                    let _ = app_handle_network.emit(
+                        "hole-punch-result",
+                        serde_json::json!({
+                            "peerId": peer_id,
+                            "success": success,
+                        }),
+                    );
                 }
             }
         }

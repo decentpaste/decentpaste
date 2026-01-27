@@ -11,6 +11,17 @@ pub enum NetworkStatus {
     Error(String),
 }
 
+/// Connection type for a peer - indicates how we're connected
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum ConnectionType {
+    /// Direct connection on local network (mDNS discovered)
+    Local,
+    /// Direct P2P connection over internet (after hole punch or public IP)
+    Direct,
+    /// Connected via relay server (circuit relay)
+    Relay,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiscoveredPeer {
     pub peer_id: String,
@@ -108,5 +119,32 @@ pub enum NetworkEvent {
     SyncContentReceived {
         peer_id: String,
         message: ClipboardMessage,
+    },
+
+    // Internet connectivity events
+    /// Connection type changed for a peer (e.g., relay → direct after hole punch)
+    ConnectionTypeChanged {
+        peer_id: String,
+        connection_type: ConnectionType,
+    },
+    /// Connected to a relay server
+    RelayConnected {
+        relay_peer_id: String,
+        relay_address: String,
+    },
+    /// Disconnected from a relay server.
+    /// Reserved for future use when implementing relay reconnection logic.
+    #[allow(dead_code)]
+    RelayDisconnected {
+        relay_peer_id: String,
+    },
+    /// NAT status detected (Public/Private)
+    NatStatusDetected {
+        is_public: bool,
+    },
+    /// Hole punch attempt result
+    HolePunchResult {
+        peer_id: String,
+        success: bool,
     },
 }

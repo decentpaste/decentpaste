@@ -4,6 +4,28 @@ use std::path::PathBuf;
 use super::peers::get_data_dir;
 use crate::error::Result;
 
+/// Default relay servers for internet connectivity.
+///
+/// Format: Multiaddr with peer ID, e.g.:
+/// - `/ip4/1.2.3.4/tcp/4001/p2p/12D3KooW...`
+/// - `/dns4/relay.example.com/tcp/4001/p2p/12D3KooW...`
+///
+/// Note: Peer ID is required for relay connections.
+///
+/// For local testing, run the relay server and get its Peer ID from /info endpoint:
+/// ```bash
+/// cd decentpaste-relay && cargo run
+/// curl http://localhost:8080/info  # Get the peer_id
+/// ```
+pub const DEFAULT_RELAY_SERVERS: &[&str] = &[
+    // Public libp2p bootstrap nodes (support circuit relay v2)
+    // These are run by Protocol Labs / IPFS Foundation
+    // Note: May have rate limits - use dedicated relays for production
+    // See: https://docs.ipfs.tech/concepts/public-utilities/
+    // Updated 2026-01-27: Peer ID was stale, using correct one now
+    "/ip4/xx.xx.xx.xx/tcp/4001/p2p/12D3KooWGPxpmwDLnJwLJAueeG5yDAJRcXZbHekCDd5rTLbv1DTs",
+];
+
 /// Application settings stored in settings.json.
 ///
 /// Note: This struct uses `#[serde(default)]` for backward compatibility.
@@ -27,6 +49,15 @@ pub struct AppSettings {
     pub hide_clipboard_content: bool,
     /// Auto-lock timeout in minutes. 0 means never auto-lock.
     pub auto_lock_minutes: u32,
+
+    // Internet connectivity settings
+    /// Whether internet sync is enabled (connect via relay servers)
+    pub internet_sync_enabled: bool,
+    /// Custom relay servers (in addition to or instead of defaults)
+    /// Format: Multiaddr strings, e.g., "/dns4/relay.example.com/tcp/4001/p2p/12D3..."
+    pub relay_servers: Vec<String>,
+    /// Whether to use default relay servers (true) or only custom ones (false)
+    pub use_default_relays: bool,
 }
 
 impl Default for AppSettings {
@@ -40,6 +71,13 @@ impl Default for AppSettings {
             auth_method: None,
             hide_clipboard_content: false,
             auto_lock_minutes: 15,
+            // Internet connectivity defaults
+            internet_sync_enabled: false,
+            relay_servers: DEFAULT_RELAY_SERVERS
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
+            use_default_relays: true,
         }
     }
 }

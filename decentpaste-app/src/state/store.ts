@@ -82,6 +82,10 @@ export interface AppState {
   // Share intent state (Android "share with" functionality)
   // Stores content received from share intent while vault is locked
   pendingShare: string | null;
+
+  // Internet pairing state
+  internetPairingCode: { displayCode: string; uri: string; expiresAt: string } | null;
+  showEnterPairingCodeModal: boolean;
 }
 
 type StateListener<K extends keyof AppState> = (value: AppState[K]) => void;
@@ -111,6 +115,10 @@ class Store {
         auth_method: null,
         hide_clipboard_content: false,
         auto_lock_minutes: 15,
+        // Internet connectivity defaults
+        internet_sync_enabled: false,
+        relay_servers: [],
+        use_default_relays: true,
       },
       deviceInfo: null,
       isLoading: true,
@@ -135,6 +143,9 @@ class Store {
       appVersion: '',
       // Share intent state (Android)
       pendingShare: null,
+      // Internet pairing state
+      internetPairingCode: null,
+      showEnterPairingCodeModal: false,
     };
   }
 

@@ -285,3 +285,88 @@ export function formatShareResultMessage(result: ShareResult): string {
 export async function handleSharedContent(content: string): Promise<ShareResult> {
   return invoke('handle_shared_content', { content });
 }
+
+// ============================================================================
+// Internet Pairing Commands - For pairing devices over the internet via relay
+// ============================================================================
+
+/** Response from generateInternetPairingCode */
+export interface PairingCodeResponse {
+  /** Full URI for sharing (dp://relay#peer#token - uses # delimiter since Multiaddrs contain /) */
+  uri: string;
+  /** Human-friendly display code (XXXX-XXXX) */
+  displayCode: string;
+  /** When the code expires (ISO 8601) */
+  expiresAt: string;
+}
+
+/**
+ * Generate an internet pairing code for sharing with another device.
+ *
+ * The code includes:
+ * - Relay server address
+ * - Our peer ID
+ * - Cryptographic token
+ *
+ * @returns Both the full URI and a short display code
+ * @throws InvalidInput if internet sync is not enabled or no relay servers configured
+ */
+export async function generateInternetPairingCode(): Promise<PairingCodeResponse> {
+  return invoke('generate_internet_pairing_code');
+}
+
+/**
+ * Connect to a peer using their internet pairing code.
+ *
+ * @param code - Either the full URI (dp://...) or display code (XXXX-XXXX)
+ * @returns Session ID for tracking the pairing process
+ * @throws InvalidInput if code format is invalid
+ */
+export async function connectWithPairingCode(code: string): Promise<string> {
+  return invoke('connect_with_pairing_code', { code });
+}
+
+/**
+ * Get the connection type for a specific peer.
+ *
+ * @param peerId - The peer ID to check
+ * @returns Connection type: "local", "direct", "relay", or "unknown"
+ */
+export async function getPeerConnectionType(peerId: string): Promise<string> {
+  return invoke('get_peer_connection_type', { peerId });
+}
+
+/**
+ * Cancel an active internet pairing code (makes it invalid).
+ *
+ * @param displayCode - The display code to cancel
+ */
+export async function cancelInternetPairingCode(displayCode: string): Promise<void> {
+  return invoke('cancel_internet_pairing_code', { displayCode });
+}
+
+/** Internet connectivity settings */
+export interface InternetSettings {
+  /** Whether internet sync is enabled */
+  internetSyncEnabled: boolean;
+  /** Custom relay servers (Multiaddr format) */
+  relayServers: string[];
+  /** Whether to use default relay servers */
+  useDefaultRelays: boolean;
+}
+
+/**
+ * Get the current internet connectivity settings.
+ */
+export async function getInternetSettings(): Promise<InternetSettings> {
+  return invoke('get_internet_settings');
+}
+
+/**
+ * Update internet connectivity settings.
+ *
+ * @param settings - The new internet settings
+ */
+export async function updateInternetSettings(settings: InternetSettings): Promise<void> {
+  return invoke('update_internet_settings', { settings });
+}
