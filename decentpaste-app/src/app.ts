@@ -501,7 +501,7 @@ class App {
         const errorEl = document.getElementById('reset-error');
         const inputValue = resetInput?.value.trim() || '';
 
-        if (inputValue !== 'RESET') {
+        if (inputValue.toUpperCase() !== 'RESET') {
           if (errorEl) {
             errorEl.textContent = 'Please type RESET to confirm';
             errorEl.classList.remove('hidden');

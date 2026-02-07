@@ -39,17 +39,31 @@ impl<R: Runtime> Decentsecret<R> {
             "Checking keyring availability for service: {}",
             SERVICE_NAME
         );
-        // Try to create a keyring entry to check if the service is available
-        match Entry::new(SERVICE_NAME, ACCOUNT_NAME) {
+
+        let entry = match Entry::new(SERVICE_NAME, ACCOUNT_NAME) {
+            Ok(entry) => entry,
+            Err(e) => {
+                warn!("Keyring not available: {}", e);
+                return Ok(SecretStorageStatus::unavailable(format!(
+                    "OS keyring not available: {}",
+                    e
+                )));
+            }
+        };
+        let method = Self::get_platform_method();
+        match entry.get_password() {
             Ok(_) => {
-                let method = Self::get_platform_method();
-                debug!("Keyring available, method: {:?}", method);
+                debug!("Keyring available (entry exists), method: {:?}", method);
+                Ok(SecretStorageStatus::available(method))
+            }
+            Err(keyring::Error::NoEntry) => {
+                debug!("Keyring available (no entry yet), method: {:?}", method);
                 Ok(SecretStorageStatus::available(method))
             }
             Err(e) => {
-                warn!("Keyring not available: {}", e);
+                warn!("Keyring not accessible: {:?}", e);
                 Ok(SecretStorageStatus::unavailable(format!(
-                    "OS keyring not available: {}",
+                    "OS keyring not accessible: {}",
                     e
                 )))
             }
@@ -69,7 +83,7 @@ impl<R: Runtime> Decentsecret<R> {
 
         let entry = Entry::new(SERVICE_NAME, ACCOUNT_NAME).map_err(|e| {
             error!("Failed to create keyring entry: {}", e);
-            Error::Internal(format!("Failed to create keyring entry: {}", e))
+            Self::map_keyring_error(e)
         })?;
 
         // Encode as base64 for safe storage (keyring APIs expect strings)
@@ -90,7 +104,7 @@ impl<R: Runtime> Decentsecret<R> {
         // This ensures we're not just reading a cached value from the original Entry
         let verify_entry = Entry::new(SERVICE_NAME, ACCOUNT_NAME).map_err(|e| {
             error!("Failed to create verification entry: {}", e);
-            Error::Internal(format!("Failed to create verification entry: {}", e))
+            Self::map_keyring_error(e)
         })?;
 
         match verify_entry.get_password() {
@@ -127,7 +141,7 @@ impl<R: Runtime> Decentsecret<R> {
 
         let entry = Entry::new(SERVICE_NAME, ACCOUNT_NAME).map_err(|e| {
             error!("Failed to create keyring entry for retrieval: {}", e);
-            Error::Internal(format!("Failed to create keyring entry: {}", e))
+            Self::map_keyring_error(e)
         })?;
 
         let encoded = match entry.get_password() {
@@ -162,7 +176,7 @@ impl<R: Runtime> Decentsecret<R> {
 
         let entry = Entry::new(SERVICE_NAME, ACCOUNT_NAME).map_err(|e| {
             error!("Failed to create keyring entry for deletion: {}", e);
-            Error::Internal(format!("Failed to create keyring entry: {}", e))
+            Self::map_keyring_error(e)
         })?;
 
         // delete_credential returns an error if the entry doesn't exist,
@@ -215,7 +229,15 @@ impl<R: Runtime> Decentsecret<R> {
                 Error::NotAvailable(format!("Keyring access denied: {:?}", e))
             }
             keyring::Error::PlatformFailure(e) => {
-                Error::Internal(format!("Keyring error: {:?}", e))
+                let msg = format!("{:?}", e);
+                if msg.contains("Dbus") || msg.contains("dbus") || msg.contains("D-Bus") {
+                    Error::NotAvailable(format!(
+                        "System keyring not available (D-Bus error): {}",
+                        msg
+                    ))
+                } else {
+                    Error::Internal(format!("Keyring error: {:?}", e))
+                }
             }
             keyring::Error::BadEncoding(e) => {
                 Error::Internal(format!("Keyring encoding error: {:?}", e))
