@@ -93,6 +93,34 @@ pub fn run() {
                     MacosLauncher::LaunchAgent,
                     None,
                 ))?;
+
+                // Global shortcut to show/focus window (CommandOrControl+Shift+D)
+                use tauri_plugin_global_shortcut::{
+                    Builder as GlobalShortcutBuilder, ShortcutState,
+                };
+                match GlobalShortcutBuilder::new()
+                    .with_shortcuts(["CommandOrControl+Shift+D"])
+                {
+                    Ok(builder) => {
+                        if let Err(e) = app.handle().plugin(
+                            builder
+                                .with_handler(|app, _shortcut, event| {
+                                    if event.state == ShortcutState::Pressed {
+                                        if let Some(window) =
+                                            app.get_webview_window("main")
+                                        {
+                                            let _ = window.show();
+                                            let _ = window.set_focus();
+                                        }
+                                    }
+                                })
+                                .build(),
+                        ) {
+                            warn!("Failed to register global shortcut: {}", e);
+                        }
+                    }
+                    Err(e) => warn!("Failed to parse global shortcut: {}", e),
+                }
             }
 
             // Initialize app state
