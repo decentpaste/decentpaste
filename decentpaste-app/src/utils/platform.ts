@@ -47,6 +47,13 @@ export function isMobile(): boolean {
 }
 
 /**
+ * Returns true if running on macOS.
+ */
+export function isMac(): boolean {
+  return cachedPlatform === 'macos';
+}
+
+/**
  * Returns true if running on a desktop platform (not mobile).
  */
 export function isDesktop(): boolean {

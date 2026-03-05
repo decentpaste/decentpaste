@@ -20,7 +20,7 @@ pub fn setup_tray(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Erro
         tauri::async_runtime::block_on(async { state.settings.read().await.auto_sync_enabled });
 
     // Create menu items
-    let show_item = MenuItem::with_id(app, "show", "Show DecentPaste", true, None::<&str>)?;
+    let show_item = MenuItem::with_id(app, "show", "Show DecentPaste", true, Some("CommandOrControl+Shift+D"))?;
     let sync_label = if sync_enabled {
         "Auto Sync: On"
     } else {
@@ -39,7 +39,11 @@ pub fn setup_tray(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Erro
         .icon(app.default_window_icon().unwrap().clone())
         .menu(&menu)
         .show_menu_on_left_click(false)
-        .tooltip("DecentPaste")
+        .tooltip(if cfg!(target_os = "macos") {
+            "DecentPaste — ⌘⇧D to open"
+        } else {
+            "DecentPaste — Ctrl+Shift+D to open"
+        })
         .on_tray_icon_event(|tray, event| {
             if let TrayIconEvent::Click {
                 button: MouseButton::Left,

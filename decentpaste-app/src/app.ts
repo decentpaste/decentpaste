@@ -5,7 +5,7 @@ import { getVersion } from '@tauri-apps/api/app';
 import { icon, type IconName } from './components/icons';
 import { $, escapeHtml, formatTime, truncate } from './utils/dom';
 import { getErrorMessage } from './utils/error';
-import { isDesktop } from './utils/platform';
+import { isDesktop, isMac } from './utils/platform';
 import { checkForUpdates, downloadAndInstallUpdate, formatBytes, getDownloadPercentage } from './api/updater';
 import type { ClipboardEntry, DiscoveredPeer, PairedPeer, SecretStorageMethod } from './api/types';
 // ?url suffix prevents race condition where Tauri webview loads before Vite is ready,
@@ -1298,7 +1298,7 @@ class App {
         <!-- Scrollable Clipboard History (Full List) -->
         <div class="flex-1 min-h-0 overflow-y-auto px-4 pb-4 pt-1">
           <div id="clipboard-history-list" class="space-y-2">
-            ${allItems.length > 0 ? allItems.map((item) => this.renderClipboardItem(item, hideContent)).join('') : this.renderEmptyState('No clipboard items yet', 'Copy something to get started')}
+            ${allItems.length > 0 ? allItems.map((item) => this.renderClipboardItem(item, hideContent)).join('') : this.renderClipboardEmptyState()}
           </div>
         </div>
       </div>
@@ -2049,6 +2049,30 @@ class App {
     `;
   }
 
+  private renderClipboardEmptyState(): string {
+    const shortcutHint = isDesktop()
+      ? `<p class="text-white/25 text-[11px] mt-3">
+          <kbd class="shortcut-kbd">${isMac() ? '⌘' : 'Ctrl'}</kbd>
+          <span class="text-white/20">+</span>
+          <kbd class="shortcut-kbd">Shift</kbd>
+          <span class="text-white/20">+</span>
+          <kbd class="shortcut-kbd">D</kbd>
+          <span class="ml-1.5">to open from anywhere</span>
+        </p>`
+      : '';
+
+    return `
+      <div class="empty-state text-center py-12">
+        <div class="empty-state-icon">
+          ${icon('clipboard', 28, 'text-white/25')}
+        </div>
+        <p class="text-white/60 text-sm font-semibold tracking-tight">No clipboard items yet</p>
+        <p class="text-white/35 text-xs mt-1.5">Copy something to get started</p>
+        ${shortcutHint}
+      </div>
+    `;
+  }
+
   private renderToastsContent(): string {
     const toasts = store.get('toasts');
     return toasts.map((toast) => this.renderToast(toast)).join('');
@@ -2231,7 +2255,7 @@ class App {
         container.innerHTML =
           history.length > 0
             ? history.map((item) => this.renderClipboardItem(item, hideContent)).join('')
-            : this.renderEmptyState('No clipboard items yet', 'Copy something to get started');
+            : this.renderClipboardEmptyState();
 
         // If this is an update, immediately re-add no-stagger to prevent animations
         // If this is initial render, add no-stagger after animations complete
