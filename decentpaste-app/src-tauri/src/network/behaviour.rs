@@ -110,7 +110,14 @@ impl DecentPasteBehaviour {
         device_name: &str,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         // mDNS for local discovery
-        let mdns = mdns::tokio::Behaviour::new(mdns::Config::default(), local_peer_id)?;
+        // Reduce query interval (default 5min) and TTL (default 6min) for faster discovery
+        // and quicker removal of stale peers after they go offline
+        let mdns_config = mdns::Config {
+            query_interval: Duration::from_secs(30),
+            ttl: Duration::from_secs(60),
+            ..mdns::Config::default()
+        };
+        let mdns = mdns::tokio::Behaviour::new(mdns_config, local_peer_id)?;
 
         // Gossipsub for clipboard broadcast
         let gossipsub_config = gossipsub::ConfigBuilder::default()
