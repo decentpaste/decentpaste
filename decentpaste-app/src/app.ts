@@ -17,6 +17,7 @@ class App {
   private pairingInProgress: boolean = false; // Guard against duplicate pairing operations
   private modalRenderPending: boolean = false; // Debounce modal renders
   private autoLockTimer: ReturnType<typeof setTimeout> | null = null; // Auto-lock timer
+  private pairingTimeout: ReturnType<typeof setTimeout> | null = null; // Pairing timeout
 
   constructor(rootElement: HTMLElement) {
     this.root = rootElement;
@@ -195,6 +196,20 @@ class App {
           try {
             const sessionId = await commands.initiatePairing(peerId);
             store.update('activePairingSession', (s) => (s ? { ...s, session_id: sessionId } : null));
+            // Start a 30s timeout — if pairing hasn't progressed, show an error
+            if (this.pairingTimeout) clearTimeout(this.pairingTimeout);
+            this.pairingTimeout = setTimeout(() => {
+              const session = store.get('activePairingSession');
+              if (session && session.state === 'Initiated') {
+                store.addToast(
+                  'Pairing timed out. Make sure the other device is nearby and the app is open.',
+                  'error',
+                );
+                store.set('showPairingModal', false);
+                store.set('activePairingSession', null);
+                commands.cancelPairing(session.session_id).catch(() => {});
+              }
+            }, 30000);
           } catch (error) {
             store.addToast(`Failed to initiate pairing: ${getErrorMessage(error)}`, 'error');
             store.set('showPairingModal', false);
@@ -383,6 +398,7 @@ class App {
 
       const cancelBtn = target.closest('#btn-cancel-pairing') as HTMLButtonElement | null;
       if (cancelBtn) {
+        if (this.pairingTimeout) clearTimeout(this.pairingTimeout);
         const session = store.get('activePairingSession');
         if (session && !cancelBtn.disabled) {
           cancelBtn.disabled = true;
@@ -830,6 +846,7 @@ class App {
     });
 
     eventManager.on('pairingPin', (payload) => {
+      if (this.pairingTimeout) clearTimeout(this.pairingTimeout);
       store.update('activePairingSession', (session) =>
         session
           ? {
@@ -844,6 +861,7 @@ class App {
     });
 
     eventManager.on('pairingComplete', (payload) => {
+      if (this.pairingTimeout) clearTimeout(this.pairingTimeout);
       store.set('showPairingModal', false);
       store.set('activePairingSession', null);
       store.addToast(`Paired with ${payload.deviceName}!`, 'success');
@@ -854,6 +872,7 @@ class App {
     });
 
     eventManager.on('pairingFailed', (payload) => {
+      if (this.pairingTimeout) clearTimeout(this.pairingTimeout);
       store.addToast(`Pairing failed: ${payload.error}`, 'error');
       store.set('showPairingModal', false);
       store.set('activePairingSession', null);
@@ -2015,7 +2034,12 @@ class App {
   }
 
   private renderDiscoveredPeer(peer: DiscoveredPeer): string {
-    const safeName = peer.device_name ? escapeHtml(peer.device_name) : 'Unknown Device';
+    const isRecent = Date.now() - new Date(peer.discovered_at).getTime() < 5000;
+    const safeName = peer.device_name
+      ? escapeHtml(peer.device_name)
+      : isRecent
+        ? 'Connecting...'
+        : 'Unknown Device';
     return `
       <div class="card p-3 flex items-center justify-between">
         <div class="flex items-center gap-3">
