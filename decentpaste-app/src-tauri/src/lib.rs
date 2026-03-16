@@ -957,6 +957,37 @@ pub async fn start_network_services(
                     );
                 }
 
+                NetworkEvent::OutboundPairingFailed { peer_id, error } => {
+                    // Find active pairing session for this peer
+                    let session_id = {
+                        let sessions = state.pairing_sessions.read().await;
+                        sessions
+                            .iter()
+                            .find(|s| {
+                                s.peer_id == peer_id
+                                    && matches!(s.state, security::PairingState::Initiated)
+                            })
+                            .map(|s| s.session_id.clone())
+                    };
+                    if let Some(session_id) = session_id {
+                        let mut sessions = state.pairing_sessions.write().await;
+                        if let Some(session) =
+                            sessions.iter_mut().find(|s| s.session_id == session_id)
+                        {
+                            session.state =
+                                security::PairingState::Failed(error.clone());
+                        }
+                        drop(sessions);
+                        let _ = app_handle_network.emit(
+                            "pairing-failed",
+                            serde_json::json!({
+                                "sessionId": session_id,
+                                "error": error,
+                            }),
+                        );
+                    }
+                }
+
                 NetworkEvent::ClipboardReceived(msg) => {
                     // Safety check: ignore our own messages (belt-and-suspenders)
                     let my_device_id = state

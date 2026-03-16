@@ -2,7 +2,7 @@ use chrono::Utc;
 use futures::StreamExt;
 use libp2p::{
     gossipsub, identify, mdns, noise,
-    request_response::{self, ResponseChannel},
+    request_response::{self, OutboundRequestId, ResponseChannel},
     swarm::SwarmEvent,
     tcp, yamux, Multiaddr, PeerId, Swarm,
 };
@@ -115,6 +115,8 @@ pub struct NetworkManager {
     ready_peers: HashMap<PeerId, Instant>,
     /// Current device name (updated when settings change)
     device_name: String,
+    /// Track outbound pairing request IDs to correlate OutboundFailure events
+    pending_pairing_requests: HashMap<OutboundRequestId, String>,
 }
 
 impl NetworkManager {
@@ -151,6 +153,7 @@ impl NetworkManager {
             pending_responses: HashMap::new(),
             ready_peers: HashMap::new(),
             device_name,
+            pending_pairing_requests: HashMap::new(),
         })
     }
 
@@ -554,7 +557,12 @@ impl NetworkManager {
                                     }
                                 }
                             }
-                            request_response::Message::Response { response, .. } => {
+                            request_response::Message::Response {
+                                request_id,
+                                response,
+                                ..
+                            } => {
+                                self.pending_pairing_requests.remove(&request_id);
                                 debug!("Received response from {}", peer);
 
                                 // Parse the protocol message
@@ -651,8 +659,24 @@ impl NetworkManager {
                             }
                         }
                     }
-                    request_response::Event::OutboundFailure { peer, error, .. } => {
+                    request_response::Event::OutboundFailure {
+                        peer,
+                        request_id,
+                        error,
+                        ..
+                    } => {
                         warn!("Outbound request to {} failed: {}", peer, error);
+                        if let Some(peer_id) =
+                            self.pending_pairing_requests.remove(&request_id)
+                        {
+                            let _ = self
+                                .event_tx
+                                .send(NetworkEvent::OutboundPairingFailed {
+                                    peer_id,
+                                    error: format!("Failed to reach device: {}", error),
+                                })
+                                .await;
+                        }
                     }
                     request_response::Event::InboundFailure { peer, error, .. } => {
                         warn!("Inbound request from {} failed: {}", peer, error);
@@ -805,11 +829,17 @@ impl NetworkManager {
             NetworkCommand::SendPairingRequest { peer_id, message } => {
                 if let Ok(peer) = peer_id.parse::<PeerId>() {
                     let request = ReqPairingRequest { message };
-                    self.swarm
+                    let request_id = self
+                        .swarm
                         .behaviour_mut()
                         .request_response
                         .send_request(&peer, request);
-                    debug!("Sent pairing request to {}", peer_id);
+                    self.pending_pairing_requests
+                        .insert(request_id, peer_id.clone());
+                    debug!(
+                        "Sent pairing request to {} (request_id: {:?})",
+                        peer_id, request_id
+                    );
                 }
             }
 
@@ -894,10 +924,13 @@ impl NetworkManager {
                     let protocol_msg = ProtocolMessage::Pairing(PairingMessage::Confirm(confirm));
                     if let Ok(message) = protocol_msg.to_bytes() {
                         let request = ReqPairingRequest { message };
-                        self.swarm
+                        let request_id = self
+                            .swarm
                             .behaviour_mut()
                             .request_response
                             .send_request(&peer, request);
+                        self.pending_pairing_requests
+                            .insert(request_id, peer_id.clone());
                         debug!("Sent pairing confirm to {}", peer_id);
                     }
                 }
