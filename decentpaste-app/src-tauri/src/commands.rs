@@ -1117,21 +1117,38 @@ pub async fn ensure_connected(state: &AppState, timeout: Duration) -> Connection
         return get_connection_summary(state).await;
     }
 
-    // Count pending dials
-    state.pending_dials.store(to_dial.len(), Ordering::SeqCst);
+    // Collect addresses for reconnection, preferring fresh mDNS-discovered addresses
+    // over stale vault addresses (which may be outdated after peer restart)
+    let addresses: Vec<(String, Vec<String>)> = {
+        let discovered = state.discovered_peers.read().await;
+        to_dial
+            .iter()
+            .filter_map(|p| {
+                let fresh_addrs = discovered
+                    .iter()
+                    .find(|d| d.peer_id == p.peer_id)
+                    .map(|d| d.addresses.clone())
+                    .filter(|a| !a.is_empty());
+                let addrs = fresh_addrs.unwrap_or_else(|| p.last_known_addresses.clone());
+                if addrs.is_empty() {
+                    None
+                } else {
+                    Some((p.peer_id.clone(), addrs))
+                }
+            })
+            .collect()
+    };
+
+    // Count pending dials (after filtering out peers with no addresses)
+    state
+        .pending_dials
+        .store(addresses.len(), Ordering::SeqCst);
 
     debug!(
         "Dialing {} disconnected peers (timeout: {:?})",
-        to_dial.len(),
+        addresses.len(),
         timeout
     );
-
-    // Collect addresses for reconnection
-    let addresses: Vec<(String, Vec<String>)> = to_dial
-        .iter()
-        .filter(|p| !p.last_known_addresses.is_empty())
-        .map(|p| (p.peer_id.clone(), p.last_known_addresses.clone()))
-        .collect();
 
     // Trigger dials via network command
     if let Some(tx) = state.network_command_tx.read().await.as_ref() {
