@@ -117,6 +117,8 @@ pub struct NetworkManager {
     device_name: String,
     /// Track outbound pairing request IDs to correlate OutboundFailure events
     pending_pairing_requests: HashMap<OutboundRequestId, String>,
+    /// Cache device names that arrive (via Identify or DeviceAnnounce) before mDNS creates the peer entry
+    pending_device_names: HashMap<PeerId, String>,
 }
 
 impl NetworkManager {
@@ -154,6 +156,7 @@ impl NetworkManager {
             ready_peers: HashMap::new(),
             device_name,
             pending_pairing_requests: HashMap::new(),
+            pending_device_names: HashMap::new(),
         })
     }
 
@@ -238,10 +241,11 @@ impl NetworkManager {
                                 existing.discovered_at = Utc::now();
                                 // Don't re-emit - no significant change (device_name preserved)
                             } else {
-                                // New peer - create entry and emit event
+                                // New peer - create entry, using any cached name from Identify/DeviceAnnounce
+                                let device_name = self.pending_device_names.remove(&peer_id);
                                 let discovered = DiscoveredPeer {
                                     peer_id: peer_id.to_string(),
-                                    device_name: None,
+                                    device_name,
                                     addresses: vec![addr.to_string()],
                                     discovered_at: Utc::now(),
                                     is_paired: false,
@@ -258,6 +262,7 @@ impl NetworkManager {
                         for (peer_id, _) in peers {
                             debug!("mDNS peer expired: {}", peer_id);
                             self.discovered_peers.remove(&peer_id);
+                            self.pending_device_names.remove(&peer_id);
                             let _ = self
                                 .event_tx
                                 .send(NetworkEvent::PeerLost(peer_id.to_string()))
@@ -317,6 +322,10 @@ impl NetworkManager {
                                             .send(NetworkEvent::PeerDiscovered(discovered.clone()))
                                             .await;
                                     }
+                                } else {
+                                    // mDNS hasn't created the entry yet — cache the name
+                                    debug!("Caching announced name for undiscovered peer {}: {}", pid, announce_msg.device_name);
+                                    self.pending_device_names.insert(pid, announce_msg.device_name.clone());
                                 }
                             }
                         }
@@ -723,6 +732,10 @@ impl NetworkManager {
                             .send(NetworkEvent::PeerDiscovered(discovered.clone()))
                             .await;
                     }
+                } else if let Some(name) = device_name {
+                    // mDNS hasn't created the entry yet — cache the name for later
+                    debug!("Caching device name for undiscovered peer {}: {}", peer_id, name);
+                    self.pending_device_names.insert(peer_id, name);
                 }
             }
 
@@ -782,6 +795,7 @@ impl NetworkManager {
                 }
 
                 self.connected_peers.remove(&peer_id);
+                self.pending_device_names.remove(&peer_id);
                 let _ = self
                     .event_tx
                     .send(NetworkEvent::PeerDisconnected(peer_id.to_string()))

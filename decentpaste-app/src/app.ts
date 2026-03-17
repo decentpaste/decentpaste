@@ -2034,12 +2034,7 @@ class App {
   }
 
   private renderDiscoveredPeer(peer: DiscoveredPeer): string {
-    const isRecent = Date.now() - new Date(peer.discovered_at).getTime() < 5000;
-    const safeName = peer.device_name
-      ? escapeHtml(peer.device_name)
-      : isRecent
-        ? 'Connecting...'
-        : 'Unknown Device';
+    const safeName = peer.device_name ? escapeHtml(peer.device_name) : 'Unknown Device';
     return `
       <div class="card p-3 flex items-center justify-between">
         <div class="flex items-center gap-3">
