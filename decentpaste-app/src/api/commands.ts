@@ -48,6 +48,21 @@ export async function refreshConnections(): Promise<ConnectionSummary> {
   return invoke('refresh_connections');
 }
 
+/** Result of a discovery refresh operation */
+export interface DiscoveryRefreshResult {
+  discovered_peers: DiscoveredPeer[];
+  paired_count: number;
+  connections_healthy: boolean;
+}
+
+/**
+ * Refresh discovery: sync frontend with backend's current discovered peers,
+ * dial unconnected peers for name resolution, and reconnect paired peers.
+ */
+export async function refreshDiscovery(): Promise<DiscoveryRefreshResult> {
+  return invoke('refresh_discovery');
+}
+
 /**
  * Update app visibility state in the backend.
  * This ensures backend is the single source of truth for foreground state.

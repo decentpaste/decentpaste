@@ -1254,6 +1254,54 @@ pub async fn refresh_connections(state: State<'_, AppState>) -> Result<Connectio
     Ok(ensure_connected(&state, Duration::from_secs(5)).await)
 }
 
+/// Result of a discovery refresh operation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiscoveryRefreshResult {
+    pub discovered_peers: Vec<DiscoveredPeer>,
+    pub paired_count: usize,
+    pub connections_healthy: bool,
+}
+
+/// Refresh discovery: sync frontend with backend's discovered peers,
+/// dial unconnected peers for name resolution, and reconnect paired peers.
+#[tauri::command]
+pub async fn refresh_discovery(state: State<'_, AppState>) -> Result<DiscoveryRefreshResult> {
+    info!("Manual discovery refresh requested");
+
+    // 1. Send GetPeers to re-emit discovered peers and dial unconnected ones.
+    //    Note: GetPeers is processed async by the swarm task — discovered_peers
+    //    may not reflect newly dialed peers yet. The 3s ensure_connected wait
+    //    gives events time to propagate, and the frontend event listener also
+    //    updates incrementally as PeerDiscovered events arrive.
+    let tx = state.network_command_tx.read().await;
+    if let Some(tx) = tx.as_ref() {
+        tx.send(NetworkCommand::GetPeers)
+            .await
+            .map_err(|e| DecentPasteError::Network(format!("Failed to send GetPeers: {}", e)))?;
+    }
+    drop(tx);
+
+    // 2. Reconnect paired peers (3s timeout — shorter than full refresh since
+    //    this is primarily a discovery operation)
+    let summary = ensure_connected(&state, Duration::from_secs(3)).await;
+
+    // 3. Return filtered discovered peers (exclude already-paired peers)
+    let discovered = state.discovered_peers.read().await;
+    let paired = state.paired_peers.read().await;
+
+    let filtered: Vec<DiscoveredPeer> = discovered
+        .iter()
+        .filter(|d| !paired.iter().any(|p| p.peer_id == d.peer_id))
+        .cloned()
+        .collect();
+
+    Ok(DiscoveryRefreshResult {
+        discovered_peers: filtered,
+        paired_count: summary.total_peers,
+        connections_healthy: summary.success,
+    })
+}
+
 /// Share clipboard content with paired peers.
 /// Called internally by handle_shared_content for Android/iOS share intents.
 async fn share_clipboard_content(

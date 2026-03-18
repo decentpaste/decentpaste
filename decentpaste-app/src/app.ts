@@ -243,21 +243,29 @@ class App {
         return;
       }
 
-      // Refresh peers button - triggers reconnection to paired devices
+      // Refresh peers button - syncs discovered devices from backend and reconnects paired peers
       if (target.closest('#btn-refresh-peers')) {
+        const btn = target.closest('#btn-refresh-peers') as HTMLElement;
+        btn.innerHTML = icon('loader', 14, 'animate-spin');
+        btn.classList.add('pointer-events-none');
         try {
-          // Awaitable refresh - returns when all dials complete or timeout
-          const summary = await commands.refreshConnections();
+          const result = await commands.refreshDiscovery();
 
-          if (summary.total_peers === 0) {
-            store.addToast('No paired devices', 'info');
-          } else if (summary.success) {
-            store.addToast(`Refreshed connections (${summary.total_peers} device(s))`, 'success');
+          // Atomically replace discovered peers with backend's current state
+          store.set('discoveredPeers', result.discovered_peers);
+
+          if (result.discovered_peers.length > 0) {
+            store.addToast(`Found ${result.discovered_peers.length} device(s) on network`, 'success');
+          } else if (result.paired_count > 0 && result.connections_healthy) {
+            store.addToast(`No new devices found (${result.paired_count} paired connected)`, 'info');
           } else {
-            store.addToast(`Reconnecting to ${summary.total_peers} device(s)...`, 'info');
+            store.addToast('No devices found', 'info');
           }
         } catch (error) {
           store.addToast(`Refresh failed: ${getErrorMessage(error)}`, 'error');
+        } finally {
+          btn.innerHTML = icon('refreshCw', 14);
+          btn.classList.remove('pointer-events-none');
         }
         return;
       }

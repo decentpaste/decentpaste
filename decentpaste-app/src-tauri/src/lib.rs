@@ -169,6 +169,7 @@ pub fn run() {
             commands::handle_shared_content,
             // Connection management
             commands::refresh_connections,
+            commands::refresh_discovery,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

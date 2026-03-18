@@ -50,7 +50,6 @@ pub enum NetworkCommand {
     BroadcastClipboard {
         message: ClipboardMessage,
     },
-    #[allow(dead_code)]
     GetPeers,
     /// Force reconnection to all discovered peers (used after app resume from background).
     /// Also attempts to reconnect to paired peers using their last-known addresses
@@ -951,12 +950,27 @@ impl NetworkManager {
             }
 
             NetworkCommand::GetPeers => {
-                // Send current peer lists
+                // Re-emit current discovered peers and dial any that aren't connected
+                let connected: std::collections::HashSet<PeerId> = self
+                    .swarm
+                    .connected_peers()
+                    .cloned()
+                    .collect();
+
                 for peer in self.discovered_peers.values() {
                     let _ = self
                         .event_tx
                         .send(NetworkEvent::PeerDiscovered(peer.clone()))
                         .await;
+
+                    // Dial unconnected discovered peers to trigger Identify for name resolution
+                    if let Ok(peer_id) = peer.peer_id.parse::<PeerId>() {
+                        if !connected.contains(&peer_id) {
+                            if let Err(e) = self.swarm.dial(peer_id) {
+                                warn!("GetPeers: failed to dial {}: {}", peer.peer_id, e);
+                            }
+                        }
+                    }
                 }
             }
 
