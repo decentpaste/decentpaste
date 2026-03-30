@@ -1117,21 +1117,38 @@ pub async fn ensure_connected(state: &AppState, timeout: Duration) -> Connection
         return get_connection_summary(state).await;
     }
 
-    // Count pending dials
-    state.pending_dials.store(to_dial.len(), Ordering::SeqCst);
+    // Collect addresses for reconnection, preferring fresh mDNS-discovered addresses
+    // over stale vault addresses (which may be outdated after peer restart)
+    let addresses: Vec<(String, Vec<String>)> = {
+        let discovered = state.discovered_peers.read().await;
+        to_dial
+            .iter()
+            .filter_map(|p| {
+                let fresh_addrs = discovered
+                    .iter()
+                    .find(|d| d.peer_id == p.peer_id)
+                    .map(|d| d.addresses.clone())
+                    .filter(|a| !a.is_empty());
+                let addrs = fresh_addrs.unwrap_or_else(|| p.last_known_addresses.clone());
+                if addrs.is_empty() {
+                    None
+                } else {
+                    Some((p.peer_id.clone(), addrs))
+                }
+            })
+            .collect()
+    };
+
+    // Count pending dials (after filtering out peers with no addresses)
+    state
+        .pending_dials
+        .store(addresses.len(), Ordering::SeqCst);
 
     debug!(
         "Dialing {} disconnected peers (timeout: {:?})",
-        to_dial.len(),
+        addresses.len(),
         timeout
     );
-
-    // Collect addresses for reconnection
-    let addresses: Vec<(String, Vec<String>)> = to_dial
-        .iter()
-        .filter(|p| !p.last_known_addresses.is_empty())
-        .map(|p| (p.peer_id.clone(), p.last_known_addresses.clone()))
-        .collect();
 
     // Trigger dials via network command
     if let Some(tx) = state.network_command_tx.read().await.as_ref() {
@@ -1235,6 +1252,54 @@ pub async fn handle_shared_content(
 pub async fn refresh_connections(state: State<'_, AppState>) -> Result<ConnectionSummary> {
     info!("Manual refresh connections requested");
     Ok(ensure_connected(&state, Duration::from_secs(5)).await)
+}
+
+/// Result of a discovery refresh operation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiscoveryRefreshResult {
+    pub discovered_peers: Vec<DiscoveredPeer>,
+    pub paired_count: usize,
+    pub connections_healthy: bool,
+}
+
+/// Refresh discovery: sync frontend with backend's discovered peers,
+/// dial unconnected peers for name resolution, and reconnect paired peers.
+#[tauri::command]
+pub async fn refresh_discovery(state: State<'_, AppState>) -> Result<DiscoveryRefreshResult> {
+    info!("Manual discovery refresh requested");
+
+    // 1. Send GetPeers to re-emit discovered peers and dial unconnected ones.
+    //    Note: GetPeers is processed async by the swarm task — discovered_peers
+    //    may not reflect newly dialed peers yet. The 3s ensure_connected wait
+    //    gives events time to propagate, and the frontend event listener also
+    //    updates incrementally as PeerDiscovered events arrive.
+    let tx = state.network_command_tx.read().await;
+    if let Some(tx) = tx.as_ref() {
+        tx.send(NetworkCommand::GetPeers)
+            .await
+            .map_err(|e| DecentPasteError::Network(format!("Failed to send GetPeers: {}", e)))?;
+    }
+    drop(tx);
+
+    // 2. Reconnect paired peers (3s timeout — shorter than full refresh since
+    //    this is primarily a discovery operation)
+    let summary = ensure_connected(&state, Duration::from_secs(3)).await;
+
+    // 3. Return filtered discovered peers (exclude already-paired peers)
+    let discovered = state.discovered_peers.read().await;
+    let paired = state.paired_peers.read().await;
+
+    let filtered: Vec<DiscoveredPeer> = discovered
+        .iter()
+        .filter(|d| !paired.iter().any(|p| p.peer_id == d.peer_id))
+        .cloned()
+        .collect();
+
+    Ok(DiscoveryRefreshResult {
+        discovered_peers: filtered,
+        paired_count: summary.total_peers,
+        connections_healthy: summary.success,
+    })
 }
 
 /// Share clipboard content with paired peers.

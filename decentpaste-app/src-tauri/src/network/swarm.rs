@@ -2,7 +2,7 @@ use chrono::Utc;
 use futures::StreamExt;
 use libp2p::{
     gossipsub, identify, mdns, noise,
-    request_response::{self, ResponseChannel},
+    request_response::{self, OutboundRequestId, ResponseChannel},
     swarm::SwarmEvent,
     tcp, yamux, Multiaddr, PeerId, Swarm,
 };
@@ -50,7 +50,6 @@ pub enum NetworkCommand {
     BroadcastClipboard {
         message: ClipboardMessage,
     },
-    #[allow(dead_code)]
     GetPeers,
     /// Force reconnection to all discovered peers (used after app resume from background).
     /// Also attempts to reconnect to paired peers using their last-known addresses
@@ -115,6 +114,10 @@ pub struct NetworkManager {
     ready_peers: HashMap<PeerId, Instant>,
     /// Current device name (updated when settings change)
     device_name: String,
+    /// Track outbound pairing request IDs to correlate OutboundFailure events
+    pending_pairing_requests: HashMap<OutboundRequestId, String>,
+    /// Cache device names that arrive (via Identify or DeviceAnnounce) before mDNS creates the peer entry
+    pending_device_names: HashMap<PeerId, String>,
 }
 
 impl NetworkManager {
@@ -151,6 +154,8 @@ impl NetworkManager {
             pending_responses: HashMap::new(),
             ready_peers: HashMap::new(),
             device_name,
+            pending_pairing_requests: HashMap::new(),
+            pending_device_names: HashMap::new(),
         })
     }
 
@@ -235,10 +240,11 @@ impl NetworkManager {
                                 existing.discovered_at = Utc::now();
                                 // Don't re-emit - no significant change (device_name preserved)
                             } else {
-                                // New peer - create entry and emit event
+                                // New peer - create entry, using any cached name from Identify/DeviceAnnounce
+                                let device_name = self.pending_device_names.remove(&peer_id);
                                 let discovered = DiscoveredPeer {
                                     peer_id: peer_id.to_string(),
-                                    device_name: None,
+                                    device_name,
                                     addresses: vec![addr.to_string()],
                                     discovered_at: Utc::now(),
                                     is_paired: false,
@@ -255,6 +261,7 @@ impl NetworkManager {
                         for (peer_id, _) in peers {
                             debug!("mDNS peer expired: {}", peer_id);
                             self.discovered_peers.remove(&peer_id);
+                            self.pending_device_names.remove(&peer_id);
                             let _ = self
                                 .event_tx
                                 .send(NetworkEvent::PeerLost(peer_id.to_string()))
@@ -314,6 +321,10 @@ impl NetworkManager {
                                             .send(NetworkEvent::PeerDiscovered(discovered.clone()))
                                             .await;
                                     }
+                                } else {
+                                    // mDNS hasn't created the entry yet — cache the name
+                                    debug!("Caching announced name for undiscovered peer {}: {}", pid, announce_msg.device_name);
+                                    self.pending_device_names.insert(pid, announce_msg.device_name.clone());
                                 }
                             }
                         }
@@ -554,7 +565,12 @@ impl NetworkManager {
                                     }
                                 }
                             }
-                            request_response::Message::Response { response, .. } => {
+                            request_response::Message::Response {
+                                request_id,
+                                response,
+                                ..
+                            } => {
+                                self.pending_pairing_requests.remove(&request_id);
                                 debug!("Received response from {}", peer);
 
                                 // Parse the protocol message
@@ -651,8 +667,24 @@ impl NetworkManager {
                             }
                         }
                     }
-                    request_response::Event::OutboundFailure { peer, error, .. } => {
+                    request_response::Event::OutboundFailure {
+                        peer,
+                        request_id,
+                        error,
+                        ..
+                    } => {
                         warn!("Outbound request to {} failed: {}", peer, error);
+                        if let Some(peer_id) =
+                            self.pending_pairing_requests.remove(&request_id)
+                        {
+                            let _ = self
+                                .event_tx
+                                .send(NetworkEvent::OutboundPairingFailed {
+                                    peer_id,
+                                    error: format!("Failed to reach device: {}", error),
+                                })
+                                .await;
+                        }
                     }
                     request_response::Event::InboundFailure { peer, error, .. } => {
                         warn!("Inbound request from {} failed: {}", peer, error);
@@ -699,6 +731,10 @@ impl NetworkManager {
                             .send(NetworkEvent::PeerDiscovered(discovered.clone()))
                             .await;
                     }
+                } else if let Some(name) = device_name {
+                    // mDNS hasn't created the entry yet — cache the name for later
+                    debug!("Caching device name for undiscovered peer {}: {}", peer_id, name);
+                    self.pending_device_names.insert(peer_id, name);
                 }
             }
 
@@ -758,6 +794,7 @@ impl NetworkManager {
                 }
 
                 self.connected_peers.remove(&peer_id);
+                self.pending_device_names.remove(&peer_id);
                 let _ = self
                     .event_tx
                     .send(NetworkEvent::PeerDisconnected(peer_id.to_string()))
@@ -805,11 +842,17 @@ impl NetworkManager {
             NetworkCommand::SendPairingRequest { peer_id, message } => {
                 if let Ok(peer) = peer_id.parse::<PeerId>() {
                     let request = ReqPairingRequest { message };
-                    self.swarm
+                    let request_id = self
+                        .swarm
                         .behaviour_mut()
                         .request_response
                         .send_request(&peer, request);
-                    debug!("Sent pairing request to {}", peer_id);
+                    self.pending_pairing_requests
+                        .insert(request_id, peer_id.clone());
+                    debug!(
+                        "Sent pairing request to {} (request_id: {:?})",
+                        peer_id, request_id
+                    );
                 }
             }
 
@@ -894,22 +937,40 @@ impl NetworkManager {
                     let protocol_msg = ProtocolMessage::Pairing(PairingMessage::Confirm(confirm));
                     if let Ok(message) = protocol_msg.to_bytes() {
                         let request = ReqPairingRequest { message };
-                        self.swarm
+                        let request_id = self
+                            .swarm
                             .behaviour_mut()
                             .request_response
                             .send_request(&peer, request);
+                        self.pending_pairing_requests
+                            .insert(request_id, peer_id.clone());
                         debug!("Sent pairing confirm to {}", peer_id);
                     }
                 }
             }
 
             NetworkCommand::GetPeers => {
-                // Send current peer lists
+                // Re-emit current discovered peers and dial any that aren't connected
+                let connected: std::collections::HashSet<PeerId> = self
+                    .swarm
+                    .connected_peers()
+                    .cloned()
+                    .collect();
+
                 for peer in self.discovered_peers.values() {
                     let _ = self
                         .event_tx
                         .send(NetworkEvent::PeerDiscovered(peer.clone()))
                         .await;
+
+                    // Dial unconnected discovered peers to trigger Identify for name resolution
+                    if let Ok(peer_id) = peer.peer_id.parse::<PeerId>() {
+                        if !connected.contains(&peer_id) {
+                            if let Err(e) = self.swarm.dial(peer_id) {
+                                warn!("GetPeers: failed to dial {}: {}", peer.peer_id, e);
+                            }
+                        }
+                    }
                 }
             }
 

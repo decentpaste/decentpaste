@@ -74,6 +74,11 @@ pub enum NetworkEvent {
         session_id: String,
         error: String,
     },
+    /// Outbound pairing-related request failed at the network level
+    OutboundPairingFailed {
+        peer_id: String,
+        error: String,
+    },
 
     // Clipboard events
     ClipboardReceived(ClipboardMessage),

@@ -51,7 +51,7 @@ rand = "0.9"
 sha2 = "0.10"
 hex = "0.4"
 x25519-dalek = { version = "2", features = ["static_secrets"] }
-zeroize = { version = "1.7", features = ["derive"] }
+zeroize = { version = "1.8", features = ["derive"] }
 
 # Storage & utilities
 hostname = "0.4"
