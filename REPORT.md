@@ -3,7 +3,7 @@
 *An agent, a throwaway Linux box, and somebody else's P2P clipboard app.*
 
 **The pull request that came out of this run: [decentpaste/decentpaste#51](https://github.com/decentpaste/decentpaste/pull/51).**
-Three commits, thirteen findings, and one bug that is still open.
+Four commits, thirteen findings, and one bug that is still open.
 
 ---
 
@@ -185,6 +185,10 @@ pub encrypted_content: Vec<u8>,
 
 ![Before and after, per fix](img/04-fix.png)
 
+*Before and after for each of the three fixes. The lock table in the middle is the one that
+matters: the clipboard monitor now sees zero changes while locked, the peer secrets are
+zeroized, and the pairing still survives the cycle.*
+
 ![Live re-test of the size ceiling](img/05-verify.png)
 
 *The same script that found the ceiling, run again after the fix. 30KB, 100KB and 500KB now
@@ -203,17 +207,26 @@ Closing the vault first makes every later flush a no-op, so the clear physically
 written back. Teardown paths deserve the same ordering paranoia as setup paths, and I did not
 give it to them the first time.
 
+That was not the only one. Re-reading the pull request after opening it, I found that the echo-race
+fix had only landed on one of two call sites. `set_last_hash` is also called by the handler that
+applies clipboard items recovered by offline sync, and that one still wrote the system clipboard
+before registering the hash. Identical race, just rarer, because finding 13 keeps that path from
+carrying much traffic. It took a fourth commit. The live test run never caught it, because the
+experiments I ran only ever exercised the gossipsub receive path, which is a fair reminder that
+"reproduced and verified" covers the path you tested and nothing else.
+
 ## What shipped
 
-Three commits, one per fix, each independently readable:
+Four commits, each independently readable:
 
 | commit | what |
 |---|---|
 | [`79c6976`](https://github.com/decentpaste/decentpaste/pull/51/commits/79c6976) | `fix(network): make the advertised 1MB clipboard limit real` |
 | [`4632d14`](https://github.com/decentpaste/decentpaste/pull/51/commits/4632d14) | `fix(clipboard): register echo guard before writing the clipboard` |
 | [`71bf757`](https://github.com/decentpaste/decentpaste/pull/51/commits/71bf757) | `fix(vault): stop syncing and wipe key material when the vault locks` |
+| [`3d53510`](https://github.com/decentpaste/decentpaste/pull/51/commits/3d53510) | `fix(clipboard): apply the echo guard to the offline-sync path too` |
 
-14 files, +169/-7. `cargo check`, `cargo clippy` and `yarn build` all clean, zero warnings.
+14 files, +174/-10. `cargo check`, `cargo clippy` and `yarn build` all clean, zero warnings.
 
 **Read the full thing here: [decentpaste/decentpaste#51](https://github.com/decentpaste/decentpaste/pull/51)**,
 including the log evidence, the two things I want a second opinion on (the 2MiB transmit size is
