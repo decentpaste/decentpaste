@@ -13,9 +13,6 @@ use tracing::{debug, error, info, warn};
 use crate::error::Error;
 use crate::models::*;
 
-/// Service name used for keyring entries.
-const SERVICE_NAME: &str = "com.decentpaste.vault";
-
 /// Account name (username) for the keyring entry.
 const ACCOUNT_NAME: &str = "vault-key";
 
@@ -23,12 +20,20 @@ const ACCOUNT_NAME: &str = "vault-key";
 pub fn init<R: Runtime, C: DeserializeOwned>(
     app: &AppHandle<R>,
     _api: PluginApi<R, C>,
+    service_name: String,
 ) -> crate::Result<Decentsecret<R>> {
-    Ok(Decentsecret(app.clone()))
+    Ok(Decentsecret {
+        _app: app.clone(),
+        service_name,
+    })
 }
 
 /// Access to the decentsecret APIs for desktop platforms.
-pub struct Decentsecret<R: Runtime>(AppHandle<R>);
+pub struct Decentsecret<R: Runtime> {
+    _app: AppHandle<R>,
+    /// Service name used for this app's keyring entries.
+    service_name: String,
+}
 
 impl<R: Runtime> Decentsecret<R> {
     /// Check what secure storage capabilities are available.
@@ -37,10 +42,10 @@ impl<R: Runtime> Decentsecret<R> {
     pub fn check_availability(&self) -> crate::Result<SecretStorageStatus> {
         debug!(
             "Checking keyring availability for service: {}",
-            SERVICE_NAME
+            self.service_name
         );
 
-        let entry = match Entry::new(SERVICE_NAME, ACCOUNT_NAME) {
+        let entry = match Entry::new(&self.service_name, ACCOUNT_NAME) {
             Ok(entry) => entry,
             Err(e) => {
                 warn!("Keyring not available: {}", e);
@@ -77,11 +82,11 @@ impl<R: Runtime> Decentsecret<R> {
         info!(
             "Attempting to store {} byte secret in keyring (service: {}, account: {})",
             secret.len(),
-            SERVICE_NAME,
+            self.service_name,
             ACCOUNT_NAME
         );
 
-        let entry = Entry::new(SERVICE_NAME, ACCOUNT_NAME).map_err(|e| {
+        let entry = Entry::new(&self.service_name, ACCOUNT_NAME).map_err(|e| {
             error!("Failed to create keyring entry: {}", e);
             Self::map_keyring_error(e)
         })?;
@@ -102,7 +107,7 @@ impl<R: Runtime> Decentsecret<R> {
 
         // Verify the secret was actually stored by creating a NEW Entry and reading back
         // This ensures we're not just reading a cached value from the original Entry
-        let verify_entry = Entry::new(SERVICE_NAME, ACCOUNT_NAME).map_err(|e| {
+        let verify_entry = Entry::new(&self.service_name, ACCOUNT_NAME).map_err(|e| {
             error!("Failed to create verification entry: {}", e);
             Self::map_keyring_error(e)
         })?;
@@ -136,10 +141,10 @@ impl<R: Runtime> Decentsecret<R> {
     pub fn retrieve_secret(&self) -> crate::Result<Vec<u8>> {
         debug!(
             "Attempting to retrieve secret from keyring (service: {}, account: {})",
-            SERVICE_NAME, ACCOUNT_NAME
+            self.service_name, ACCOUNT_NAME
         );
 
-        let entry = Entry::new(SERVICE_NAME, ACCOUNT_NAME).map_err(|e| {
+        let entry = Entry::new(&self.service_name, ACCOUNT_NAME).map_err(|e| {
             error!("Failed to create keyring entry for retrieval: {}", e);
             Self::map_keyring_error(e)
         })?;
@@ -171,10 +176,10 @@ impl<R: Runtime> Decentsecret<R> {
     pub fn delete_secret(&self) -> crate::Result<()> {
         debug!(
             "Attempting to delete secret from keyring (service: {}, account: {})",
-            SERVICE_NAME, ACCOUNT_NAME
+            self.service_name, ACCOUNT_NAME
         );
 
-        let entry = Entry::new(SERVICE_NAME, ACCOUNT_NAME).map_err(|e| {
+        let entry = Entry::new(&self.service_name, ACCOUNT_NAME).map_err(|e| {
             error!("Failed to create keyring entry for deletion: {}", e);
             Self::map_keyring_error(e)
         })?;
